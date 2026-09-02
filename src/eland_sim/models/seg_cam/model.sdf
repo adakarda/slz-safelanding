@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Ground-truth semantic segmentation camera.
+
+  Structurally a copy of PX4's Tools/simulation/gz/models/mono_cam, with one
+  difference: the sensor is type="segmentation" instead of type="camera".
+
+  Two constraints drove the sensor numbers:
+
+  1. The segmentation camera is implemented ONLY in the ogre2 render engine
+     (libgz-rendering8-ogre2.so exports SegmentationCamera symbols;
+     libgz-rendering8-ogre.so exports none). Falling back to `--render-engine
+     ogre` does not degrade the sensor, it silences it completely.
+  2. This machine has no GPU -- glxinfo reports llvmpipe, so every pixel is
+     rasterised on the CPU. PX4's mono_cam runs 1280x960 @ 30 Hz, which is far
+     more than the landing pipeline needs and enough to drag the simulation
+     below real time.
+
+  Hence 320x240 @ 5 Hz. The mapping node's ground footprint is driven by
+  horizontal_fov and altitude, not by pixel count, so the lower resolution
+  costs map detail but not map extent. If the real-time factor still sags,
+  drop to 160x120 @ 2 Hz before touching anything else.
+
+  horizontal_fov is kept at mono_cam's 1.74 rad (99.7 deg) so the existing
+  camera_hfov_deg parameter in eland_params.yaml stays correct.
+-->
+<sdf version='1.9'>
+  <model name='seg_cam'>
+    <pose>0 0 0 0 0 0</pose>
+    <self_collide>false</self_collide>
+    <static>false</static>
+    <link name="camera_link">
+      <inertial>
+        <pose>0.03 0.03 0.03 0 0 0</pose>
+        <mass>0.050</mass>
+        <inertia>
+          <ixx>0.00004</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.00004</iyy>
+          <iyz>0</iyz>
+          <izz>0.00004</izz>
+        </inertia>
+      </inertial>
+      <visual name="seg_cam/visual/housing">
+        <geometry>
+          <box>
+            <size>0.02 0.04 0.04</size>
+          </box>
+        </geometry>
+      </visual>
+      <visual name="seg_cam/visual/lens">
+        <pose>0.015 0 0 0 1.5707 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.008</radius>
+            <length>0.01</length>
+          </cylinder>
+        </geometry>
+      </visual>
+      <sensor name="segmentation_camera" type="segmentation">
+        <gz_frame_id>camera_link</gz_frame_id>
+        <pose>0 0 0 0 0 0</pose>
+        <topic>seg_cam</topic>
+        <camera>
+          <segmentation_type>semantic</segmentation_type>
+          <horizontal_fov>1.74</horizontal_fov>
+          <image>
+            <width>320</width>
+            <height>240</height>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>3000</far>
+          </clip>
+        </camera>
+        <always_on>1</always_on>
+        <update_rate>5</update_rate>
+        <visualize>true</visualize>
+      </sensor>
+      <gravity>true</gravity>
+      <velocity_decay />
+    </link>
+  </model>
+</sdf>

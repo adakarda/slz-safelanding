@@ -1,0 +1,159 @@
+# Emergency landing pipeline parameters -- one file, all nodes.
+#
+# PX4 topic names: the `_vN` suffix is appended by the uXRCE-DDS client iff the
+# .msg declares a nonzero MESSAGE_VERSION. Verified against PX4 v1.17.0-alpha1
+# on this machine. If a PX4 upgrade bumps a version, check
+# `ros2 topic list | grep fmu` and edit the *_topic entries here -- never the
+# node source. See eland_common/px4_topics.py.
+
+perception_node:
+  ros__parameters:
+    use_gt_segmentation: true
+    model_path: ""
+    input_size: [512, 512]
+    max_rate_hz: 5.0
+    image_topic: "/camera/image"
+    segmentation_topic: "/camera/segmentation"
+    mask_topic: "/eland/semantic_mask"
+
+mapping_node:
+  ros__parameters:
+    map_size_m: 40.0
+    map_resolution: 0.2
+    # seg_cam declares horizontal_fov 1.74 rad = 99.7 deg, inherited from the
+    # mono_cam model it was derived from. At the 15 m search altitude that is a
+    # 35.6 m wide ground footprint, which fits inside map_size_m with margin.
+    camera_hfov_deg: 99.7
+    # Map memory. Without it the vehicle cannot land: at 3 m the camera
+    # footprint is ~7 m wide, so a memoryless map can never show r_safe=3.0 m
+    # of clearance and the candidate is lost exactly during final descent.
+    # tau=30 s comfortably covers a 15 m -> 0 m descent.
+    memory_tau_s: 30.0
+    min_evidence: 0.05
+    # Past this tilt the frame starts to include the horizon (at ~40 deg with
+    # a 99.7 deg FOV) and rays near it project to absurd distances. Dropping
+    # the frame beats fusing a smear.
+    max_tilt_deg: 30.0
+    camera_info_topic: "/camera/camera_info"
+    vehicle_attitude_topic: "/fmu/out/vehicle_attitude"
+    map_frame: "map"
+    mask_topic: "/eland/semantic_mask"
+    map_topic: "/eland/ground_map"
+    # Human-readable view of the same grid. RViz cannot render the ground map
+    # itself: its Map display expects 0..100 occupancy and this carries class
+    # IDs. Set false to save a little CPU once you stop watching.
+    debug_image_topic: "/eland/ground_map_colored"
+    publish_debug_image: true
+    vehicle_local_position_topic: "/fmu/out/vehicle_local_position_v1"
+
+detector_node:
+  ros__parameters:
+    safe_classes: [1, 2, 3]        # grass, dirt, gravel
+    # Things a landing site owes an absolute separation distance to. Note this
+    # is NOT "everything that is not safe": UNKNOWN and VEGETATION are not
+    # landable but do not demand 3 m of clearance, they are covered by r_fit.
+    hazard_classes: [6, 7, 8, 9]   # building, water, vehicle, person
+    # SORA risk ordering. The two entries that matter most are the ones that
+    # are NOT about the surface: vehicle and person are 1.0 not because a drone
+    # cannot physically land there, but because SORA does not permit it.
+    # unknown is 1.0 for the same reason -- an unlabelled pixel is an
+    # unevaluated pixel, and an unevaluated pixel is not a cleared one.
+    class_risk:
+      "0": 1.0                     # unknown  -> not landable
+      "1": 0.0                     # grass    -> SORA safe-soft
+      "2": 0.1                     # dirt     -> SORA safe-soft
+      "3": 0.2                     # gravel   -> SORA safe-hard
+      "4": 0.4                     # pavement -> SORA safe-hard
+      "5": 0.7                     # vegetation -> SORA terrain-hazard
+      "6": 1.0                     # building -> SORA structure
+      "7": 1.0                     # water
+      "8": 1.0                     # vehicle  -> SORA vehicle-animal
+      "9": 1.0                     # person
+    # SORA separation from hazards. Absolute and non-negotiable.
+    r_hazard: 3.0
+    # "Does the aircraft fit here" -- x500 is ~0.5 m across, so this is mostly
+    # margin. Splitting this out from r_hazard is what makes a small patch of
+    # grass in an empty field selectable; a single 3 m threshold rejected any
+    # region under 6 m across regardless of what was around it.
+    r_fit: 1.0
+    # Smallest region worth considering, independent of its shape. A radius
+    # test alone cannot express this: a long thin strip can clear r_fit
+    # everywhere along its spine while offering nowhere sensible to sit.
+    min_area_m2: 9.0
+    # The radius we would like to fit at the landing site. Clearance beyond
+    # this earns nothing in the score, so the vehicle does not trek across the
+    # map hunting for the exact centre of the largest meadow.
+    r_ideal: 8.0
+    # Score = w_risk*risk + w_distance*normalised_distance + w_clearance*shortfall
+    # (all 0..1, minimised). w_clearance is what stops it landing on the kerb:
+    # with risk identically 0 across grass, the first two terms alone reduce to
+    # "nearest eligible cell", which by construction sits on the edge of the
+    # exclusion zone.
+    w_risk: 0.50
+    w_distance: 0.15
+    w_clearance: 0.35
+    max_rate_hz: 2.0
+    map_topic: "/eland/ground_map"
+    mask_topic: "/eland/semantic_mask"
+    candidate_topic: "/eland/candidate"
+
+emergency_landing_mode:
+  ros__parameters:
+    # Which PX4 internal mode this one takes over, so that a failsafe -- not
+    # just an operator button -- can trigger it. "rtl" matches NAV_RCL_ACT's
+    # default (Return), so manual-control loss reaches this mode with no PX4
+    # parameter changes. Note the side effect: while this is registered, a
+    # deliberate RTL also lands here instead of flying home.
+    # Options: rtl | land | descend | none
+    replace_internal_mode: "rtl"
+    search_altitude: 15.0
+    # Below this altitude the camera footprint is too small to re-acquire a
+    # lost candidate, so losing one here means freezing rather than searching.
+    min_radius_altitude: 5.0
+    landing_altitude: 2.0
+    arrival_radius_m: 1.0
+    altitude_tolerance_m: 0.5
+    candidate_timeout_s: 3.0
+    hold_duration_s: 5.0
+    max_horizontal_speed: 3.0
+    # Bounds on giving up. Without these the state machine will cycle
+    # VALIDATE -> HOLD -> ABORT -> SEARCH forever, or loiter forever with no
+    # candidate at all -- either way spending the battery and then falling.
+    # Both accept <= 0 to disable, restoring the unbounded behaviour.
+    max_landing_attempts: 3
+    search_timeout_s: 60.0
+    # Descent law, driven by how much of the camera view the landing site
+    # fills rather than by altitude:
+    #   v_ceiling = clamp(descent_size_gain * sqrt(area_m2), min, max)
+    #   v         = clamp(v_ceiling * (1 - area_ratio), min, v_ceiling)
+    # descent_size_gain 0.20 puts a 10 m x 10 m pad at the 2.0 m/s ceiling and
+    # a 4 m x 4 m pad at 0.8 m/s, so a tight site is approached carefully at
+    # every altitude and not only at the end.
+    descent_size_gain: 0.20
+    descent_min_mps: 0.3
+    descent_max_mps: 2.0
+    # Only used before the first area measurement arrives.
+    descent_altitude_gain: 0.35
+    candidate_topic: "/eland/candidate"
+    state_topic: "/eland/state"
+
+hud_node:
+  ros__parameters:
+    # These four are display-only copies of the detector's r_ideal/r_hazard and
+    # the mode's descent gains. The live numbers (commanded speed, ceiling,
+    # area ratio) come from /eland/state so the HUD cannot disagree with the
+    # controller; these are the static settings it annotates them with, so
+    # keep them in step if you retune above.
+    r_ideal: 8.0
+    r_hazard: 3.0
+    descent_size_gain: 0.20
+    descent_min_mps: 0.3
+    descent_max_mps: 2.0
+    map_size_px: 520
+    panel_width_px: 330
+    rate_hz: 5.0
+    map_topic: "/eland/ground_map"
+    candidate_topic: "/eland/candidate"
+    state_topic: "/eland/state"
+    hud_topic: "/eland/hud"
+    vehicle_local_position_topic: "/fmu/out/vehicle_local_position_v1"

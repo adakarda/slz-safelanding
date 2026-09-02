@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>eland_mode</name>
+  <version>0.1.0</version>
+  <description>Emergency Landing flight mode, registered with PX4 through px4_ros2.</description>
+  <maintainer email="adakarda34@gmail.com">arda</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>eigen3_cmake_module</buildtool_depend>
+  <buildtool_export_depend>eigen3_cmake_module</buildtool_export_depend>
+
+  <build_depend>eigen</build_depend>
+  <build_depend>rclcpp</build_depend>
+  <build_export_depend>eigen</build_export_depend>
+
+  <depend>px4_ros2_cpp</depend>
+  <depend>eland_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

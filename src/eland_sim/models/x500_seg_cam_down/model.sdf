@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  x500 with a downward-looking segmentation camera.
+
+  Structurally identical to PX4's x500_mono_cam_down: the same 1.5707 rad pitch
+  on both the include pose and the CameraJoint is what points the camera at the
+  ground. Only the included camera model differs.
+
+  The `x500` model resolves out of PX4's own Tools/simulation/gz/models
+  directory, which PX4's gz_env.sh appends to GZ_SIM_RESOURCE_PATH. This model
+  therefore only works when launched through PX4's SITL tooling (or with that
+  directory on the path manually) -- it is not self-contained by design, so
+  that x500 airframe updates land here for free.
+
+  No RGB camera: on llvmpipe a second camera sensor is the difference between
+  running at real time and not. It comes back in Phase 5, when the trained
+  segmentation model needs real imagery to run inference on.
+-->
+<sdf version='1.9'>
+  <model name='x500_seg_cam_down'>
+    <self_collide>false</self_collide>
+    <include merge='true'>
+      <uri>x500</uri>
+    </include>
+    <include merge='true'>
+      <uri>model://seg_cam</uri>
+      <pose>0 0 .10 0 1.5707 0</pose>
+      <name>seg_cam</name>
+    </include>
+    <joint name="CameraJoint" type="fixed">
+      <parent>base_link</parent>
+      <child>camera_link</child>
+      <pose relative_to="base_link">0 0 0 0 1.5707 0</pose>
+    </joint>
+  </model>
+</sdf>

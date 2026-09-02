@@ -1,0 +1,18 @@
+# colcon output
+build/
+install/
+log/
+
+__pycache__/
+*.pyc
+*.swp
+
+# Third-party sources. Not vendored: they are their own git repositories and
+# their exact commits are recorded in dependencies.repos, which matters more
+# than the files themselves -- see the comment at the top of that file.
+/src/px4_msgs/
+/src/px4-ros2-interface-lib/
+
+# Pre-existing package, unrelated to the emergency landing work. Left out of
+# this repository rather than deleted; it is still on disk.
+/src/ilk_offboard/

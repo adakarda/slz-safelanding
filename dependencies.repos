@@ -1,0 +1,33 @@
+# Third-party sources this workspace needs, at the exact commits it was
+# verified against. Restore with:
+#
+#     cd ~/ros2_ws && vcs import src < dependencies.repos
+#
+# THE PINS ARE NOT INCIDENTAL. px4_msgs, px4-ros2-interface-lib and PX4 itself
+# must come from the same era, because the library verifies message format
+# hashes against the flight controller when it registers the mode. Mismatched
+# versions fail like this, at registration, not at build time:
+#
+#     MessageFormatResponse::success == false for fmu/in/setpoint_config
+#     Mismatch for the following topics, update PX4 or the px4_ros2 library
+#     terminate called after throwing an instance of 'px4_ros2::Exception'
+#       what():  Registration failed
+#
+# PX4-Autopilot is not listed here because it lives outside the workspace, but
+# it is the third member of the set:
+#
+#     PX4-Autopilot  f63b0d6b6f  (main, 2026-05-01, v1.17.0-alpha1-1670)
+#
+# Upgrading PX4 means moving both pins forward too. px4_msgs commit messages
+# are of the form "Update to PX4 <sha>", so finding the matching one is
+# mechanical.
+
+repositories:
+  px4_msgs:
+    type: git
+    url: https://github.com/PX4/px4_msgs.git
+    version: e62353ec019b7079bffda4d69546ad24806292dd
+  px4-ros2-interface-lib:
+    type: git
+    url: https://github.com/Auterion/px4-ros2-interface-lib.git
+    version: 9fb7ceac653a8b18e4b62016d7493b925c78d417
