@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'hud_node = eland_viz.hud_node:main',
+            'control_station = eland_viz.control_station:main',
         ],
     },
 )

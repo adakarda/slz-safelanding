@@ -17,7 +17,7 @@ Tasarım kararları, ölçümler ve bilinen sınırlar: `docs/PLAN.md` ve
 | `eland_perception` | Python | Kamera → `mono8` semantik maske |
 | `eland_mapping` | Python | Maske → metrik zemin haritası (IPM + zamansal füzyon), ve aday seçimi |
 | `eland_mode` | C++ | `px4_ros2::ModeBase` — PX4'e kayıtlı "Emergency Landing" modu |
-| `eland_viz` | Python | İniş HUD'ı — `/eland/hud` |
+| `eland_viz` | Python | İniş HUD'ı (`/eland/hud`) ve kontrol istasyonu |
 | `eland_sim` | Python | Gazebo modelleri, dünya, launch, parametreler, rviz |
 
 Veri akışı:
@@ -209,6 +209,56 @@ ros2 run rqt_image_view rqt_image_view /eland/hud
 `/eland/ground_map` sınıf ID'si taşır, 0-100 occupancy değil; rviz'in Map
 display'i onu simsiyah gösterir, o yüzden config'de kapalı.
 Renkli görünüm için `/eland/ground_map_colored` kullan.
+
+### Kontrol istasyonu — HUD + klavye
+
+`run_sim.sh` varsayılan olarak açar. Tek pencerede HUD, tuş listesi, çubuk
+göstergeleri ve araç durumu var. **Klavyenin çalışması için pencereye tıkla.**
+
+| Tuş | |
+|---|---|
+| `W` / `S` | ileri / geri |
+| `A` / `D` | sola / sağa kay |
+| `Q` / `E` | sola / sağa dön |
+| `R` / `F` | yüksel / alçal |
+| `SPACE` | çubukları ortala |
+| `1` / `X` | arm / disarm |
+| `2` | kalkış |
+| `3` | manuel kontrolü al (POSCTL) |
+| `0` | **acil iniş modunu tetikle** |
+| `L` | PX4 ile in |
+| `ESC` | çık |
+
+Çubuklar **yapışkan**: OpenCV tuş bırakma olayı vermediği için bir tuş çubuğu
+kaydırır ve orada kalır. Test için bu daha kullanışlı — yönü ver, uçuşu izle,
+`SPACE` ile durdur.
+
+Tipik akış: `1` arm → `2` kalkış → `3` manuel kontrol → WASD ile ilginç bir
+yere uç → `SPACE` → `0` acil iniş. Böylece her senaryo için baştan
+başlatmana gerek kalmıyor.
+
+Manuel kontrol `/fmu/in/manual_control_input` üzerinden gidiyor, yani PX4 bunu
+joystick gibi görüyor ve Position modda uçuyor; çubuklar gövde-göreli, "ileri"
+burnun baktığı yön. Offboard setpoint **kullanılmıyor** — bu projenin tümüyle
+kaçındığı mekanizma o, ve desteklenen bir giriş yolu varken bir test aracının
+onu kullanması için sebep yok.
+
+#### Bilmen gereken: istasyon GCS bağlantısını canlı tutar
+
+PX4 bir yer istasyonunun konuşup konuşmadığını takip eder ve `NAV_DLL_ACT`
+varsayılanı Return'dür. Hiç GCS bağlı değilse kalkıştan `COM_DL_LOSS_T` (10 s)
+sonra `gcs_connection_lost` doğru olur, failsafe tetiklenir — ve acil iniş modu
+Return'ün yerine kayıtlı olduğu için **araç ne yapıyor olursan ol kendi kendine
+iner.** Bu bir hata değil, failsafe'in çalışması; ama teleop denemelerinin ilk
+üçünü bozuk kumanda gibi gösterdi.
+
+Bu yüzden istasyon saniyede bir GCS heartbeat gönderiyor (`pymavlink` ile,
+PX4'ün dinlediği 18570 portuna). Pencere açıkken bağlantı var, kapanınca
+kopuyor — kopunca da failsafe acil iniş modunu getiriyor, ki bu zaten
+gösterilmek istenen davranış.
+
+`gcs_heartbeat: false` ile kapatılabilir, ama o zaman her uçuş ~15 saniyede
+kendiliğinden iner.
 
 ### HUD — iniş sırasında bakılacak asıl yer
 

@@ -94,10 +94,16 @@ def generate_launch_description() -> LaunchDescription:
             description='Publish the landing HUD on /eland/hud. It costs one '
                         'rendered image at 5 Hz.'),
         DeclareLaunchArgument(
+            'station', default_value='false',
+            description='Open the control station: the HUD plus a keyboard '
+                        'that flies the vehicle. Off by default so launching '
+                        'does not conjure a window in a headless or remote '
+                        'session; run_sim.sh turns it on.'),
+        DeclareLaunchArgument(
             'hud_view', default_value='false',
-            description='Also open rqt_image_view on the HUD. Off by default '
-                        'so that launching does not conjure a window in a '
-                        'headless or remote session; run_sim.sh turns it on.'),
+            description='Open a plain rqt_image_view on the HUD instead of '
+                        'the control station -- the same picture without the '
+                        'keyboard.'),
         DeclareLaunchArgument(
             'log_level', default_value='info',
             description='ROS log level for all pipeline nodes.'),
@@ -155,6 +161,14 @@ def generate_launch_description() -> LaunchDescription:
         name='hud_view', arguments=['/eland/hud'], output='screen',
         condition=IfCondition(LaunchConfiguration('hud_view')),
     )
+    # The station both displays the HUD and flies the vehicle, so it replaces
+    # rather than accompanies the plain viewer above.
+    station = Node(
+        package='eland_viz', executable='control_station', name='control_station',
+        parameters=[params], output='screen',
+        additional_env=compat_env,
+        condition=IfCondition(LaunchConfiguration('station')),
+    )
 
     # 3. The flight mode. Registers itself with PX4 on startup and then waits
     #    to be selected; starting it does not give it control of the vehicle.
@@ -194,4 +208,4 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         args + [labels_bridge, colored_bridge] + pipeline_nodes
-        + [hud, hud_view, mode_node, rviz_tf, rviz])
+        + [hud, hud_view, station, mode_node, rviz_tf, rviz])

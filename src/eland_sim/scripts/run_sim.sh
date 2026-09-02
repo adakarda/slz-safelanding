@@ -26,7 +26,8 @@ LOG_DIR="${LOG_DIR:-/tmp/eland_logs}"
 POSE="0,0,0,0,0,0"
 HEADLESS=""
 HUD="true"
-HUD_VIEW="true"
+STATION="true"
+HUD_VIEW="false"
 TAKEOFF_ALT=""
 DO_TRIGGER=0
 DO_LINK_DROP=0
@@ -45,8 +46,9 @@ run_sim.sh [options]
   --link-drop        --takeoff, then drop a real GCS link and let the PX4
                      failsafe select the mode on its own
   --headless         no Gazebo window (faster; software rendering here)
-  --no-hud           no HUD at all
-  --hud-headless     publish /eland/hud but do not open a viewer window
+  --no-hud           no HUD and no control station
+  --hud-headless     publish /eland/hud but open no window at all
+  --rqt              plain rqt_image_view on the HUD, no keyboard
   -h, --help
 EOF
 }
@@ -96,12 +98,19 @@ while [ $# -gt 0 ]; do
 	--no-hud)
 		HUD="false"
 		HUD_VIEW="false"
+		STATION="false"
+		shift
+		;;
+	--rqt)
+		STATION="false"
+		HUD_VIEW="true"
 		shift
 		;;
 	--hud-headless)
 		# Keep publishing /eland/hud but do not open a window -- useful when
 		# recording a bag or running over a connection without a display.
 		HUD_VIEW="false"
+		STATION="false"
 		shift
 		;;
 	-h | --help)
@@ -206,7 +215,7 @@ echo "[run_sim]   kopru kuruldu"
 # --------------------------------------------------------------- pipeline
 echo "[run_sim] algi zinciri + ucus modu baslatiliyor..."
 ros2 launch eland_sim eland_sim.launch.py \
-	hud:="$HUD" hud_view:="$HUD_VIEW" bridge_colored:=false \
+	hud:="$HUD" hud_view:="$HUD_VIEW" station:="$STATION" bridge_colored:=false \
 	>"$LOG_DIR/pipeline.log" 2>&1 &
 LAUNCH_PID=$!
 
@@ -261,7 +270,7 @@ fi
 # ------------------------------------------------------------------- done
 cat <<EOF
 
-  Hazir.$([ "$HUD_VIEW" = true ] && echo " HUD penceresi acildi." )
+  Hazir.$([ "$STATION" = true ] && echo " Kontrol istasyonu acildi -- ucurmak icin o pencereye tikla." )
 
   Durum akisi icin baska bir terminalde:
 
