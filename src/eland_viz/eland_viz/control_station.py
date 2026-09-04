@@ -75,8 +75,8 @@ NAV_POSCTL = 2
 NAV_LAND = 18
 NAV_EXTERNAL1 = 23
 
-#: How far one key press deflects a stick. Small enough that a single tap is a
-#: nudge rather than a lurch; press twice to go faster.
+#: How far one key press deflects a stick in `sticky` mode. Small enough that
+#: a single tap is a nudge rather than a lurch; press twice to go faster.
 STICK_STEP = 0.3
 STICK_MAX = 1.0
 
@@ -134,6 +134,34 @@ class ControlStation(Node):
         # unchanged, which is what makes the station measurable without a
         # display and usable over a connection that has none.
         self.declare_parameter('window', True)
+        # How the keys drive the sticks.
+        #
+        #   momentary  a held key ramps the axis up, letting go lets it fall
+        #              back to centre. What a transmitter does, and what one
+        #              tap should NOT do is peg the axis.
+        #   sticky     a tap sets the axis and it stays there until centred.
+        #              The original behaviour, kept because it is genuinely
+        #              easier for "point it that way and watch": no key has to
+        #              be held for the twenty seconds of a traverse.
+        #
+        # OpenCV reports key presses but never releases, so `momentary` infers
+        # the release: an axis is considered held while key events keep
+        # arriving and starts falling back once they stop. That makes
+        # stick_hold_timeout_s the one number that has to match the machine --
+        # X delays about half a second before it starts repeating a held key,
+        # and a timeout under that would make a held key stutter.
+        self.declare_parameter('stick_mode', 'momentary')
+        self.declare_parameter('stick_ramp_per_s', 1.5)
+        self.declare_parameter('stick_decay_per_s', 2.5)
+        # Two timeouts, because the key repeat stream has two phases. X waits
+        # about half a second before it starts repeating a held key, so the
+        # first press has to be trusted for that long or a held key stutters.
+        # Once repeats are arriving every 30 ms, waiting that long again just
+        # adds a second of drift after the key is let go -- so as soon as the
+        # repeats are flowing, the shorter timeout takes over and the axis
+        # falls back promptly.
+        self.declare_parameter('stick_hold_timeout_s', 0.7)
+        self.declare_parameter('stick_repeat_timeout_s', 0.15)
         # 14550 is where PX4 sends; 18570 is where its "Normal" mavlink
         # instance listens. Heartbeats aimed at 14550 are never seen by the
         # autopilot, so the link it is meant to notice would never exist.
@@ -157,6 +185,23 @@ class ControlStation(Node):
         self.publish_stamps = []
         self.worst_gap = 0.0
         self.sticks = {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0, 'throttle': 0.0}
+        # Which way each axis is being pushed, and until when that push counts
+        # as still happening.
+        self.hold = {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0, 'throttle': 0.0}
+        self.hold_until = {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0, 'throttle': 0.0}
+        self.last_advance = time.time()
+        # What actually went out, snapshotted at publish time. The panel shows
+        # this rather than the working value, so the gauge cannot show a
+        # deflection the aircraft was never told about.
+        self.last_sent = dict(self.sticks)
+        self.stick_mode = self.get_parameter('stick_mode').value
+        self.ramp = float(self.get_parameter('stick_ramp_per_s').value)
+        self.decay = float(self.get_parameter('stick_decay_per_s').value)
+        self.hold_timeout = float(
+            self.get_parameter('stick_hold_timeout_s').value)
+        self.repeat_timeout = float(
+            self.get_parameter('stick_repeat_timeout_s').value)
+        self.last_press = {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0, 'throttle': 0.0}
         self.notice = 'baslatildi -- 1: arm, 2: kalkis, 3: manuel kontrol'
 
         self.manual_pub = self.create_publisher(
@@ -333,7 +378,10 @@ class ControlStation(Node):
         manual control link within COM_RC_LOSS_T."""
         if not self.manual_active:
             return
-        self.publish_stamps.append(time.time())
+        now = time.time()
+        self.advance_sticks(now - self.last_advance, now)
+        self.last_advance = now
+        self.publish_stamps.append(now)
         m = ManualControlSetpoint()
         m.timestamp = m.timestamp_sample = self.stamp()
         m.valid = True
@@ -344,6 +392,7 @@ class ControlStation(Node):
         m.throttle = float(self.sticks['throttle'])
         m.sticks_moving = any(abs(v) > 0.01 for v in self.sticks.values())
         self.manual_pub.publish(m)
+        self.last_sent = dict(self.sticks)
 
     def report_stream(self) -> None:
         """Say how regular this node's own output actually was.
@@ -369,6 +418,51 @@ class ControlStation(Node):
               f'>0.5 s bosluk {over} (kosu boyunca en uzun '
               f'{self.worst_gap * 1000:.0f} ms)')
 
+    def advance_sticks(self, dt: float, now: float) -> None:
+        """Move each axis toward where the keys are asking it to go.
+
+        Pure arithmetic on self.sticks, separated out so the ramp can be
+        checked without a window, a simulator or a person: feed it a sequence
+        of (dt, key events) and the trajectory is reproducible.
+        """
+        if self.stick_mode != 'momentary':
+            return
+        dt = max(0.0, min(dt, 0.25))  # a stalled render must not lurch the axis
+        for axis, value in self.sticks.items():
+            pushed = self.hold[axis] if now < self.hold_until[axis] else 0.0
+            if pushed:
+                target = pushed * STICK_MAX
+                step = self.ramp * dt
+                value = (min(value + step, target) if target > value
+                         else max(value - step, target))
+            else:
+                step = self.decay * dt
+                value = max(value - step, 0.0) if value > 0 else min(value + step, 0.0)
+            self.sticks[axis] = float(value)
+
+    def press(self, axis: str, direction: float) -> None:
+        """A key event on an axis: nudge it (sticky) or start pushing it
+        (momentary)."""
+        if self.stick_mode == 'momentary':
+            now = self.now_wall()
+            # Repeats arriving means the key is genuinely down, and a release
+            # will be obvious within one repeat interval. Before they arrive,
+            # the only evidence is the single press, which has to be trusted
+            # across the repeat delay.
+            repeating = (now - self.last_press[axis]) < self.repeat_timeout
+            self.last_press[axis] = now
+            self.hold[axis] = direction
+            self.hold_until[axis] = now + (
+                self.repeat_timeout if repeating else self.hold_timeout)
+        else:
+            self.sticks[axis] = float(
+                np.clip(self.sticks[axis] + direction * STICK_STEP,
+                        -STICK_MAX, STICK_MAX))
+
+    @staticmethod
+    def now_wall() -> float:
+        return time.time()
+
     def send_command(self, command: int, p1=0.0, p2=0.0) -> None:
         c = VehicleCommand()
         c.timestamp = self.stamp()
@@ -385,34 +479,32 @@ class ControlStation(Node):
         self.send_command(CMD_SET_NAV_STATE, nav_state)
 
     # ------------------------------------------------------------------
-    def nudge(self, axis: str, delta: float) -> None:
-        self.sticks[axis] = float(
-            np.clip(self.sticks[axis] + delta, -STICK_MAX, STICK_MAX))
-
     def handle_key(self, key: int) -> bool:
         """Returns False to quit."""
         k = chr(key).lower() if 32 <= key < 127 else ''
         if key == 27:  # ESC
             return False
         elif k == 'w':
-            self.nudge('pitch', STICK_STEP)
+            self.press('pitch', 1.0)
         elif k == 's':
-            self.nudge('pitch', -STICK_STEP)
+            self.press('pitch', -1.0)
         elif k == 'd':
-            self.nudge('roll', STICK_STEP)
+            self.press('roll', 1.0)
         elif k == 'a':
-            self.nudge('roll', -STICK_STEP)
+            self.press('roll', -1.0)
         elif k == 'e':
-            self.nudge('yaw', STICK_STEP)
+            self.press('yaw', 1.0)
         elif k == 'q':
-            self.nudge('yaw', -STICK_STEP)
+            self.press('yaw', -1.0)
         elif k == 'r':
-            self.nudge('throttle', STICK_STEP)
+            self.press('throttle', 1.0)
         elif k == 'f':
-            self.nudge('throttle', -STICK_STEP)
+            self.press('throttle', -1.0)
         elif key == 32:  # space
             for a in self.sticks:
                 self.sticks[a] = 0.0
+                self.hold[a] = 0.0
+                self.hold_until[a] = 0.0
             self.notice = 'cubuklar ortalandi'
         elif k == '1':
             # -f: without a GCS attached the preflight check refuses on "no
@@ -487,7 +579,7 @@ class ControlStation(Node):
                     cv2.LINE_AA)
         for i, axis in enumerate(('pitch', 'roll', 'yaw', 'throttle')):
             y = 48 + i * 22
-            v = self.sticks[axis]
+            v = self.last_sent[axis]
             cv2.putText(strip, f'{axis:9s}{v:+.1f}', (bx, y + 4), FONT, 0.40,
                         (200, 200, 200), 1, cv2.LINE_AA)
             x0 = bx + 110
