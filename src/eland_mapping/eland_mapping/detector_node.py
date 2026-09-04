@@ -161,6 +161,16 @@ class DetectorNode(Node):
         # excluded, and the exclusion ages out rather than accumulating
         # forever.
         self.declare_parameter('corridor_memory_s', 25.0)
+        # The exclusion this filter actually applied, as a grid, for the HUD.
+        #
+        # Published rather than recomputed on the display side for the same
+        # reason the descent speed is: a HUD that derives the corridor from
+        # the same parameters can drift away from the detector without either
+        # of them being obviously wrong, and the picture would then be
+        # reassuring instead of true. 100 = the predicted corridor, 50 =
+        # ground something moved across, 0 = clear.
+        self.declare_parameter('block_map_topic', '/eland/trajectory_block')
+        self.declare_parameter('publish_block_map', True)
 
         # class_risk arrives as a nested map, which ROS 2 flattens to
         # `class_risk.<id>`; declare one entry per known class ID.
@@ -207,6 +217,8 @@ class DetectorNode(Node):
 
         self.corridor_memory_s = float(
             self.get_parameter('corridor_memory_s').value)
+        self.publish_block_map = bool(
+            self.get_parameter('publish_block_map').value)
 
         self.obstacles = None
         self.obstacles_time = None
@@ -238,6 +250,9 @@ class DetectorNode(Node):
         self.create_subscription(
             DynamicObstacleArray, self.get_parameter('obstacles_topic').value,
             self.on_obstacles, DECISION_QOS)
+        self.block_pub = self.create_publisher(
+            OccupancyGrid, self.get_parameter('block_map_topic').value,
+            SENSOR_QOS)
 
         safe_names = [classes.CLASS_NAMES.get(c, '?') for c in self.safe_classes]
         hazard_names = [classes.CLASS_NAMES.get(c, '?') for c in self.hazard_classes]
@@ -515,6 +530,8 @@ class DetectorNode(Node):
         #     interesting because nothing is driving towards it.
         discs = self.corridor_discs()
         memory = self.memory_discs()
+        if self.publish_block_map:
+            self.publish_block(msg, discs, memory)
         n_before = len(cell_x)
         if discs or memory:
             keep = self.trajectory_clear(cell_x, cell_y, drone_x, drone_y,
@@ -571,6 +588,35 @@ class DetectorNode(Node):
         )
 
     # ------------------------------------------------------------------
+    def publish_block(self, map_msg, discs, memory) -> None:
+        """Rasterise the exclusion this frame used, for display only.
+
+        Drawn with filled circles rather than a per-cell distance test because
+        it is a picture, not a decision: the decision was already made against
+        the discs themselves, on the cells that mattered.
+        """
+        info = map_msg.info
+        h, w, res = info.height, info.width, info.resolution
+        img = np.zeros((h, w), dtype=np.uint8)
+
+        def stamp(items, value):
+            for cx, cy, r in items:
+                col = int(round((cx - info.origin.position.x) / res))
+                row = int(round((cy - info.origin.position.y) / res))
+                cv2.circle(img, (col, row), max(1, int(round(r / res))),
+                           int(value), -1)
+
+        # Memory first so the live corridor overwrites it where they overlap:
+        # the stronger claim should be the one that shows.
+        stamp(memory, 50)
+        stamp(discs, 100)
+
+        out = OccupancyGrid()
+        out.header = map_msg.header
+        out.info = info
+        out.data = img.astype(np.int8).ravel().tolist()
+        self.block_pub.publish(out)
+
     def publish_candidate(self, map_msg, x, y, radius, risk, area_m2,
                           n_eligible, score) -> None:
         out = LandingCandidate()

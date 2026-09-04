@@ -191,6 +191,19 @@ command -v MicroXRCEAgent >/dev/null ||
 [ -e "$PX4_DIR/Tools/simulation/gz/worlds/eland_test.sdf" ] ||
 	fail "Gazebo varliklari bagli degil: scripts/link_px4_assets.sh calistir"
 
+# Rebuild the world from the parameters this run will actually use, before
+# Gazebo reads it. The dynamic obstacles exist in two places -- their SDF and
+# obstacle_driver's parameters -- and this is what stops those two drifting
+# apart: change a start point in the YAML and the world already agrees on the
+# next run, with no separate step to forget.
+GEN_ARGS=""
+if [ -n "$PARAMS_ARG" ]; then
+	GEN_ARGS="--params ${PARAMS_ARG#params_file:=}"
+fi
+# shellcheck disable=SC2086
+python3 "$(dirname "$0")/gen_world.py" $GEN_ARGS >/dev/null ||
+	fail "dunya uretilemedi: scripts/gen_world.py"
+
 mkdir -p "$LOG_DIR"
 # Anything left over from a previous run steals the ports and the topics.
 pkill -x px4 2>/dev/null

@@ -38,7 +38,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from eland_common import classes, px4_topics
 from eland_common.qos import DECISION_QOS, PX4_QOS, SENSOR_QOS
-from eland_msgs.msg import LandingCandidate, LandingState
+from eland_msgs.msg import DynamicObstacleArray, LandingCandidate, LandingState
 
 STATE_NAMES = {
     LandingState.SEARCH: 'SEARCH',
@@ -78,6 +78,13 @@ class HudNode(Node):
         self.declare_parameter('descent_min_mps', 0.3)
         self.declare_parameter('descent_max_mps', 2.0)
         self.declare_parameter('map_topic', '/eland/ground_map')
+        self.declare_parameter('obstacles_topic', '/eland/dynamic_obstacles')
+        # The exclusion the detector applied, as it applied it. Not
+        # recomputed here from r_hazard and the prediction: a HUD that derives
+        # the corridor itself can disagree with the detector while both look
+        # plausible, and the whole value of the picture is that it is the same
+        # thing the decision used.
+        self.declare_parameter('block_map_topic', '/eland/trajectory_block')
         self.declare_parameter('candidate_topic', '/eland/candidate')
         self.declare_parameter('state_topic', '/eland/state')
         self.declare_parameter('hud_topic', '/eland/hud')
@@ -99,6 +106,8 @@ class HudNode(Node):
 
         self.grid = None
         self.map_info = None
+        self.block = None
+        self.obstacles = None
         self.candidate = None
         self.state = None
         self.pos_enu = None
@@ -110,6 +119,12 @@ class HudNode(Node):
         self.create_subscription(
             OccupancyGrid, self.get_parameter('map_topic').value,
             self.on_map, SENSOR_QOS)
+        self.create_subscription(
+            OccupancyGrid, self.get_parameter('block_map_topic').value,
+            self.on_block, SENSOR_QOS)
+        self.create_subscription(
+            DynamicObstacleArray, self.get_parameter('obstacles_topic').value,
+            self.on_obstacles, DECISION_QOS)
         self.create_subscription(
             LandingCandidate, self.get_parameter('candidate_topic').value,
             self.on_candidate, DECISION_QOS)
@@ -138,6 +153,15 @@ class HudNode(Node):
             np.asarray(msg.data, dtype=np.int16).reshape(h, w),
             0, classes.NUM_CLASSES - 1).astype(np.uint8)
         self.map_info = msg.info
+
+    def on_block(self, msg: OccupancyGrid) -> None:
+        w, h = msg.info.width, msg.info.height
+        if w == 0 or h == 0:
+            return
+        self.block = np.asarray(msg.data, dtype=np.int16).reshape(h, w)
+
+    def on_obstacles(self, msg: DynamicObstacleArray) -> None:
+        self.obstacles = msg
 
     def on_candidate(self, msg: LandingCandidate) -> None:
         self.candidate = msg
@@ -187,6 +211,33 @@ class HudNode(Node):
         img = cv2.resize(img, (self.map_px, self.map_px),
                          interpolation=cv2.INTER_NEAREST)
 
+        # Where the trajectory filter refuses to land, tinted over the map
+        # before anything else is drawn so the markers stay readable on top.
+        # Two shades because they are two different claims: red is "the
+        # obstacle is predicted to be here", amber is "something moved across
+        # here recently". Blended rather than filled -- the terrain
+        # underneath is still the thing being judged.
+        if self.block is not None and self.block.shape == self.grid.shape:
+            block = cv2.resize(np.flipud(self.block).astype(np.uint8),
+                               (self.map_px, self.map_px),
+                               interpolation=cv2.INTER_NEAREST)
+            for value, colour, alpha in ((50, (60, 150, 240), 0.22),
+                                         (100, (70, 70, 240), 0.32)):
+                mask = block == value
+                if not mask.any():
+                    continue
+                tint = np.zeros_like(img)
+                tint[:] = colour
+                img[mask] = ((1.0 - alpha) * img[mask]
+                             + alpha * tint[mask]).astype(np.uint8)
+                # An outline as well as a tint. Tinted grass just looks like
+                # different grass; the edge is what makes it read as a border
+                # the aircraft is not allowed to cross.
+                contours, _ = cv2.findContours(mask.astype(np.uint8),
+                                               cv2.RETR_EXTERNAL,
+                                               cv2.CHAIN_APPROX_SIMPLE)
+                cv2.drawContours(img, contours, -1, colour, 1, cv2.LINE_AA)
+
         # Metre grid, every 10 m, so distances on the HUD are readable without
         # measuring against the panel numbers.
         step = self.metres_to_px(10.0)
@@ -217,6 +268,30 @@ class HudNode(Node):
             cv2.drawMarker(img, c, (120, 255, 120), cv2.MARKER_CROSS, 16, 2)
             if vehicle is not None:
                 cv2.line(img, vehicle, c, (120, 255, 120), 1, cv2.LINE_AA)
+
+        # Tracked movers: where each one is, and where it is going. The arrow
+        # is the velocity the tracker fitted, drawn over the message's own
+        # horizon, so a short arrow means a slow obstacle and a faint one
+        # means a track the tracker does not believe in yet.
+        if self.obstacles is not None:
+            for ob in self.obstacles.obstacles:
+                if ob.speed < 0.5:
+                    continue
+                p = self.world_to_px(ob.position.x, ob.position.y)
+                conf = min(max(ob.confidence, 0.0), 1.0)
+                shade = int(90 + 165 * conf)
+                colour = ((60, shade, shade) if ob.class_id == classes.VEHICLE
+                          else (60, 60, shade))
+                cv2.circle(img, p, 5, colour, -1)
+                horizon = float(self.obstacles.horizon_s) or 0.0
+                tip = self.world_to_px(ob.position.x + ob.velocity.x * horizon,
+                                       ob.position.y + ob.velocity.y * horizon)
+                cv2.arrowedLine(img, p, tip, colour, 2, cv2.LINE_AA,
+                                tipLength=0.15)
+                label = classes.CLASS_NAMES.get(ob.class_id, '?')[:3]
+                cv2.putText(img, f'{label} {ob.speed:.1f}',
+                            (p[0] + 7, p[1] - 6), FONT, 0.34, colour, 1,
+                            cv2.LINE_AA)
 
         if vehicle is not None:
             cv2.circle(img, vehicle, 6, (255, 255, 255), 2)
@@ -285,6 +360,29 @@ class HudNode(Node):
         line(f'v_min / v_max {self.v_min:.2f} / {self.v_max:.2f}', (170, 170, 170))
         line('Ki, Kd        not used', (140, 140, 140))
 
+        header('MOVING HAZARDS')
+        if self.obstacles is None:
+            line('tracker not publishing', (140, 140, 140))
+        else:
+            movers = [o for o in self.obstacles.obstacles if o.speed >= 0.5]
+            if not movers:
+                line('nothing moving', (140, 140, 140))
+            else:
+                for ob in movers[:4]:
+                    nm = classes.CLASS_NAMES.get(ob.class_id, '?')
+                    line(f'{nm:8s} {ob.speed:4.1f} m/s  conf {ob.confidence:.2f}',
+                         (120, 200, 240), 0.38, 15)
+            line(f'horizon       {self.obstacles.horizon_s:4.1f} s',
+                 (170, 170, 170), 0.38, 15)
+        if self.block is not None:
+            live = int((self.block == 100).sum())
+            mem = int((self.block == 50).sum())
+            total = self.block.size
+            line(f'predicted     {100.0 * live / total:4.1f} % of map',
+                 (120, 120, 240), 0.38, 15)
+            line(f'recently used {100.0 * mem / total:4.1f} % of map',
+                 (100, 170, 235), 0.38, 15)
+
         header('CHOSEN SITE')
         cand = self.candidate
         if cand is not None and cand.valid:
@@ -308,6 +406,9 @@ class HudNode(Node):
         # if read as RGB. Getting that backwards is how the legend ended up
         # promising blue and drawing orange.
         line('thin blue     SORA separation', (255, 170, 80), 0.36, 14)
+        line('red wash      predicted path', (70, 70, 240), 0.36, 14)
+        line('amber wash    recently crossed', (60, 150, 240), 0.36, 14)
+        line('arrow         tracked mover', (200, 200, 200), 0.36, 14)
         return img
 
     @staticmethod
