@@ -15,6 +15,13 @@ BUILDING = 6
 WATER = 7
 VEHICLE = 8
 PERSON = 9
+#: Added later than the first nine. The scheme is append-only on purpose: the
+#: mask carries these values as pixels and the map indexes arrays by them, so
+#: renumbering an existing class would silently reinterpret every recording
+#: ever made with it.
+FENCE = 10
+POLE = 11
+SAND = 12
 
 #: id -> human readable name
 CLASS_NAMES = {
@@ -28,6 +35,9 @@ CLASS_NAMES = {
     WATER: 'water',
     VEHICLE: 'vehicle',
     PERSON: 'person',
+    FENCE: 'fence',
+    POLE: 'pole',
+    SAND: 'sand',
 }
 
 #: id -> default risk, 0.0 safest .. 1.0 unsafe. Overridable via the
@@ -43,6 +53,14 @@ DEFAULT_CLASS_RISK = {
     WATER: 1.0,
     VEHICLE: 1.0,
     PERSON: 1.0,
+    # Thin structures. Not landable and worth real separation -- a fence post
+    # or a lamp post is small in the mask and unforgiving in a rotor.
+    FENCE: 1.0,
+    POLE: 1.0,
+    # Landable, and softer than gravel. Included so the risk ordering has
+    # something to do besides separate safe from unsafe: on a map with sand
+    # and gravel both available the score should prefer the sand.
+    SAND: 0.15,
 }
 
 #: id -> RGB, for human-readable debug views only. Nothing decides anything
@@ -62,23 +80,26 @@ CLASS_COLORS = {
     WATER: (36, 87, 143),
     VEHICLE: (200, 40, 40),
     PERSON: (240, 150, 30),
+    FENCE: (120, 90, 60),
+    POLE: (90, 90, 110),
+    SAND: (196, 184, 120),
 }
 
 #: C_safe -- the only classes a landing may touch down on.
-DEFAULT_SAFE_CLASSES = [GRASS, DIRT, GRAVEL]
+DEFAULT_SAFE_CLASSES = [GRASS, DIRT, GRAVEL, SAND]
 
 #: Classes a landing site must keep an absolute SORA separation distance from.
 #: Distinct from "not safe": UNKNOWN and VEGETATION are not landable, but you
 #: do not owe them three metres of clearance -- you owe that to things that can
 #: be hurt, and to structures you could strike. Everything not landable is
 #: still handled by the smaller r_fit clearance.
-DEFAULT_HAZARD_CLASSES = [BUILDING, WATER, VEHICLE, PERSON]
+DEFAULT_HAZARD_CLASSES = [BUILDING, WATER, VEHICLE, PERSON, FENCE, POLE]
 
 NUM_CLASSES = len(CLASS_NAMES)
 
 __all__ = [
     'UNKNOWN', 'GRASS', 'DIRT', 'GRAVEL', 'PAVEMENT', 'VEGETATION',
-    'BUILDING', 'WATER', 'VEHICLE', 'PERSON',
+    'BUILDING', 'WATER', 'VEHICLE', 'PERSON', 'FENCE', 'POLE', 'SAND',
     'CLASS_NAMES', 'CLASS_COLORS', 'DEFAULT_CLASS_RISK',
     'DEFAULT_SAFE_CLASSES', 'DEFAULT_HAZARD_CLASSES', 'NUM_CLASSES',
 ]

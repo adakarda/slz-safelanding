@@ -101,7 +101,29 @@ def _heading(start, goal):
     return math.atan2(goal[1] - start[1], goal[0] - start[0])
 
 
-def person_model_block(p) -> str:
+def leg_for(index, start, goal, spacing):
+    """Start and goal for obstacle `index`, offset sideways from the base leg.
+
+    Several obstacles of the same kind share one pair of numbers in the
+    parameter file and are spread out from it: obstacle 0 runs the leg as
+    written, and each one after it is pushed `spacing` metres to the side,
+    alternating so the group stays centred on the original route rather than
+    drifting off it. The phase offset that keeps them from moving in lockstep
+    is applied at runtime by obstacle_driver, not here -- this file only has
+    to place them.
+    """
+    if index == 0:
+        return list(start), list(goal)
+    # 1, -1, 2, -2, ... so the group grows either side of the original line.
+    step = ((index + 1) // 2) * (1 if index % 2 else -1)
+    heading = _heading(start, goal)
+    nx, ny = -math.sin(heading), math.cos(heading)
+    off = step * spacing
+    return ([start[0] + nx * off, start[1] + ny * off],
+            [goal[0] + nx * off, goal[1] + ny * off])
+
+
+def person_model_block(p, name=None, start=None) -> str:
     """A cylinder labelled PERSON(9) at its start pose, driven at runtime.
 
     Same geometry as the static people already in the world, so a moving
@@ -109,8 +131,9 @@ def person_model_block(p) -> str:
     is the point: the only thing that should distinguish them downstream is
     that one of them moves.
     """
-    start = p['person_start']
-    return f"""    <model name="{p['person_name']}">
+    start = start if start is not None else p['person_start']
+    name = name or p['person_name']
+    return f"""    <model name="{name}">
       <static>true</static>
       <pose>{start[0]} {start[1]} 0.9 0 0 0</pose>
       <link name="link">
@@ -132,16 +155,19 @@ def person_model_block(p) -> str:
 """
 
 
-def person_actor_block(p) -> str:
+def person_actor_block(p, name=None, start=None, goal=None) -> str:
     """A walking <actor> labelled PERSON(9), looping start -> goal -> start."""
-    start, goal, speed = p['person_start'], p['person_goal'], p['person_speed']
+    start = start if start is not None else p['person_start']
+    goal = goal if goal is not None else p['person_goal']
+    speed = p['person_speed']
+    name = name or p['person_name']
     leg = _leg_time(start, goal, speed)
     out_h, back_h = _heading(start, goal), _heading(goal, start)
     # z: the actor mesh is authored with its origin at the feet, and Gazebo
     # places actors at the pose given -- 1.0 m sinks it to roughly waist
     # height on flat ground, which is what the PX4 example worlds use.
     z = p['person_z']
-    return f"""    <actor name="{p['person_name']}">
+    return f"""    <actor name="{name}">
       <skin>
         <filename>{ACTOR_SKIN}</filename>
         <scale>1.0</scale>
@@ -176,7 +202,7 @@ def person_actor_block(p) -> str:
 """
 
 
-def vehicle_block(p) -> str:
+def vehicle_block(p, name=None, start=None, goal=None) -> str:
     """A box labelled VEHICLE(8), parked at its start pose.
 
     Static on purpose. obstacle_driver teleports it along the trajectory
@@ -185,11 +211,13 @@ def vehicle_block(p) -> str:
     to be a hazard to. The collision geometry is kept only so the shape is
     visible to anything that queries the world geometrically.
     """
-    start, goal = p['vehicle_start'], p['vehicle_goal']
+    start = start if start is not None else p['vehicle_start']
+    goal = goal if goal is not None else p['vehicle_goal']
+    name = name or p['vehicle_name']
     yaw = _heading(start, goal)
     size = p['vehicle_size']
     z = size[2] / 2.0
-    return f"""    <model name="{p['vehicle_name']}">
+    return f"""    <model name="{name}">
       <static>true</static>
       <pose>{start[0]} {start[1]} {z} 0 0 {yaw:.4f}</pose>
       <link name="link">
@@ -237,13 +265,33 @@ def render(params) -> str:
         # disk should always match the parameters, including "no obstacles".
         return template.replace(MARKER, '    <!-- dynamic obstacles disabled -->')
     kind = params.get('person_kind', 'model')
-    if kind == 'actor':
-        person = person_actor_block(params)
-    elif kind == 'model':
-        person = person_model_block(params)
-    else:
+    if kind not in ('actor', 'model'):
         raise SystemExit(f'person_kind must be "model" or "actor", got "{kind}"')
-    return template.replace(MARKER, person + '\n' + vehicle_block(params))
+
+    blocks = []
+
+    # Names carry the index even when there is only one. A name that says
+    # nothing about how many there are is a name that silently changes meaning
+    # the day a second one is added.
+    n_people = max(0, int(params.get('person_count', 1)))
+    p_spacing = float(params.get('person_spacing_m', 6.0))
+    for i in range(n_people):
+        start, goal = leg_for(i, params['person_start'], params['person_goal'],
+                              p_spacing)
+        name = f"{params['person_name']}_{i}"
+        blocks.append(person_actor_block(params, name, start, goal)
+                      if kind == 'actor'
+                      else person_model_block(params, name, start))
+
+    n_vehicles = max(0, int(params.get('vehicle_count', 1)))
+    v_spacing = float(params.get('vehicle_spacing_m', 7.0))
+    for i in range(n_vehicles):
+        start, goal = leg_for(i, params['vehicle_start'], params['vehicle_goal'],
+                              v_spacing)
+        blocks.append(vehicle_block(params, f"{params['vehicle_name']}_{i}",
+                                    start, goal))
+
+    return template.replace(MARKER, '\n'.join(blocks))
 
 
 def main():

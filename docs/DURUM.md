@@ -772,3 +772,85 @@ iki kez çalıştırıldığında aynı poz çıktı.
 **Not:** ölçüm ve regresyon script'lerinin `--fixed` kullanması gerekiyor;
 aksi hâlde karşılaştırma koşuları farklı yerlerden başlar ve sayılar
 kıyaslanamaz hâle gelir.
+
+---
+
+# 15. Daha fazla sınıf, daha fazla engel (2026-09-04)
+
+**İstenen:** dünyada daha fazla sınıf ve engel; dinamik taraf tek insan/tek
+araçla sınırlı kalmasın; sınıf şeması tek kaynaktan türesin; hızın ne kadar
+etkilendiği ölçülsün.
+
+## 15.1 Yeni sınıflar
+
+`eland_common/classes.py`'ye üç sınıf eklendi — şema **eklemeli**, mevcut
+ID'ler değişmedi. Maske piksel değeri olarak bu ID'leri taşıyor ve harita
+dizileri onlarla indeksleniyor; var olan bir sınıfı yeniden numaralamak eski
+her kaydı sessizce başka bir şeye çevirirdi.
+
+| ID | Sınıf | Risk | Rol |
+|---|---|---|---|
+| 10 | `FENCE` | 1.0 | Tehlike (SORA ayrımı ister). 12 cm kalınlık = harita çözünürlüğünde ~1 hücre |
+| 11 | `POLE` | 1.0 | Tehlike. 32 cm çap = ~2 hücre |
+| 12 | `SAND` | 0.15 | **İnilebilir**, çakıldan yumuşak |
+
+`NUM_CLASSES` 10 → 13; `CLASS_NAMES`, `DEFAULT_CLASS_RISK`, `CLASS_COLORS`,
+`DEFAULT_SAFE_CLASSES`, `DEFAULT_HAZARD_CLASSES` hepsi aynı dosyada güncellendi
+ve mapping / detector / HUD bunları oradan türetiyor — hiçbir yere ikinci bir
+liste yazılmadı.
+
+İnce yapılar kasten seçildi: mesafe dönüşümü engelin **büyüklüğünü** değil,
+uzaklığını umursar. Bir çitin bir binadan daha az saygı görmemesi gerekir.
+
+## 15.2 Yeni statik engeller
+
+Üç çit hattı, üç direk, bir kum yaması, üç ağaçlık bir koru, ve alçak-uzun bir
+depo binası. Dünya 24 → **37 model**. Yerleşim haritanın ortasını kasten açık
+bırakıyor: amaç seçimi zorlaştırmak, inişi imkânsızlaştırmak değil.
+
+## 15.3 Çoklu dinamik engel
+
+Sayılar parametre: `person_count` (3), `vehicle_count` (2),
+`person_spacing_m`, `vehicle_spacing_m`.
+
+Kural: engel 0 parametredeki güzergâhı aynen kullanır; sonrakiler o hattın
+**yanına** kaydırılır (1, −1, 2, −2 … sırasıyla, grup hattın üstünde merkezli
+kalsın diye) ve her biri kendi güzergâhında **faz kaydırmalı** ilerler. Üç araç
+20 saniyelik bir bacakta yaklaşık yedi saniye arayla geçer — konvoy değil,
+trafik.
+
+`gen_world.py` modelleri `dyn_person_0..2`, `dyn_vehicle_0..1` olarak üretiyor;
+`obstacle_driver` hepsini sürüyor. Truth topic'i artık **önce araçlar, sonra
+insanlar** sırasıyla hepsini yayınlıyor — sıra sözleşme, çünkü `PoseArray`'de
+isim yok.
+
+## 15.4 Ölçüm
+
+20 m'de asılı, sabit doğuş (`--fixed`), 90 s:
+
+| | öncesi (8 sınıf, 1+1 engel) | sonrası (11 sınıf, 3+2 engel) |
+|---|---|---|
+| `/eland/semantic_mask` | 3.11 Hz | **3.19 Hz** |
+| En uzun kare boşluğu | 0.43 s | 0.71 s |
+| Tek karede görülen sınıf | 8 | **11** |
+| İnsan izleme | 272/272, hata 1.37 m | **150/150, hata 1.32 m** |
+| Araç izleme | 207/272, hata 1.86 m | 114/150, hata **2.16 m** |
+
+Maskede tek karede görülenler (ortalama piksel):
+
+```
+grass 55696 · pavement 10831 · vegetation 4149 · sand 2742 · fence 1484
+vehicle 1370 · person 165 · dirt 195 · building 85 · pole 65 · gravel 26
+```
+
+**Hız etkilenmedi.** 3.07–3.19 Hz aralığı koşular arası gürültü; sınıf ve
+engel sayısını artırmak segmentasyonu yavaşlatmıyor — render maliyeti piksel
+sayısında, model sayısında değil.
+
+**Bedeli olan yer izleme:** araç konum hatası 1.86 → 2.16 m ve izlenme oranı
+%76 → %76 (114/150). İki araç aynı sınıftan iki leke demek; en yakın komşu
+eşlemesi ikisini karıştırabiliyor. Bu, çoklu engelin gerçek maliyeti ve
+açık madde olarak duruyor.
+
+**Yeni sınıflar görülüyor:** fence 1484 px ve pole 65 px ile her karede
+mevcut — 32 cm'lik bir direk 25 m'den görülüyor.

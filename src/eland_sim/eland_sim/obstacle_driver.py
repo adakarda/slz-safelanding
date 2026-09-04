@@ -69,31 +69,55 @@ class ObstacleDriver(Node):
         self.declare_parameter('person_goal', [10.0, -8.0])
         self.declare_parameter('person_speed', 1.2)
         self.declare_parameter('person_z', 1.0)
+        self.declare_parameter('person_count', 1)
+        self.declare_parameter('person_spacing_m', 6.0)
         self.declare_parameter('vehicle_name', 'dyn_vehicle')
         self.declare_parameter('vehicle_start', [20.0, 0.0])
         self.declare_parameter('vehicle_goal', [-20.0, 0.0])
         self.declare_parameter('vehicle_speed', 3.0)
         self.declare_parameter('vehicle_size', [4.4, 1.9, 1.5])
         self.declare_parameter('vehicle_mode', 'pingpong')
+        self.declare_parameter('vehicle_count', 1)
+        self.declare_parameter('vehicle_spacing_m', 7.0)
         self.declare_parameter('truth_topic', '/eland/obstacle_truth')
 
         gp = self.get_parameter
         self._enabled = gp('enable').value
         self._world = gp('world_name').value
-        self._person_name = gp('person_name').value
-        self._vehicle_name = gp('vehicle_name').value
-        self._start = list(gp('vehicle_start').value)
-        self._goal = list(gp('vehicle_goal').value)
-        self._speed = float(gp('vehicle_speed').value)
-        self._mode = gp('vehicle_mode').value
-        self._z = float(gp('vehicle_size').value[2]) / 2.0
         rate = float(gp('update_rate_hz').value)
+        self._person_kind = gp('person_kind').value
+        self._mode = gp('vehicle_mode').value
 
-        self._leg = math.hypot(self._goal[0] - self._start[0],
-                               self._goal[1] - self._start[1])
-        self._leg_time = self._leg / self._speed if self._speed > 0 else 0.0
-        self._yaw_out = math.atan2(self._goal[1] - self._start[1],
-                                   self._goal[0] - self._start[0])
+        # One list, built from the same numbers gen_world.py used to place
+        # them. Vehicles first, then people: the truth topic is a PoseArray
+        # with no names in it, so the order is the contract, and it has to be
+        # written down in exactly one place.
+        self._movers = []
+        self._movers += self._build(
+            kind='vehicle',
+            name=gp('vehicle_name').value,
+            count=int(gp('vehicle_count').value),
+            start=list(gp('vehicle_start').value),
+            goal=list(gp('vehicle_goal').value),
+            speed=float(gp('vehicle_speed').value),
+            spacing=float(gp('vehicle_spacing_m').value),
+            z=float(gp('vehicle_size').value[2]) / 2.0,
+            driven=True)
+        self._movers += self._build(
+            kind='person',
+            name=gp('person_name').value,
+            count=int(gp('person_count').value),
+            start=list(gp('person_start').value),
+            goal=list(gp('person_goal').value),
+            speed=float(gp('person_speed').value),
+            spacing=float(gp('person_spacing_m').value),
+            # 0.9 m: half of the 1.8 m cylinder, so it stands on the ground
+            # rather than half-buried, matching the static people.
+            z=0.9,
+            # An actor is driven by its own script; these commands would be
+            # ignored, and the published truth is then nominal rather than
+            # commanded.
+            driven=self._person_kind == 'model')
 
         self._gz = GzNode()
         self._service = f'/world/{self._world}/set_pose'
@@ -108,26 +132,8 @@ class ObstacleDriver(Node):
         self._gz.subscribe(WorldStatistics, f'/world/{self._world}/stats',
                            self._on_stats)
 
-        # The person is driven exactly like the vehicle when it is a model,
-        # which is the default. When gen_world.py was told to emit an <actor>
-        # instead, Gazebo's trajectory script owns the pose and these commands
-        # are ignored -- the published truth is then the script's nominal
-        # position, which was measured to run about 17% fast, so it is
-        # flagged in the message rather than pretended to be exact.
-        self._person_kind = gp('person_kind').value
-        self._person_start = list(gp('person_start').value)
-        self._person_goal = list(gp('person_goal').value)
-        self._person_speed = float(gp('person_speed').value)
-        self._person_z = float(gp('person_z').value)
-        person_dist = math.hypot(self._person_goal[0] - self._person_start[0],
-                                 self._person_goal[1] - self._person_start[1])
-        self._person_leg_time = (person_dist / self._person_speed
-                                 if self._person_speed > 0 else 0.0)
-
         self._truth_pub = self.create_publisher(
             PoseArray, gp('truth_topic').value, 10)
-
-        self._vehicle_pose = (self._start[0], self._start[1], self._yaw_out)
 
         if not self._enabled:
             self.get_logger().warn(
@@ -137,9 +143,80 @@ class ObstacleDriver(Node):
 
         self.create_timer(1.0 / rate, self._tick)
         self.create_timer(10.0, self._log_rtf)
-        self.get_logger().info(
-            f'driving {self._vehicle_name} {self._start} -> {self._goal} at '
-            f'{self._speed} m/s ({self._mode}), {self._leg_time:.1f} s per leg')
+        for m in self._movers:
+            self.get_logger().info(
+                f"{'driving' if m['driven'] else 'tracking'} {m['name']} "
+                f"{[round(v, 1) for v in m['start']]} -> "
+                f"{[round(v, 1) for v in m['goal']]} at {m['speed']} m/s "
+                f"({self._mode}), {m['leg_time']:.1f} s per leg, "
+                f"phase {m['phase']:.2f}")
+
+    # --------------------------------------------------------------- movers
+
+    @staticmethod
+    def _build(kind, name, count, start, goal, speed, spacing, z, driven):
+        """Spread `count` obstacles along one configured leg.
+
+        Obstacle 0 runs the leg as written; each one after it is pushed
+        `spacing` metres to the side, alternating so the group stays centred
+        on the route rather than drifting off it. This has to match
+        gen_world.py, which placed the models -- the two are kept in step by
+        both reading the same parameters and applying the same rule, and the
+        rule is small enough to state twice rather than share a module for.
+
+        Each also gets a phase offset, so a row of obstacles does not march in
+        lockstep: with three vehicles on a 20 s leg they cross the map roughly
+        seven seconds apart, which is a scenario rather than a formation.
+        """
+        movers = []
+        count = max(0, int(count))
+        for i in range(count):
+            if i == 0:
+                s0, g0 = list(start), list(goal)
+            else:
+                step = ((i + 1) // 2) * (1 if i % 2 else -1)
+                heading = math.atan2(goal[1] - start[1], goal[0] - start[0])
+                nx, ny = -math.sin(heading), math.cos(heading)
+                off = step * spacing
+                s0 = [start[0] + nx * off, start[1] + ny * off]
+                g0 = [goal[0] + nx * off, goal[1] + ny * off]
+            dist = math.hypot(g0[0] - s0[0], g0[1] - s0[1])
+            movers.append({
+                'kind': kind,
+                'name': f'{name}_{i}',
+                'start': s0,
+                'goal': g0,
+                'speed': speed,
+                'z': z,
+                'driven': driven,
+                'leg_time': dist / speed if speed > 0 else 0.0,
+                'yaw_out': math.atan2(g0[1] - s0[1], g0[0] - s0[0]),
+                'phase': i / count if count else 0.0,
+            })
+        return movers
+
+    def _pose_at(self, mover, t):
+        """Where `mover` is at sim time t, as (x, y, yaw)."""
+        leg = mover['leg_time']
+        if leg <= 0.0:
+            return mover['start'][0], mover['start'][1], mover['yaw_out']
+
+        # The phase offset is in whole cycles, so it shifts the obstacle along
+        # its own route rather than changing the route.
+        t = t + mover['phase'] * 2.0 * leg
+        if self._mode == 'pingpong':
+            phase = (t % (2.0 * leg)) / leg
+            if phase <= 1.0:
+                frac, yaw = phase, mover['yaw_out']
+            else:
+                frac, yaw = 2.0 - phase, mover['yaw_out'] + math.pi
+        else:
+            frac = min(t / leg, 1.0)
+            yaw = mover['yaw_out']
+
+        x = mover['start'][0] + (mover['goal'][0] - mover['start'][0]) * frac
+        y = mover['start'][1] + (mover['goal'][1] - mover['start'][1]) * frac
+        return x, y, yaw
 
     # ------------------------------------------------------------------ gz io
 
@@ -174,30 +251,6 @@ class ObstacleDriver(Node):
                 f'so their speed in wall-clock terms is that factor times the '
                 f'configured value')
 
-    def _person_heading(self, t):
-        if self._person_leg_time <= 0.0:
-            return 0.0
-        phase = (t % (2.0 * self._person_leg_time)) / self._person_leg_time
-        out = math.atan2(self._person_goal[1] - self._person_start[1],
-                         self._person_goal[0] - self._person_start[0])
-        return out if phase <= 1.0 else out + math.pi
-
-    def _person_at(self, t):
-        """Where the person is at sim time t.
-
-        For the default `model` person this is the pose that gets commanded,
-        so it is truth in the same sense as the vehicle's. For an `actor` it
-        is only the script's nominal position, which Gazebo does not follow
-        exactly -- see the note above.
-        """
-        if self._person_leg_time <= 0.0:
-            return self._person_start[0], self._person_start[1]
-        phase = (t % (2.0 * self._person_leg_time)) / self._person_leg_time
-        frac = phase if phase <= 1.0 else 2.0 - phase
-        x = self._person_start[0] + (self._person_goal[0] - self._person_start[0]) * frac
-        y = self._person_start[1] + (self._person_goal[1] - self._person_start[1]) * frac
-        return x, y
-
     def _set_pose(self, name, x, y, z, yaw):
         req = GzPose()
         req.name = name
@@ -210,67 +263,38 @@ class ObstacleDriver(Node):
         ok, _ = self._gz.request(self._service, req, GzPose, Boolean, 200)
         return ok
 
-    # ---------------------------------------------------------------- motion
-
-    def _vehicle_at(self, t):
-        """Pose on the leg at sim time t."""
-        if self._leg_time <= 0.0:
-            return self._start[0], self._start[1], self._yaw_out
-
-        if self._mode == 'pingpong':
-            phase = (t % (2.0 * self._leg_time)) / self._leg_time
-            if phase <= 1.0:
-                frac, yaw = phase, self._yaw_out
-            else:
-                frac, yaw = 2.0 - phase, self._yaw_out + math.pi
-        else:
-            frac = min(t / self._leg_time, 1.0)
-            yaw = self._yaw_out
-
-        x = self._start[0] + (self._goal[0] - self._start[0]) * frac
-        y = self._start[1] + (self._goal[1] - self._start[1]) * frac
-        return x, y, yaw
-
     def _tick(self):
         if self._sim_time is None:
-            # No world statistics yet. Placing the vehicle on the wall clock
+            # No world statistics yet. Placing the obstacles on the wall clock
             # in the meantime would start the scenario at an offset nobody
-            # asked for, so it stays at its spawn pose until Gazebo speaks.
+            # asked for, so they stay at their spawn poses until Gazebo speaks.
             return
-        x, y, yaw = self._vehicle_at(self._sim_time)
-        self._vehicle_pose = (x, y, yaw)
-        self._set_pose(self._vehicle_name, x, y, self._z, yaw)
+        poses = []
+        for mover in self._movers:
+            x, y, yaw = self._pose_at(mover, self._sim_time)
+            poses.append((x, y, yaw))
+            if mover['driven']:
+                self._set_pose(mover['name'], x, y, mover['z'], yaw)
+        self._publish_truth(poses)
 
-        px, py = self._person_at(self._sim_time)
-        if self._person_kind == 'model':
-            # 0.9 m: half of the 1.8 m cylinder, so it stands on the ground
-            # rather than half-buried, matching the static people.
-            self._set_pose(self._person_name, px, py, 0.9,
-                           self._person_heading(self._sim_time))
-        self._publish_truth()
-
-    def _publish_truth(self):
-        """Both obstacles, vehicle first, person second. Order is the contract:
-        a PoseArray has no names, and adding a message type for a topic that
-        only exists to be plotted afterwards is not worth a new dependency in
-        eland_msgs."""
+    def _publish_truth(self, poses):
+        """Every obstacle, in `self._movers` order: vehicles first, then
+        people. A PoseArray has no names in it, so the order is the contract,
+        and it is stated in exactly two places -- here and where the list is
+        built. Adding a message type for a topic that exists only to be
+        plotted afterwards is not worth a new dependency in eland_msgs.
+        """
         msg = PoseArray()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = 'map'
-
-        veh = RosPose()
-        veh.position.x, veh.position.y = self._vehicle_pose[0], self._vehicle_pose[1]
-        veh.position.z = self._z
-        qz, qw = _yaw_to_quat(self._vehicle_pose[2])
-        veh.orientation.z, veh.orientation.w = qz, qw
-        msg.poses.append(veh)
-
-        px, py = self._person_at(self._sim_time)
-        per = RosPose()
-        per.position.x, per.position.y, per.position.z = px, py, self._person_z
-        per.orientation.w = 1.0
-        msg.poses.append(per)
-
+        for mover, (x, y, yaw) in zip(self._movers, poses):
+            pose = RosPose()
+            pose.position.x = x
+            pose.position.y = y
+            pose.position.z = mover['z']
+            qz, qw = _yaw_to_quat(yaw)
+            pose.orientation.z, pose.orientation.w = qz, qw
+            msg.poses.append(pose)
         self._truth_pub.publish(msg)
 
 

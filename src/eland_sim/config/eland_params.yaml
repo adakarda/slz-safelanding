@@ -48,11 +48,11 @@ mapping_node:
 
 detector_node:
   ros__parameters:
-    safe_classes: [1, 2, 3]        # grass, dirt, gravel
+    safe_classes: [1, 2, 3, 12]    # grass, dirt, gravel, sand
     # Things a landing site owes an absolute separation distance to. Note this
     # is NOT "everything that is not safe": UNKNOWN and VEGETATION are not
     # landable but do not demand 3 m of clearance, they are covered by r_fit.
-    hazard_classes: [6, 7, 8, 9]   # building, water, vehicle, person
+    hazard_classes: [6, 7, 8, 9, 10, 11]  # building, water, vehicle, person, fence, pole
     # SORA risk ordering. The two entries that matter most are the ones that
     # are NOT about the surface: vehicle and person are 1.0 not because a drone
     # cannot physically land there, but because SORA does not permit it.
@@ -69,6 +69,14 @@ detector_node:
       "7": 1.0                     # water
       "8": 1.0                     # vehicle  -> SORA vehicle-animal
       "9": 1.0                     # person
+      # Added 2026-09-04. Thin structures: a fence is 12 cm across and a pole
+      # 32 cm, one or two cells at the map resolution. They are here to check
+      # that a hazard does not have to be big to be respected.
+      "10": 1.0                    # fence
+      "11": 1.0                    # pole
+      # Landable, softer than gravel, so the risk ordering has something to do
+      # besides separating safe from unsafe.
+      "12": 0.15                   # sand
     # SORA separation from hazards. Absolute and non-negotiable.
     r_hazard: 3.0
     # "Does the aircraft fit here" -- x500 is ~0.5 m across, so this is mostly
@@ -303,6 +311,12 @@ obstacle_driver:
     # the pose that was commanded.
     person_name: "dyn_person"
     person_kind: "model"
+    # How many of them, and how far apart their parallel routes run. Obstacle
+    # 0 walks the leg below; the rest are pushed sideways from it, alternating
+    # so the group stays centred on the route, and each is phase-shifted so
+    # they do not march in lockstep.
+    person_count: 3
+    person_spacing_m: 6.0
     person_start: [-10.0, 8.0]
     person_goal: [10.0, 8.0]
     person_speed: 1.2
@@ -320,6 +334,10 @@ obstacle_driver:
     # crosses at a constant 3 m/s, leaves, and comes back 20 s later, so a
     # crossing is never far away in a test run.
     vehicle_name: "dyn_vehicle"
+    # Same rule as the people. Three vehicles on a 20 s leg cross the map
+    # about seven seconds apart, which is traffic rather than a convoy.
+    vehicle_count: 2
+    vehicle_spacing_m: 9.0
     vehicle_start: [30.0, 0.0]
     vehicle_goal: [-30.0, 0.0]
     vehicle_speed: 3.0
