@@ -733,3 +733,42 @@ geldi; ayrılık testi zaten yerindeydi.
 | 14 | **Manuel akıştaki öbeklenmenin kendisi giderilmedi** | Semptom `COM_RC_LOSS_T` ile karşılandı, kaynağı (uXRCE-DDS köprüsü mü, ROS zamanlayıcı mı, CPU doygunluğu mu) izole edilmedi. Gerçek donanımda aynı toleransla uçmak **doğru olmaz**. |
 | 15 | **GUI'li koşu ölçülmedi** | Bütün ölçümler `--headless`. Kullanıcının şikâyeti Gazebo penceresi açıkken çıktı; düzeltmeler orada da işe yaramalı ama bu doğrulanmadı. |
 | 16 | **Operatör kaçış yolu hâlâ yok** | §8/2 duruyor: mod kayıtlıyken kasıtlı bir RTL de acil inişe dönüyor. İstasyonun ısrarlı POSCTL isteği bunu maskeliyor, çözmüyor. |
+
+---
+
+# 14. Rastgele başlangıç konumu (2026-09-04)
+
+**Sorun:** doğuş noktası sabitti (orijin), yani her koşu aynı yirmi metrelik
+çimi test ediyordu. Bir iniş algoritması hep aynı mahalleyi görüyorsa yalnız
+o mahalleye karşı sınanmış olur.
+
+**Yapılan:** `scripts/pick_spawn.py` üretilen dünyayı okuyup engellerden ve
+hareketli engel güzergâhlarından uzak bir poz seçiyor; `run_sim.sh` varsayılan
+olarak bunu kullanıyor.
+
+- Engel sayılan şey: yüksekliği ≥ 0.5 m olan modeller. Yol, çakıl, toprak ve
+  gölet 2 cm'lik kutular — zemine sürülmüş boya; sınıfları iniş kararı için
+  önemli, doğuş noktası için değil.
+- Dinamik engellerin güzergâhı da (doğru parçası olarak) dışlanıyor.
+- `--seed N` ile tekrarlanabilir; seçilen poz ve seed hem ekrana hem
+  `/tmp/eland_logs/spawn.txt`'e yazılıyor.
+- `--fixed` (veya `--scenario` / `--pose`) eski sabit davranışı geri veriyor.
+
+**Ölçüm — 200 örnek, varsayılan sınırlar (±25 m):**
+
+| | öncesi | sonrası |
+|---|---|---|
+| Farklı doğuş noktası | 1 | **200/200** |
+| x yayılımı | — | −24.4 … 24.9 m (std 16.4) |
+| y yayılımı | — | −24.9 … 24.6 m (std 17.3) |
+| En yakın engele boşluk | — | min **6.04 m**, ort. 8.79 m |
+| Engel güzergâhına boşluk | — | min **8.23 m**, ort. 16.16 m |
+| Başarısız seçim | — | 0 |
+
+Uçtan uca doğrulama: `--seed 12345` ile seçilen poz `-4.17,-24.49,0,0,0,2.0433`;
+Gazebo aynı koşuda aracı `x=-4.170, y=-24.490` konumunda gösterdi. Aynı seed
+iki kez çalıştırıldığında aynı poz çıktı.
+
+**Not:** ölçüm ve regresyon script'lerinin `--fixed` kullanması gerekiyor;
+aksi hâlde karşılaştırma koşuları farklı yerlerden başlar ve sayılar
+kıyaslanamaz hâle gelir.

@@ -123,7 +123,11 @@ arayüzü, ajan ve beş ROS node'unun hepsinin gitmesi gerekir.
 
 | Seçenek | Ne yapar |
 |---|---|
-| `--scenario default\|person\|yard` | Doğuş yerini seçer |
+| *(varsayılan)* | **Doğuş noktası rastgele** — engellerden ≥6 m, hareketli engel güzergâhlarından ≥8 m uzakta. Seçilen poz ve seed ekrana ve `/tmp/eland_logs/spawn.txt`'e yazılır. |
+| `--seed N` | Aynı seed, aynı doğuş noktası (koşuyu tekrarlamak için) |
+| `--spawn-bounds x0,y0,x1,y1` | Rastgele pozun çekildiği alan (varsayılan ±25 m) |
+| `--fixed` | Eski davranış: orijinden kalk (regresyon karşılaştırmaları için) |
+| `--scenario default\|person\|yard` | Sabit doğuş yeri seçer |
 | `--pose X,Y,Z,R,P,Y` | Elle doğuş pozu |
 | `--takeoff [ALT]` | Her şey açıldıktan sonra arm + kalkış (varsayılan 18 m) |
 | `--auto` | Kalkış + modu seç (tam demo) |
@@ -138,7 +142,18 @@ arayüzü, ajan ve beş ROS node'unun hepsinin gitmesi gerekir.
 çalıştırmana gerek yok. `--headless` yalnızca *Gazebo* penceresini kapatır,
 HUD yine açılır; ikisini birden istemiyorsan `--headless --hud-headless`.
 
-Üç senaryo:
+**Bir koşuyu tekrar üretmek:** çıktının başındaki iki satır bunun içindir.
+
+```
+[run_sim] rastgele dogus: pose -4.17,-24.49,0,0,0,2.0433  (seed 12345)
+[run_sim]   ayni koşuyu tekrarlamak icin: --seed 12345
+[run_sim]   ya da tam olarak: --pose -4.17,-24.49,0,0,0,2.0433
+```
+
+`--pose` olanı daha sağlamdır: seed, seçim kodunun aynı kalmasına bağlıdır,
+poz bağlı değildir.
+
+Üç sabit senaryo (`--scenario` ile):
 
 | | Ne görürsün |
 |---|---|

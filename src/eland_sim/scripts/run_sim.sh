@@ -27,6 +27,13 @@ ROS_DISTRO_SETUP="/opt/ros/jazzy/setup.bash"
 LOG_DIR="${LOG_DIR:-/tmp/eland_logs}"
 
 POSE="0,0,0,0,0,0"
+# Where the aircraft starts. Random unless something says otherwise, because
+# a fixed spawn means every run tests the same twenty metres of grass -- and
+# the landing logic was written to handle a world, not a neighbourhood.
+# --scenario and --pose both pin it; --fixed pins it at the origin.
+SPAWN_MODE="random"
+SPAWN_SEED=""
+SPAWN_BOUNDS=""
 # A whole parameter file, and arbitrary launch arguments. Both exist for the
 # comparison runs: the trajectory filter has to be measured against itself
 # switched off, in the same world, without editing the tracked parameter file
@@ -45,6 +52,11 @@ usage() {
 	cat <<'EOF'
 run_sim.sh [options]
 
+  (spawn is RANDOM unless one of --scenario / --pose / --fixed is given)
+  --random-spawn     random start pose, clear of obstacles (the default)
+  --seed N           same seed, same start pose -- for repeating a run
+  --spawn-bounds x0,y0,x1,y1   area the random pose is drawn from
+  --fixed            start at the world origin (old default)
   --scenario NAME    default | person | yard   (sets --pose)
                        default  open grass, site is right below the vehicle
                        person   3 m from a person, SORA shifts the site
@@ -77,10 +89,31 @@ while [ $# -gt 0 ]; do
 			exit 1
 			;;
 		esac
+		SPAWN_MODE="fixed"
 		shift 2
 		;;
 	--pose)
 		POSE="$2"
+		SPAWN_MODE="fixed"
+		shift 2
+		;;
+	--fixed)
+		POSE="0,0,0,0,0,0"
+		SPAWN_MODE="fixed"
+		shift
+		;;
+	--random-spawn)
+		SPAWN_MODE="random"
+		shift
+		;;
+	--seed)
+		SPAWN_SEED="$2"
+		SPAWN_MODE="random"
+		shift 2
+		;;
+	--spawn-bounds)
+		SPAWN_BOUNDS="$2"
+		SPAWN_MODE="random"
 		shift 2
 		;;
 	--takeoff)
@@ -207,7 +240,35 @@ fi
 python3 "$(dirname "$0")/gen_world.py" $GEN_ARGS >/dev/null ||
 	fail "dunya uretilemedi: scripts/gen_world.py"
 
+# --------------------------------------------------------------- spawn pose
+#
+# After the world is generated, because the picker reads that world to find
+# out what it has to stay away from, and the dynamic obstacles are only in it
+# once the generator has run.
+if [ "$SPAWN_MODE" = "random" ]; then
+	SPAWN_ARGS=""
+	[ -n "$SPAWN_SEED" ] && SPAWN_ARGS="$SPAWN_ARGS --seed $SPAWN_SEED"
+	[ -n "$SPAWN_BOUNDS" ] && SPAWN_ARGS="$SPAWN_ARGS --bounds $SPAWN_BOUNDS"
+	# shellcheck disable=SC2086
+	SPAWN_OUT=$(python3 "$(dirname "$0")/pick_spawn.py" $SPAWN_ARGS 2>/dev/null)
+	if [ -n "$SPAWN_OUT" ]; then
+		POSE=$(echo "$SPAWN_OUT" | head -1)
+		SPAWN_SEED=$(echo "$SPAWN_OUT" | tail -1)
+		# Printed rather than buried: a run nobody can repeat is a run that
+		# cannot be argued about.
+		echo "[run_sim] rastgele dogus: pose $POSE  (seed $SPAWN_SEED)"
+		echo "[run_sim]   ayni koşuyu tekrarlamak icin: --seed $SPAWN_SEED"
+		echo "[run_sim]   ya da tam olarak: --pose $POSE"
+	else
+		echo "[run_sim] UYARI: dogus noktasi secilemedi, orijin kullaniliyor" >&2
+	fi
+fi
+
 mkdir -p "$LOG_DIR"
+# Kept with the run's own logs, so a recording and the pose it was made from
+# do not have to be matched up by memory afterwards.
+printf 'pose %s\nseed %s\nmode %s\n' "$POSE" "${SPAWN_SEED:--}" "$SPAWN_MODE" \
+	>"$LOG_DIR/spawn.txt"
 # Anything left over from a previous run steals the ports and the topics.
 pkill -x px4 2>/dev/null
 pkill -x ruby 2>/dev/null
