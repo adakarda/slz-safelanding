@@ -60,7 +60,7 @@ import cv2
 import numpy as np
 import rclpy
 import rclpy.executors
-from px4_msgs.msg import (ManualControlSetpoint, VehicleCommand,
+from px4_msgs.msg import (FailsafeFlags, ManualControlSetpoint, VehicleCommand,
                           VehicleLocalPosition, VehicleStatus)
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -105,7 +105,19 @@ class ControlStation(Node):
         super().__init__('control_station')
 
         self.declare_parameter('hud_topic', '/eland/hud')
-        self.declare_parameter('manual_rate_hz', 20.0)
+        # 33 Hz rather than 20. Measured against a steady 20 Hz stream, the
+        # rate PX4 actually accepted swung between 0 and 31 Hz -- the messages
+        # arrive in bursts with gaps in between, and every gap longer than
+        # COM_RC_LOSS_T is a lost transmitter as far as the failsafe is
+        # concerned. Sending faster does not fix the gaps, it just puts more
+        # messages in each burst; run_sim.sh widens the timeout, which is the
+        # part that actually matters.
+        self.declare_parameter('manual_rate_hz', 33.0)
+        # Hold the operator's intention. If a failsafe takes the aircraft back
+        # while the operator is flying it, ask again rather than leaving them
+        # pressing a key that appears to do nothing.
+        self.declare_parameter('reassert_manual', True)
+        self.declare_parameter('reassert_period_s', 2.0)
         # 14550 is where PX4 sends; 18570 is where its "Normal" mavlink
         # instance listens. Heartbeats aimed at 14550 are never seen by the
         # autopilot, so the link it is meant to notice would never exist.
@@ -118,8 +130,14 @@ class ControlStation(Node):
         self.hud = None
         self.pos = None
         self.status = None
+        self.flags = None
         self.manual_active = False
         self.posctl_request_at = None
+        # What the operator asked for, as opposed to what PX4 is doing. The
+        # difference between the two is the thing worth showing.
+        self.wants_manual = False
+        self.last_reassert = 0.0
+        self.takeovers = 0
         self.sticks = {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0, 'throttle': 0.0}
         self.notice = 'baslatildi -- 1: arm, 2: kalkis, 3: manuel kontrol'
 
@@ -136,6 +154,11 @@ class ControlStation(Node):
         self.create_subscription(
             VehicleStatus, self.get_parameter('vehicle_status_topic').value,
             self.on_status, PX4_QOS)
+        # Why PX4 is doing what it is doing. Without this the station can say
+        # "the aircraft is landing" but not "because it thinks your control
+        # link is gone", and those need different reactions from the operator.
+        self.create_subscription(
+            FailsafeFlags, '/fmu/out/failsafe_flags', self.on_flags, PX4_QOS)
 
         # The manual control stream runs on its own timer, spun by a background
         # executor, deliberately not from the render loop. PX4 treats a gap
@@ -146,6 +169,7 @@ class ControlStation(Node):
         period = 1.0 / float(self.get_parameter('manual_rate_hz').value)
         self.create_timer(period, self.publish_manual)
         self.create_timer(0.1, self.service_pending_mode)
+        self.create_timer(0.5, self.hold_manual)
 
         self.gcs = None
         if bool(self.get_parameter('gcs_heartbeat').value):
@@ -201,6 +225,56 @@ class ControlStation(Node):
 
     def on_status(self, msg: VehicleStatus) -> None:
         self.status = msg
+
+    def on_flags(self, msg: FailsafeFlags) -> None:
+        self.flags = msg
+
+    def failsafe_reason(self) -> str:
+        """The conditions PX4 is currently unhappy about, in the order they
+        matter to an operator. Only the ones that can take the aircraft away
+        from them -- the list also carries things like a missing mission that
+        are true the whole flight and mean nothing here."""
+        f = self.flags
+        if f is None:
+            return ''
+        named = [
+            (f.manual_control_signal_lost, 'kumanda baglantisi kopuk sayiliyor'),
+            (f.gcs_connection_lost, 'GCS baglantisi kopuk'),
+            (f.battery_low_remaining_time, 'batarya suresi kritik'),
+            (f.geofence_breached, 'geofence asildi'),
+            (f.local_position_invalid, 'konum kestirimi gecersiz'),
+            (f.fd_critical_failure, 'kritik ucus arizasi'),
+        ]
+        return ', '.join(text for flag, text in named if flag)
+
+    def hold_manual(self) -> None:
+        """Keep asking for POSCTL while the operator is flying and PX4 is not
+        letting them.
+
+        A failsafe outranks a mode request, so the request can be accepted and
+        then undone a second later -- measured: the link was declared lost
+        again about four seconds after a successful handover, and the landing
+        mode took the aircraft back. Pressing 3 harder does not help; the
+        station asks again on the operator's behalf and, more importantly,
+        says why it is having to.
+        """
+        if not (self.wants_manual and self.manual_active):
+            return
+        if not bool(self.get_parameter('reassert_manual').value):
+            return
+        st = self.status
+        if st is None or st.nav_state == NAV_POSCTL:
+            return
+        now = self.now()
+        if now - self.last_reassert < float(
+                self.get_parameter('reassert_period_s').value):
+            return
+        self.last_reassert = now
+        self.takeovers += 1
+        self.set_nav_state(NAV_POSCTL)
+        why = self.failsafe_reason()
+        self.notice = (f'PX4 kontrolu geri aldi ({why or "failsafe"}) -- '
+                       f'manuel istegi tekrarlaniyor ({self.takeovers})')
 
     # ------------------------------------------------------------------
     def now(self) -> float:
@@ -301,12 +375,19 @@ class ControlStation(Node):
             for a in self.sticks:
                 self.sticks[a] = 0.0
             self.manual_active = True
+            self.wants_manual = True
+            self.takeovers = 0
             self.posctl_request_at = self.now() + MANUAL_SETTLE_S
             self.notice = 'manuel kontrol kuruluyor...'
         elif k == 'l':
+            self.wants_manual = False
             self.set_nav_state(NAV_LAND)
             self.notice = "PX4 iniş modu"
         elif k == '0':
+            # Asking for the landing mode is also giving up manual control;
+            # without this the station would spend the whole descent trying to
+            # take the aircraft back from a mode the operator just selected.
+            self.wants_manual = False
             self.set_nav_state(NAV_EXTERNAL1)
             self.notice = 'ACIL INIS modu tetiklendi'
         return True
@@ -357,18 +438,36 @@ class ControlStation(Node):
                     cv2.LINE_AA)
         armed = ''
         nav = ''
+        failsafe = ''
         if self.status is not None:
             armed = ('ARMED' if self.status.arming_state == 2 else 'disarmed')
-            nav = f'nav_state {self.status.nav_state}'
+            nav = f'nav_state {self.status.nav_state}' + (
+                ' (POSCTL)' if self.status.nav_state == NAV_POSCTL else
+                ' (ACIL INIS)' if self.status.nav_state == NAV_EXTERNAL1 else '')
+            if self.status.failsafe:
+                failsafe = 'FAILSAFE'
         manual = 'manuel: AKTIF' if self.manual_active else 'manuel: kapali'
         rows = [armed, nav, manual]
+        if failsafe:
+            rows.append(failsafe)
         if self.pos is not None:
             rows.append(f'alt {-self.pos.z:.1f} m')
             rows.append(f'hiz {math.hypot(self.pos.vx, self.pos.vy):.1f} m/s')
         for i, text in enumerate(rows):
             color = (120, 235, 120) if text == 'ARMED' else (200, 200, 200)
+            if text == 'FAILSAFE':
+                color = (90, 90, 250)
             cv2.putText(strip, text, (sx, 48 + i * 20), FONT, 0.40, color, 1,
                         cv2.LINE_AA)
+
+        # The reason, when there is one. An operator who can see "the link is
+        # considered lost" knows the aircraft is not ignoring them and knows
+        # what would fix it; without it, the same event is just the vehicle
+        # doing something unaccountable.
+        why = self.failsafe_reason()
+        if why:
+            cv2.putText(strip, f'sebep: {why}', (14, strip.shape[0] - 34), FONT,
+                        0.42, (90, 160, 250), 1, cv2.LINE_AA)
 
         cv2.putText(strip, self.notice, (14, strip.shape[0] - 14), FONT, 0.42,
                     (240, 200, 120), 1, cv2.LINE_AA)

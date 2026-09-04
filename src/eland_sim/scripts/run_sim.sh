@@ -19,6 +19,9 @@
 set -uo pipefail
 
 PX4_DIR="${PX4_DIR:-$HOME/PX4-Autopilot}"
+# The px4-* clients talk to the running instance; used for parameters here and
+# for arm/takeoff further down.
+PX4_BIN="$PX4_DIR/build/px4_sitl_default/bin"
 WS_DIR="${WS_DIR:-$HOME/ros2_ws}"
 ROS_DISTRO_SETUP="/opt/ros/jazzy/setup.bash"
 LOG_DIR="${LOG_DIR:-/tmp/eland_logs}"
@@ -232,6 +235,34 @@ grep -q "Startup script returned successfully" "$LOG_DIR/px4.log" ||
 	fail "PX4 acilmadi, bak: $LOG_DIR/px4.log"
 echo "[run_sim]   PX4 hazir"
 
+# --------------------------------------------------------- failsafe tuning
+#
+# Two parameters, both about the manual control link, both set because the
+# defaults describe a radio transmitter and this link is a DDS bridge sharing
+# a CPU with a software rasteriser.
+#
+# Measured: while the station streams a steady 20 Hz of ManualControlSetpoint,
+# the rate PX4 actually accepts swings between 0 and 31 Hz -- it arrives in
+# bursts with multi-second gaps. Every gap longer than COM_RC_LOSS_T makes PX4
+# declare the transmitter lost, and with NAV_RCL_ACT at its default (Return)
+# and this mode registered in Return's place, each of those declarations
+# turned into an emergency landing. That is what "it lands on its own" and
+# "taking manual control back does not stop it" both were.
+#
+#   NAV_RCL_ACT=1     Hold, not Return. A gap in the operator link should
+#                     park the aircraft, not land it. The link-loss demo is
+#                     unaffected: that runs on NAV_DLL_ACT (the GCS datalink),
+#                     which is left at Return so a real GCS drop still brings
+#                     up this mode.
+#   COM_RC_LOSS_T=3   Three seconds of silence before calling it lost. Long
+#                     enough to ride out the observed bursts, short enough to
+#                     still be a failsafe.
+#
+# Both are simulation ergonomics. On real hardware with a real transmitter the
+# defaults are the right numbers and these lines should not be copied.
+"$PX4_BIN/px4-param" set NAV_RCL_ACT 1 >/dev/null 2>&1
+"$PX4_BIN/px4-param" set COM_RC_LOSS_T 3 >/dev/null 2>&1
+
 # ------------------------------------------------------------------ agent
 echo "[run_sim] uXRCE-DDS ajani baslatiliyor..."
 MicroXRCEAgent udp4 -p 8888 >"$LOG_DIR/agent.log" 2>&1 &
@@ -272,7 +303,8 @@ else
 	echo "[run_sim]   (en sik sebep: px4_msgs / px4-ros2-interface-lib / PX4 surum uyusmazligi)"
 fi
 
-PX4_BIN="$PX4_DIR/build/px4_sitl_default/rootfs/../bin"
+# (PX4_BIN is set at the top of the file; the parameter tuning after startup
+# needs it before this point.)
 
 # --------------------------------------------------------------- takeoff
 if [ -n "$TAKEOFF_ALT" ]; then

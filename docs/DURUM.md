@@ -615,3 +615,121 @@ kopyasında `trajectory_filter_enabled: false` yapıp:
 ```bash
 ~/ros2_ws/src/eland_sim/scripts/run_sim.sh --headless --takeoff 20 --params /kalici/yol/params_off.yaml
 ```
+
+---
+
+# 13. Teleoperasyon: kendi kendine iniş ve devralmanın geri alınması (2026-09-04)
+
+Kullanıcı üç şikâyet bildirdi: HUD açıkken hiçbir tuşa basmadan araç iniyor,
+manuel kontrol geri alınsa bile iniş durmuyor, ve teleoperasyon genel olarak
+tutarsız. Üçü de **aynı tek sebebe** çıktı.
+
+## 13.1 Kök neden
+
+PX4'ün kabul ettiği manuel kontrol akışı **kesintili**. İstasyon sabit 20 Hz
+`ManualControlSetpoint` yayınlarken, PX4'ün geri yayınladığı (yani fiilen
+kullandığı) hız ölçüldü:
+
+```
+we send 20 Hz  ->  px4 manual echo: 0.0, 14.7, 0.0, 0.3, 20.0, 27.0, 1.0, 31.7 Hz
+```
+
+20 Hz'in üstündeki değerler mesajların **öbekler hâlinde** geldiğini gösteriyor:
+saniyelerce boşluk, sonra biriken mesajlar birden. Her boşluk
+`COM_RC_LOSS_T`'yi (varsayılan **0.5 s**) aşıyor, PX4 kumandayı kayıp sayıyor,
+`NAV_RCL_ACT` varsayılanı **Return**, ve acil iniş modu Return'ün yerine kayıtlı
+olduğu için her kayıp bildirimi bir acil inişe dönüşüyor.
+
+Ölçülen zincir (`failsafe_flags` topic'inden, düzeltmeden önce):
+
+```
+[47.5] stick akışı başlatıldı
+[47.8] manual_control_signal_lost temizlendi
+[50.0] POSCTL istendi -> nav=POSCTL, took_over=True     (devralma başarılı)
+[52.1] manual_control_signal_lost YİNE true             (akış hâlâ 20 Hz!)
+[52.2] failsafe=True, nav=AUTO_LOITER (5 s Hold)
+[54.0] nav=EMERGENCY_LANDING                            (mod aracı geri aldı)
+```
+
+Yani: devralma **çalışıyordu**, dört saniye sonra failsafe geri alıyordu.
+Kullanıcının "manuel moda geçmiyor" dediği şey buydu. Gazebo penceresi açıkken
+makine daha da yüklendiği için boşluklar büyüyor — şikâyetin GUI'li koşuda
+belirginleşmesinin sebebi bu.
+
+**Ayrıca doğrulandı:** GCS kalp atışı mekanizması sağlam. Gerçek istasyon
+açıkken 100 saniye boyunca `gcs_lost=False`, hiç failsafe yok. Sorun kalp
+atışında değildi.
+
+İkinci, bağımsız bulgu: **stick akışı canlı değilken POSCTL isteği reddediliyor.**
+
+```
+akış yokken  POSCTL istendi -> 4 s sonra hâlâ EMERGENCY_LANDING  (REFUSED)
+akış varken  POSCTL istendi -> anında nav=POSCTL                 (WORKED)
+```
+
+İstasyon zaten önce akışı başlatıp 2 s sonra istiyor, yani bu yol doğruydu; ama
+elle `ros2 topic pub` ile mod değiştirmeye çalışan biri bunu bilmeden reddedilir.
+
+## 13.2 Yapılan düzeltmeler
+
+| Nerede | Ne | Gerekçe |
+|---|---|---|
+| `run_sim.sh` | `NAV_RCL_ACT=1` (Hold) | Operatör bağlantısındaki boşluk aracı **park etmeli**, indirmemeli. GCS kopması senaryosu etkilenmiyor: o `NAV_DLL_ACT` üzerinden gider ve Return'de bırakıldı. |
+| `run_sim.sh` | `COM_RC_LOSS_T=3` | 0.5 s gerçek bir vericinin sayısı; buradaki bağlantı, yazılımsal render ile CPU paylaşan bir DDS köprüsü. Ölçülen öbeklenmeyi karşılıyor. |
+| `control_station` | Manuel akış 20 → 33 Hz | Boşlukları kapatmıyor ama her öbeğe daha çok mesaj koyuyor. Asıl düzeltme yukarıdaki timeout. |
+| `control_station` | Operatör niyeti korunuyor | Failsafe aracı geri alırsa istasyon POSCTL'i tekrar istiyor ve **sebebini yazıyor**. `0` veya `L` niyeti temizliyor. |
+| `control_station` | Failsafe sebebi ekranda | `failsafe_flags` okunuyor; "kumanda baglantisi kopuk sayiliyor" gibi bir satır çıkıyor. Operatör aracın kendisini yok saymadığını görüyor. |
+| `detector_node` | Nokta kilidi (`latch_site`) | Aday zıplaması azaldı; ayrıntı §13.4. |
+
+Bunlar **simülasyon ergonomisi**. Gerçek donanımda gerçek bir verici ile PX4
+varsayılanları doğru sayılardır; `run_sim.sh`'deki iki satır oraya kopyalanmaz —
+bu, kodda da yazılı.
+
+## 13.3 Düzeltme sonrası ölçüm
+
+Aynı deney, aynı script, düzeltmelerden sonra:
+
+```
+[50.1] POSCTL istendi -> nav=POSCTL, took_over=True
+[53.6] flags: manual_control_signal_lost YOK
+[53.8] nav=POSCTL, failsafe=False
+[78.5] 25 saniye sonra: nav=POSCTL          <-- araç operatörde kaldı
+```
+
+Öncesinde aynı noktada araç 4 saniye içinde acil inişe dönüyordu. **25 saniye
+boyunca hiç failsafe yok.**
+
+## 13.4 "Karar vermesi uzun sürüyor" — değerlendirme ve düzeltme
+
+Kullanıcının önerisi: *HUD'daki dış çember ile dinamik nesnenin çemberi
+birbirinden uzak olduğu sürece tahmin yapıp inebilmeli.*
+
+**Değerlendirme: gözlem doğru, ama sebep eksik bir kural değil.** Ayrılık testi
+zaten var — `trajectory_clear` tam olarak bunu yapıyor, aday hücre koridor
+disklerinin dışında olmak zorunda. Gecikme, kuralın yokluğundan değil,
+**kararın her karede yeniden verilmesinden** geliyordu: koridor süpürüldükçe
+kazanan hücre 12 m öteye atlıyor, uçuş modu bu atlamayı "aday kaybı" sayıyor,
+üç kayıp deneme bütçesini bitiriyor ve `no retries left, committing anyway`
+ile araç zaten reddedilmiş yere iniyordu.
+
+Uygulanan: **nokta kilidi.** Seçilen nokta, bütün testleri geçmeye devam ettiği
+sürece korunuyor; uygunluk testleri önce çalıştığı için kilit bir kararı
+uzatabilir ama koridorun kapattığı bir noktayı yaşatamaz. Kilit yalnızca başka
+bir nokta `latch_release_margin` (0.20) kadar daha iyi olduğunda bırakılıyor.
+
+| | kilitten önce | kilitten sonra |
+|---|---|---|
+| Aday kaybı (bir iniş boyunca) | 3 | **1** |
+| Sonuç | `committing anyway` | normal COMMIT, 1.99 m'de |
+| Araç hattına uzaklık | 0.06–0.19 m | **4.73 m** |
+
+Yani kullanıcının istediği sonuç (beklemeden, ayrılığa bakarak inme) kilitle
+geldi; ayrılık testi zaten yerindeydi.
+
+## 13.5 Bu bölümün bıraktığı açık maddeler
+
+| # | Konu | Durum |
+|---|---|---|
+| 14 | **Manuel akıştaki öbeklenmenin kendisi giderilmedi** | Semptom `COM_RC_LOSS_T` ile karşılandı, kaynağı (uXRCE-DDS köprüsü mü, ROS zamanlayıcı mı, CPU doygunluğu mu) izole edilmedi. Gerçek donanımda aynı toleransla uçmak **doğru olmaz**. |
+| 15 | **GUI'li koşu ölçülmedi** | Bütün ölçümler `--headless`. Kullanıcının şikâyeti Gazebo penceresi açıkken çıktı; düzeltmeler orada da işe yaramalı ama bu doğrulanmadı. |
+| 16 | **Operatör kaçış yolu hâlâ yok** | §8/2 duruyor: mod kayıtlıyken kasıtlı bir RTL de acil inişe dönüyor. İstasyonun ısrarlı POSCTL isteği bunu maskeliyor, çözmüyor. |

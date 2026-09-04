@@ -143,6 +143,21 @@ class DetectorNode(Node):
         # the aircraft stay somewhere it should leave.
         self.declare_parameter('w_stickiness', 0.15)
         self.declare_parameter('stickiness_radius_m', 3.0)
+        # Keep the site already chosen while it is still allowed, instead of
+        # re-running the argmin every frame and possibly landing somewhere
+        # else because a cell two metres away scored a thousandth better.
+        #
+        # The eligibility tests are unchanged and still run first, so a site
+        # the corridor now covers is gone from the candidates before this is
+        # consulted: the latch can prolong a decision, never override a
+        # rejection. What it removes is the churn -- and the churn was not
+        # cosmetic, because the flight mode reads a candidate that jumped as a
+        # candidate it lost, and three of those end the attempt budget.
+        #
+        # The margin is the escape hatch: if something genuinely better shows
+        # up, better by this much on the 0..1 score, the latch releases.
+        self.declare_parameter('latch_site', True)
+        self.declare_parameter('latch_release_margin', 0.20)
         # How long a stretch of ground that something drove or walked over
         # stays excluded, seconds. 0 disables the memory.
         #
@@ -214,6 +229,8 @@ class DetectorNode(Node):
 
         self.w_sticky = float(self.get_parameter('w_stickiness').value)
         self.sticky_radius = float(self.get_parameter('stickiness_radius_m').value)
+        self.latch_site = bool(self.get_parameter('latch_site').value)
+        self.latch_margin = float(self.get_parameter('latch_release_margin').value)
 
         self.corridor_memory_s = float(
             self.get_parameter('corridor_memory_s').value)
@@ -572,8 +589,21 @@ class DetectorNode(Node):
                          <= self.sticky_radius)
             score = score - self.w_sticky * near_last
 
-        # 6. argmin
+        # 6. argmin, unless the site already chosen is still on the table
         best = int(np.argmin(score))
+        if self.latch_site and self.last_choice is not None:
+            d_prev = np.hypot(cell_x - self.last_choice[0],
+                              cell_y - self.last_choice[1])
+            held = int(np.argmin(d_prev))
+            # Same cell, give or take the grid it is drawn on.
+            if d_prev[held] <= res * 1.5:
+                if score[held] - score[best] <= self.latch_margin:
+                    best = held
+                else:
+                    self.get_logger().info(
+                        f'latch released: a site scoring '
+                        f'{score[best]:.3f} beat the held one at '
+                        f'{score[held]:.3f} by more than {self.latch_margin}')
         self.last_choice = (float(cell_x[best]), float(cell_y[best]))
         best_label = int(labels[ys[best], xs[best]])
         self.publish_candidate(

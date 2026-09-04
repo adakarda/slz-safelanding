@@ -641,6 +641,41 @@ Tuzak: marker'ı şablonun başlık yorumunda da anmak, metin değiştirme sıra
 engelleri o yoruma da yazdırdı. Üreteç artık marker'ın **tam bir kez**
 geçtiğini doğruluyor.
 
+#### K13 — Simülasyondaki failsafe eşikleri gerçek donanımınkiler değil
+
+`run_sim.sh` açılışta iki PX4 parametresi yazıyor: `NAV_RCL_ACT=1` (Hold) ve
+`COM_RC_LOSS_T=3`. İkisi de ölçüme dayanıyor.
+
+İstasyon sabit 20 Hz manuel kontrol yayınlarken PX4'ün fiilen kullandığı hız
+0 ile 31 Hz arasında salınıyor — mesajlar öbekler hâlinde, aralarda saniyelerce
+boşlukla geliyor. 0.5 s'lik varsayılan eşik her boşlukta "verici kayboldu"
+diyor, `NAV_RCL_ACT` varsayılanı Return, ve bu mod Return'ün yerine kayıtlı
+olduğu için her biri bir acil inişe dönüşüyordu. Ölçülen: devralma başarılı
+oluyor, dört saniye sonra failsafe aracı geri alıyor.
+
+Ayrım önemli: **`NAV_DLL_ACT` (GCS datalink) Return'de bırakıldı.** Bağlantı
+kopması senaryosu — bu projenin asıl gösterdiği şey — olduğu gibi çalışıyor.
+Değişen yalnızca operatörün kumanda bağlantısındaki boşluğun cezası: iniş
+değil, bekleme.
+
+Bunlar gerçek bir vericiyle uçan bir araca kopyalanmaz. 0.5 s orada doğru
+sayıdır; buradaki bağlantı yazılımsal render ile CPU paylaşan bir DDS
+köprüsüdür. Öbeklenmenin kaynağı izole edilmedi (bölüm 4, madde 10).
+
+#### K14 — Seçilen nokta kilitleniyor
+
+Aday seçimi her karede sıfırdan yapılıyordu. Koridor süpürüldükçe kazanan hücre
+12 m öteye atlıyor, uçuş modu bu atlamayı kaybolmuş aday sayıyor, üç kayıp
+deneme bütçesini bitiriyor ve `committing anyway` ile araç zaten reddedilmiş
+noktaya iniyordu — filtrenin varlık sebebinin tam tersi.
+
+Kilit, uygunluk testlerinden **sonra** çalışıyor: bir kararı uzatabilir,
+reddedilmiş bir hücreyi geri getiremez. Bırakma eşiği (`latch_release_margin`)
+gerçekten daha iyi bir yer çıkarsa kilidi açıyor.
+
+Ölçülen: bir iniş boyunca aday kaybı 3 → 1, sonuç `committing anyway` yerine
+1.99 m'de normal COMMIT, araç hattına uzaklık 0.06 m yerine 4.73 m.
+
 ---
 
 ## 4. Bilinen açık kusurlar
@@ -722,6 +757,13 @@ geçtiğini doğruluyor.
 9. **Süpürülmüş güzergâh hafızası ile yaklaşma rotası testi birleştirilmedi.**
    Birleşince haritanın %95'i kapanıyor; zaman-uzay muhakemesi yapan bir sürüm
    ikisini güvenli şekilde birleştirebilir.
+10. **Manuel kontrol akışındaki öbeklenmenin kaynağı bulunmadı** (Faz 6).
+    20 Hz gönderilirken PX4'ün kullandığı hız 0–31 Hz arasında salınıyor.
+    Semptom `COM_RC_LOSS_T=3` ile karşılandı; kaynağı (uXRCE-DDS köprüsü, ROS
+    zamanlayıcı, CPU doygunluğu) izole edilmedi. Gerçek donanımda aynı
+    toleransla uçmak doğru olmaz.
+11. **GUI'li koşu ölçülmedi.** Bütün teleoperasyon ölçümleri `--headless`;
+    şikâyet Gazebo penceresi açıkken çıkmıştı.
 
 ## 5. Açık sorular
 

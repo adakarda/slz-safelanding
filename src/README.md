@@ -275,6 +275,37 @@ burnun baktığı yön. Offboard setpoint **kullanılmıyor** — bu projenin t�
 kaçındığı mekanizma o, ve desteklenen bir giriş yolu varken bir test aracının
 onu kullanması için sebep yok.
 
+#### Failsafe eşikleri simülasyona göre ayarlı
+
+`run_sim.sh` açılışta iki PX4 parametresi yazar:
+
+| Parametre | Değer | Neden |
+|---|---|---|
+| `NAV_RCL_ACT` | 1 (Hold) | Operatör kumandasındaki boşluk aracı park etmeli, indirmemeli |
+| `COM_RC_LOSS_T` | 3 s | Buradaki bağlantı bir verici değil, yazılımsal render ile CPU paylaşan bir DDS köprüsü |
+
+Sebebi ölçüldü: istasyon sabit 20 Hz manuel kontrol yayınlarken PX4'ün fiilen
+kullandığı hız 0 ile 31 Hz arasında salınıyor — mesajlar öbekler hâlinde,
+aralarda saniyelerce boşlukla geliyor. 0.5 s'lik varsayılan eşik her boşlukta
+"verici kayboldu" diyordu ve bu mod Return'ün yerine kayıtlı olduğu için her
+biri bir acil inişe dönüşüyordu. Devralma başarılı oluyor, dört saniye sonra
+failsafe geri alıyordu.
+
+**`NAV_DLL_ACT` (GCS datalink) değiştirilmedi** — `--link-drop` senaryosu
+olduğu gibi çalışır.
+
+Bu iki satır gerçek donanıma kopyalanmaz; orada varsayılanlar doğrudur.
+
+#### Manuel kontrol geri alınırken
+
+- `3`'e basınca istasyon önce çubuk akışını başlatır, ~2 s sonra POSCTL ister.
+  **Sıra önemli:** akış canlı değilken PX4 devretmiyor (ölçüldü: akışsız istek
+  reddedildi, akışlıyken anında kabul edildi).
+- Bir failsafe aracı geri alırsa istasyon POSCTL'i **tekrar ister** ve alt
+  satırda sebebini yazar (`sebep: kumanda baglantisi kopuk sayiliyor` gibi).
+  `0` (acil iniş) veya `L` (PX4 ile in) tuşları bu ısrarı bırakır.
+- Durum panelinde `FAILSAFE` satırı ve `nav_state` yanında mod adı görünür.
+
 #### Bilmen gereken: istasyon GCS bağlantısını canlı tutar
 
 PX4 bir yer istasyonunun konuşup konuşmadığını takip eder ve `NAV_DLL_ACT`
@@ -357,3 +388,10 @@ Hareketli engeller ve yörünge-farkında karar:
   hattan 0.37 m).
 - `detector_node.w_stickiness` (0.15) — seçim kararlılığı. Sıfırlanırsa
   koridor kaydıkça aday zıplar ve mod bunu aday kaybı sayar.
+- `detector_node.latch_site` (true) — seçilen nokta bütün testleri geçmeye
+  devam ettiği sürece korunur. Kapatılırsa karar her karede yeniden verilir;
+  ölçülen bedeli bir inişte 1 yerine 3 aday kaybı ve `committing anyway` ile
+  reddedilmiş noktaya iniş.
+- `control_station.reassert_manual` (true) — failsafe aracı geri alırsa
+  POSCTL isteğini tekrarlar. `false` yapmak eski davranışı verir: tuş çalışır
+  gibi görünür, araç yine de iner.

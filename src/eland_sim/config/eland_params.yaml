@@ -139,6 +139,14 @@ detector_node:
     # never revive a rejected one.
     w_stickiness: 0.15
     stickiness_radius_m: 3.0
+    # Hold the site already chosen while it still passes every test, rather
+    # than re-deciding each frame. The eligibility tests run first, so this
+    # can prolong a decision but never keep a site the corridor now covers.
+    # Without it the winner hops between far-apart sites as the corridor
+    # sweeps, and the flight mode counts each hop as a lost candidate.
+    latch_site: true
+    # Release the latch if something scores better by this much (0..1 scale).
+    latch_release_margin: 0.20
     # How long ground that something moved across stays excluded, seconds.
     # 0 disables the memory and leaves only the forward-looking corridor.
     #
