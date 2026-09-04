@@ -114,3 +114,64 @@ Gazebo penceresi ağır gelirse `--headless` ekle.
 
 Filtresiz karşılaştırma için parametre dosyasının bir kopyasında
 `trajectory_filter_enabled: false` yapıp `--params <dosya>` ile çalıştır.
+
+---
+
+# 2026-09-04 düzeltme isteklerinin karşılığı
+
+Üç madde, üç ayrı commit ve sürüm etiketi. Ayrıntı `docs/DURUM.md` §14–16.
+
+## 4. Rastgele başlangıç konumu (`v1.5-random-spawn`)
+
+Doğuş noktası artık rastgele; engellerden ve hareketli engel güzergâhlarından
+uzak duruyor, seed ile tekrar üretilebiliyor, `--fixed` ile eski davranışa
+dönülüyor.
+
+| | öncesi | sonrası |
+|---|---|---|
+| Farklı doğuş noktası | 1 | **200/200** |
+| En yakın engele boşluk | — | min 6.04 m |
+| Güzergâha boşluk | — | min 8.23 m |
+
+Uçtan uca: `--seed 12345` → poz `-4.17,-24.49`; Gazebo aracı tam orada gösterdi.
+
+## 5. Daha fazla sınıf ve engel (`v1.6-more-classes`)
+
+`FENCE(10)`, `POLE(11)`, `SAND(12)` tek kaynağa (`classes.py`) eklendi; şema
+eklemeli, mevcut ID'ler değişmedi. Dünya 24 → 37 model. Dinamik engel sayısı
+parametre (`person_count: 3`, `vehicle_count: 2`), her biri hattın yanına
+kaydırılıp faz farkıyla hareket ediyor.
+
+| | öncesi | sonrası |
+|---|---|---|
+| Maske hızı | 3.11 Hz | **3.19 Hz** |
+| Tek karede sınıf | 8 | **11** |
+| İnsan izleme hatası | 1.37 m | 1.32 m |
+| Araç izleme hatası | 1.86 m | 2.16 m *(iki araç, eşleme zorlaştı)* |
+
+İnce yapılar görülüyor: çit 1484 px, direk 65 px — 32 cm'lik bir direk 25 m'den.
+
+## 6. Teleoperasyon kök nedeni (`v1.7-teleop-rootcause`)
+
+Zincir üç noktadan ölçüldü (yayıncı / DDS / PX4) ve **temiz çıktı**.
+
+**Önceki teşhis yanlıştı ve düzeltildi:** "0–31 Hz öbeklenme" ölçümü, ölçen
+node'un kendi tek-thread'li executor'ından geliyordu — akış gerçekten
+duruyordu, ama tanı aracında. Doğru ifade: *manuel kontrolü meşgul bir
+tek-thread executor'dan yayınlayan her node bu failsafe'i tetikler.*
+
+| Koşul | İstasyon akışı | PX4 "kumanda kayıp" | nav_state |
+|---|---|---|---|
+| Yüksüz | 33.1 Hz, en uzun 36 ms | 0 kez | — |
+| 8 CPU yükü | 33.1 Hz, en uzun 54 ms | 0 kez | — |
+| 8 CPU yükü + **varsayılan 0.5 s eşik** | 33.0 Hz, en uzun 60.6 ms | **0 kez** | 60 s POSCTL |
+
+Sonuç: `COM_RC_LOSS_T` workaround'u **geri alındı**, PX4 varsayılanı kullanılıyor.
+`NAV_RCL_ACT=1` politika olarak kaldı. İstasyon artık kendi en uzun yayın
+boşluğunu raporluyor, penceresiz çalışabiliyor.
+
+**Operatör kaçış yolu eklendi** (açık madde #16 kapandı): `9` tuşu modu
+kayıttan düşürüyor, PX4 kendi Return'üne dönüyor. Doğrulandı.
+
+**Hâlâ açık:** GUI'li koşu benim tarafımdan doğrulanamadı (otomasyon
+bağlamında X sunucusu yok); yerine 8 çekirdek CPU yüküyle mekanizma sınandı.
