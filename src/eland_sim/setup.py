@@ -38,7 +38,8 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
-        (os.path.join('share', package_name, 'worlds'), glob('worlds/*.sdf')),
+        (os.path.join('share', package_name, 'worlds'),
+            glob('worlds/*.sdf') + glob('worlds/*.sdf.in')),
     ] + model_data_files(),
     install_requires=['setuptools'],
     zip_safe=True,
@@ -47,5 +48,9 @@ setup(
     description='Gazebo models, worlds, launch files and parameters for the '
                 'emergency landing simulation.',
     license='MIT',
-    entry_points={'console_scripts': []},
+    entry_points={
+        'console_scripts': [
+            'obstacle_driver = eland_sim.obstacle_driver:main',
+        ],
+    },
 )

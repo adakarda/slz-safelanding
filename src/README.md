@@ -15,7 +15,7 @@ Tasarım kararları, ölçümler ve bilinen sınırlar: `docs/PLAN.md` ve
 | `eland_msgs` | CMake | `LandingCandidate`, `LandingState` |
 | `eland_common` | Python | Sınıf ID'leri, renk paleti, QoS profilleri, PX4 topic adları |
 | `eland_perception` | Python | Kamera → `mono8` semantik maske |
-| `eland_mapping` | Python | Maske → metrik zemin haritası (IPM + zamansal füzyon), ve aday seçimi |
+| `eland_mapping` | Python | Maske → metrik zemin haritası (IPM + zamansal füzyon), hareketli engel izleme, ve aday seçimi |
 | `eland_mode` | C++ | `px4_ros2::ModeBase` — PX4'e kayıtlı "Emergency Landing" modu |
 | `eland_viz` | Python | İniş HUD'ı (`/eland/hud`) ve kontrol istasyonu |
 | `eland_sim` | Python | Gazebo modelleri, dünya, launch, parametreler, rviz |
@@ -26,12 +26,25 @@ Veri akışı:
 gz segmentation camera
   -> /camera/segmentation      (ros_gz_image bridge)
   -> perception_node   -> /eland/semantic_mask
-  -> mapping_node      -> /eland/ground_map  (+ /eland/ground_map_colored)
+  -> mapping_node      -> /eland/ground_map          (füzyonlu; iniş kararı)
+                       -> /eland/ground_map_instant  (ham kare; hareket)
+                       -> /eland/ground_map_colored  (görsel)
+  -> tracker_node      -> /eland/dynamic_obstacles
   -> detector_node     -> /eland/candidate
   -> eland_mode        -> PX4 setpoint'leri, /eland/state
 ```
 
 `eland_mode` dışında hiçbir node PX4'e yazmaz.
+
+**Neden iki harita:** füzyonlu harita hızlı hareket edeni göremez — kanıt
+hücre başına `rate × tau`'ya oturuyor (~90) ve 1.5 s'de geçen bir araç ~5
+kanıt bırakıp argmax'ı kaybediyor. Hafızayı düşürmek alçalmayı bozar, o yüzden
+izleyici füzyondan **önceki** kareyi okuyor. Ayrıntı `docs/DURUM.md` §12.
+
+**Dinamik engeller:** `eland_sim/obstacle_driver` bir insan ve bir aracı
+`eland_params.yaml`'daki parametrelere göre hareket ettirir ve **yalnız ölçüm
+için** `/eland/obstacle_truth` yayınlar. Zincirdeki hiçbir node bunu okumaz;
+araç engelin nereye gittiğini kendi kamerasından çıkarır.
 
 ---
 
@@ -71,6 +84,18 @@ Derleme:
 cd ~/ros2_ws && colcon build && source install/setup.bash
 ```
 
+Dünyayı üret (dinamik engeller parametrelerden yazılır; `run_sim.sh` her
+açılışta kendisi çalıştırır, elle kurulumda bir kez gerekir):
+
+```bash
+python3 ~/ros2_ws/src/eland_sim/scripts/gen_world.py
+```
+
+`worlds/eland_test.sdf` **üretilen** dosyadır. Statik sahne için
+`eland_test.sdf.in`'i, engeller için `config/eland_params.yaml` içindeki
+`obstacle_driver` bölümünü düzenle; üretilen dosyaya yazılan her şey bir
+sonraki koşuda kaybolur.
+
 Gazebo varlıklarını PX4 ağacına bağla (bir kez; PX4 `make clean` veya
 `git submodule update` sonrası tekrar):
 
@@ -103,6 +128,8 @@ arayüzü, ajan ve beş ROS node'unun hepsinin gitmesi gerekir.
 | `--takeoff [ALT]` | Her şey açıldıktan sonra arm + kalkış (varsayılan 18 m) |
 | `--auto` | Kalkış + modu seç (tam demo) |
 | `--link-drop` | Kalkış, sonra gerçek GCS bağlantısını kes — failsafe modu kendi getirir |
+| `--params FILE` | Kurulu yerine bu parametre dosyasıyla çalış (karşılaştırma koşuları). Dosya yoksa **durur** — sessizce varsayılanlara düşmek ölçümü bozar. |
+| `--launch-arg A:=B` | Ek launch argümanı, tekrarlanabilir |
 | `--headless` | Gazebo penceresi açma (bu makinede belirgin şekilde hızlı) |
 | `--no-hud` | HUD hiç çalışmasın |
 | `--hud-headless` | `/eland/hud` yayınlansın ama pencere açılmasın |
@@ -198,10 +225,15 @@ veya `"none"` yapılabilir.
 ## İzleme
 
 ```bash
-ros2 topic echo /eland/state          # durum makinesi + her geçişin gerekçesi
-ros2 topic echo /eland/candidate      # seçilen nokta, alan, oran, yarıçap
+ros2 topic echo /eland/state              # durum makinesi + her geçişin gerekçesi
+ros2 topic echo /eland/candidate          # seçilen nokta, alan, oran, yarıçap
+ros2 topic echo /eland/dynamic_obstacles  # izlenen hareketli engeller + tahmin
 ros2 run rqt_image_view rqt_image_view /eland/hud
 ```
+
+Yörünge filtresi bir şey elediğinde `detector_node` bunu INFO seviyesinde
+yazar: `trajectory filter removed N of M otherwise eligible cells`. Hiç satır
+yoksa ya hareketli engel yok ya da filtre kapalı.
 
 `/eland/state` yalnızca mod aktifken yayınlanır — PX4 pasif moda
 `updateSetpoint` çağırmaz.
@@ -308,3 +340,20 @@ dokunacakların:
 - `max_landing_attempts` (3) / `search_timeout_s` (60) — pes etme sınırları
 - `memory_tau_s` (30 s) — harita hafızası. **Düşürme:** onsuz araç inemiyor,
   gerekçesi `mapping_node.py` başlığında.
+
+Hareketli engeller ve yörünge-farkında karar:
+
+- `obstacle_driver.*` — senaryo: iki engelin başlangıç/hedef/hızı,
+  `person_kind` (`model` / `actor`), `vehicle_mode` (`once` / `pingpong`).
+  Simülasyon tarafı; uçuş zinciri bunları okumaz.
+- `tracker_node.horizon_s` (10 s) — tahmin ufku. 4 s ölçülerek yetersiz
+  bulundu: araç haritanın dışındayken karar verilip tam üstüne inilmişti.
+- `tracker_node.track_timeout_s` (6 s) — haritadan çıkan engel ne kadar
+  "yaşamaya" devam eder. Güven bu süre boyunca sıfıra iner.
+- `detector_node.trajectory_filter_enabled` — **karşılaştırma koşusu için
+  kapatılır.** Kapalıyken sistem tamamen reaktif SafeLand davranışına döner.
+- `detector_node.corridor_memory_s` (25 s) — süpürülmüş güzergâh hafızası.
+  Sıfırlanırsa araç, engel geçer geçmez tam onun hattına iner (ölçüldü:
+  hattan 0.37 m).
+- `detector_node.w_stickiness` (0.15) — seçim kararlılığı. Sıfırlanırsa
+  koridor kaydıkça aday zıplar ve mod bunu aday kaybı sayar.

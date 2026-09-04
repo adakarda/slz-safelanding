@@ -3,8 +3,12 @@
 Kaynak brief: `gazebo-acil-inis-simulasyon-brief.md`
 Referans kod: `~/ws_slz` (dokunulmuyor, olduğu gibi duruyor)
 Çalışma alanı: `~/ros2_ws`
-Son güncelleme: 2026-09-01 — **Faz 0, 1, 3 ve 4 tamamlandı ve doğrulandı.
-Faz 2 kısmen: zamansal füzyon yazıldı (zorunlu çıktı), IPM hâlâ bekliyor.**
+Son güncelleme: 2026-09-03 — **Faz 0, 1, 2, 3, 4 ve 6 tamamlandı ve
+doğrulandı. Faz 5 (gerçek segmentasyon modeli) GPU'lu makine bekliyor.**
+
+(Bu satırın 2026-09-01 tarihli hâli "Faz 2 kısmen, IPM hâlâ bekliyor" diyordu
+ve aynı dosyanın gövdesiyle çelişiyordu: IPM 09-01'de tamamlanıp
+doğrulanmıştı. Düzeltme burada, kaydı için.)
 
 Uçtan uca sonuç: QGC modu tetiklendiğinde drone 20 m'den aday noktaya gidiyor,
 yaklaştıkça yavaşlayarak alçalıyor, iniyor ve disarm oluyor — aktivasyondan
@@ -324,7 +328,7 @@ Bu yarıçap (-6,-6)'daki insana olan mesafeyle (8.49 m) örtüşüyor — yani
 mesafe dönüşümü en yakın güvensiz hücre olarak **insanı** buluyor. SORA
 insan dışlaması ölçülebilir şekilde çalışıyor.
 
-### Faz 2 — Algı zincirini sağlamlaştır (kısmen tamam)
+### ✅ Faz 2 — Algı zincirini sağlamlaştır (tamam)
 
 #### ✅ Zamansal füzyon — "sonraya bırakılabilir" değilmiş
 
@@ -536,6 +540,109 @@ llvmpipe üzerinde CPU inference + CPU render aynı anda anlamlı hızda
 
 ---
 
+### Faz 6 — Dinamik engeller ve yörünge-farkında karar (2026-09-03, tamam)
+
+Ölçümler ve tam sonuç tabloları `docs/DURUM.md` §12'de; burada yalnız tasarım
+kararları ve neden başka türlü yapılmadığı.
+
+#### K6 — İzleme füzyonlu haritadan değil, füzyondan önceki kareden
+
+Füzyonlu harita hızlı hareket edeni **yapısal olarak** göremiyor: kanıt hücre
+başına `rate × tau`'ya oturuyor (3 Hz, τ=30 s → ~90) ve 1.5 s'de geçen bir
+araç ~5 kanıt bırakıyor, argmax'ı asla kazanamıyor. Ölçüldü: gz'nin kendi
+segmentasyonunda iki araç lekesi varken `/eland/ground_map`'te yalnız park
+hâlindeki görünüyordu.
+
+Üç seçenek vardı: (a) dinamik sınıflara kısa τ vermek, (b) izleyicinin kendi
+IPM'ini yazması, (c) `mapping_node`'un ham kareyi ikinci bir topic'te
+yayınlaması. (a) alçalmanın dayandığı hafızayı bozar (tuzak 1'in kendisi),
+(b) ikinci bir projeksiyon uygulaması demek ve ikisi zamanla ayrışır.
+(c) seçildi: `/eland/ground_map_instant`, aynı homografi, aynı geometri.
+
+#### K7 — Dördüncü test, skora ek terim değil
+
+`trajectory_clear`, `min_area_m2` / `r_fit` / `r_hazard` ile aynı sırada bir
+**uygunluk testi**. Skora ağırlıklı bir terim olarak eklemek de mümkündü;
+seçilmemesinin sebebi SORA ayrımının pazarlık konusu olmaması: yeterince
+"iyi" bir hücre, engelin gideceği yerde olmayı telafi edemez. Ayrıca eleme
+olarak tutmak logu okunur kılıyor — kaç hücrenin neden düştüğü tek satır.
+
+Seçim kararlılığı (`w_stickiness`) ise skorda, çünkü o gerçekten bir tercih:
+eşitliği bozar, uygunluğu değiştirmez. Uygunluk testlerinden **sonra**
+uygulanıyor, yani reddedilmiş bir hücreyi geri getiremez.
+
+#### K8 — Koridor, tahminin kendi hatası kadar geniş
+
+Ayrımı tahmin edilen noktadan tam `r_hazard` kadar almak, metrelerce yanlış
+olan bir noktadan 3 m ayrılmak demekti. Koridor yarıçapı:
+
+```
+r(t) = r_hazard + (sigma_base + sigma_cross_rate * t) * (2 - confidence)
+```
+
+`sigma_cross_rate` kasten küçük (0.25 m/s). Ölçülen tahmin hatası ~0.9 m/s
+büyüyor ama neredeyse tamamı yol **boyunca**; koridor aynı hat üzerinde
+örneklenmiş disklerin birleşimi olduğu için o bileşen zaten kapsanıyor. Her
+diski onunla genişletmek hatayı iki kez sayıyor ve haritanın yarısını eliyor.
+Disk yarıçapı yalnız **yanal** hatayı taşır.
+
+#### K9 — İleri koridor + süpürülmüş güzergâh hafızası
+
+Yalnız ileri koridorla ölçülen davranış: araç yaklaşırken nokta doğru şekilde
+reddedildi, beklendi, araç geçer geçmez tam oraya inildi — hattan 0.37 m.
+Sabit hızlı bir model "bu araç geri gelecek" diyemez.
+
+Eklenen: hareket eden bir şeyin **gözlendiği** her nokta, `corridor_memory_s`
+boyunca dışlanmış kalıyor. Gerekçe, tahmin değil kanıt: az önce buradan bir
+araç geçtiyse orası bir güzergâhtır. Yalnız gözlenen kısım hatırlanıyor,
+tahmin edilen kısım değil — yoksa bir ekstrapolasyon, hiçbir şeyin bulunmadığı
+bir yerin kalıcı kaydına dönüşürdü.
+
+**Hafıza diskleri yaklaşma rotası testine dahil değil.** İkisi birleşince
+ölçülen sonuç haritanın %95'inin kapanmasıydı: aracın 30 saniyede geçtiği her
+yer, drone'dan bakınca bir yönü gölgeliyor. 15 m'den üstünden uçmak tehlike
+değil; üstüne oturmak tehlike.
+
+#### K10 — İnsan `<actor>` değil, `<model>` (varsayılan olarak)
+
+`<actor>` denendi ve segmentasyon açısından **çalışıyor**: Label eklentisiyle
+etiketleniyor, yürüyor, izleyici görüyor (etiket 3 ile yapılan sınamada 123 px,
+centroid 5 s'de 124.8 → 207.0 px kaydı, statik kontroller kıpırdamadı).
+
+Kullanılmamasının sebebi ölçülebilirlik: Gazebo actor pozunu **yayınlamıyor**
+(ne `pose/info` ne `dynamic_pose/info` bir actor listeliyor) ve script'in
+dediği hızda yürütmüyor — 33.3 s'lik tur ~28 s sürdü, yani ~%17 hızlı. Gerçek
+konumu ne komut edilen ne gözlenebilen bir engel, konum kestiricisini
+puanlayamaz: her hata kestirici ile referans arasında belirsiz kalır.
+
+`person_kind: actor` ile geri açılabilir; sınıf etiketi, yörünge parametreleri
+ve aşağı akıştaki her şey aynı.
+
+#### K11 — Engeller ışınlanıyor, itilmiyor
+
+`set_pose` servisi, hız komutu değil. Üç sebep, göz ardı edilince maliyetine
+göre sıralı: (1) tekrarlanabilir test tekrarlanabilir engel ister, hız kontrolü
+pozu sürtünmeye ve çözücüye bırakır; (2) engel, tehlike oluşturduğu aracın
+kendisi tarafından itilmemeli; (3) zincirde kuvvet okuyan hiçbir şey yok, kamera
+piksel görüyor.
+
+Ölçülerek seçildi: statik etiketli bir modele tek `set_pose` çağrısı,
+segmentasyon lekesini (100.7, 119.5) → (101.8, 212.6) px taşıdı — render yolu
+ışınlanan modeli takip ediyor ve etiket taşınmayı atlatıyor.
+
+#### K12 — Dünya üretiliyor, elle yazılmıyor
+
+Actor'ün hareketi kendi SDF'indeki waypoint script'i; "başlangıç, hedef ve hız
+parametredir" ancak SDF'i o parametrelerden yazarak sağlanabiliyor. Araç için
+şart değil (çalışma anında sürülüyor) ama aynı dosyadan üretiliyor ki
+geometri ile yörünge ayrışmasın.
+
+Tuzak: marker'ı şablonun başlık yorumunda da anmak, metin değiştirme sırasında
+engelleri o yoruma da yazdırdı. Üreteç artık marker'ın **tam bir kez**
+geçtiğini doğruluyor.
+
+---
+
 ## 4. Bilinen açık kusurlar
 
 1. ~~**Sınırsız yeniden deneme.**~~ **Kapandı.** `max_landing_attempts` (3).
@@ -605,6 +712,16 @@ llvmpipe üzerinde CPU inference + CPU render aynı anda anlamlı hızda
 6. **Modu geri almanın yolu yok.** `replace_internal_mode: "rtl"` kayıtlıyken
    kasıtlı bir RTL de acil inişe dönüşüyor. Operatörün "hayır, gerçekten eve
    dön" diyebileceği bir kaçış yolu yok.
+
+7. **Hız kestirimi sistematik olarak düşük** (Faz 6). Ölçülen: insanda %87,
+   araçta %68 (2.04 m/s / 3.0 m/s). Sebepleri: dönüş anını içine alan
+   en-küçük-kareler penceresi, ve haritadan çıkıp giren engelin track'inin
+   yeniden kurulması. **Güvensiz yön**: koridor olması gerekenden kısa çıkıyor.
+8. **10 saniyelik ufkun ucu güvenilmez** (Faz 6). Araçta +10 s tahmin hatası
+   16.9 m. Koridorun asıl değeri 2–4 s aralığında (3.4–4.6 m).
+9. **Süpürülmüş güzergâh hafızası ile yaklaşma rotası testi birleştirilmedi.**
+   Birleşince haritanın %95'i kapanıyor; zaman-uzay muhakemesi yapan bir sürüm
+   ikisini güvenli şekilde birleştirebilir.
 
 ## 5. Açık sorular
 

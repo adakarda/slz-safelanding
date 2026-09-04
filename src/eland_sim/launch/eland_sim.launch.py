@@ -105,6 +105,14 @@ def generate_launch_description() -> LaunchDescription:
                         'the control station -- the same picture without the '
                         'keyboard.'),
         DeclareLaunchArgument(
+            'obstacles', default_value='true',
+            description='Drive the dynamic vehicle and publish obstacle '
+                        'ground truth. Simulation only -- it moves scenery, '
+                        'it does not touch the aircraft. Set false to freeze '
+                        'the world back to its static form for a comparison '
+                        'run; the person actor keeps walking either way, '
+                        'because Gazebo owns its script.'),
+        DeclareLaunchArgument(
             'log_level', default_value='info',
             description='ROS log level for all pipeline nodes.'),
     ]
@@ -143,9 +151,20 @@ def generate_launch_description() -> LaunchDescription:
         for pkg, exe in (
             ('eland_perception', 'perception_node'),
             ('eland_mapping', 'mapping_node'),
+            ('eland_mapping', 'tracker_node'),
             ('eland_mapping', 'detector_node'),
         )
     ]
+
+    # 2b. Scenery motion. Deliberately not part of pipeline_nodes: it is the
+    #     only node here that writes to the simulator, and it must be possible
+    #     to run the whole perception chain with it switched off.
+    obstacle_driver = Node(
+        package='eland_sim', executable='obstacle_driver', name='obstacle_driver',
+        parameters=[params], output='screen', arguments=log_args,
+        additional_env=compat_env,
+        condition=IfCondition(LaunchConfiguration('obstacles')),
+    )
 
     hud = Node(
         package='eland_viz', executable='hud_node', name='hud_node',
@@ -208,4 +227,4 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         args + [labels_bridge, colored_bridge] + pipeline_nodes
-        + [hud, hud_view, station, mode_node, rviz_tf, rviz])
+        + [obstacle_driver, hud, hud_view, station, mode_node, rviz_tf, rviz])

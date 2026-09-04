@@ -330,3 +330,288 @@ Kontrol istasyonu tuşları (önce pencereye tıkla): `1` arm · `2` kalkış ·
 Kaynak dosyaların başlıkları (`mapping_node.py`, `emergency_landing_mode.hpp`,
 `control_station.py`, `link_px4_assets.sh`) kendi kararlarının gerekçesini
 taşıyor — bir davranış tuhaf geldiğinde önce oraya bak.
+
+---
+
+# 12. Dinamik engeller ve yörünge-farkında karar (2026-09-03)
+
+Bu bölüm §1–11'in üstüne eklendi; öncesi olduğu gibi geçerli. Baseline etiketi
+`v1.1-hud-baseline` (commit `2b741df`) — bir şey bozulursa dönülecek nokta
+orası.
+
+## 12.1 Ne eklendi
+
+| Bileşen | Dosya | İş |
+|---|---|---|
+| Dünya üreteci | `eland_sim/scripts/gen_world.py` | Şablon + parametre → `eland_test.sdf`. Dinamik insan ve aracı parametrelerden yazar. |
+| Dünya şablonu | `eland_sim/worlds/eland_test.sdf.in` | Statik sahne. Dinamik engeller burada **yok**; tek kaynaktan üretiliyor. |
+| Engel sürücüsü | `eland_sim/eland_sim/obstacle_driver.py` | Engelleri gz `set_pose` ile sim saatinde hareket ettirir; `/eland/obstacle_truth` yayınlar (**yalnız ölçüm için**). |
+| İzleyici | `eland_mapping/eland_mapping/tracker_node.py` | Dinamik sınıfları izler, doğrusal hız kestirir, `/eland/dynamic_obstacles` yayınlar. |
+| Anlık harita | `mapping_node.py` (ek) | `/eland/ground_map_instant` — füzyondan **önceki** kare. |
+| Dördüncü test | `detector_node.py` (ek) | `trajectory_clear` — aday ve yaklaşma rotası, tahmini engel koridoruna karşı. |
+| Mesajlar | `eland_msgs/DynamicObstacle{,Array}.msg` | id, sınıf, konum, hız, güven, tahmin dizisi. |
+
+Veri akışının değişen kısmı:
+
+```
+mapping_node ─┬─► /eland/ground_map            (füzyonlu, iniş kararı)
+              └─► /eland/ground_map_instant    (ham kare, hareket için)
+                        │
+                        ▼
+                  tracker_node ─► /eland/dynamic_obstacles
+                        │
+                        ▼
+                  detector_node  (4. test: trajectory_clear)
+```
+
+## 12.2 SafeLand'den farkı — hangisi literatür, hangisi bizim
+
+SafeLand (arXiv:2603.17430) dinamik engeli **anlık konumla** ele alıyor: engel
+güvenlik yarıçapına girerse 5 s duraklat, hâlâ oradaysa arama irtifasına
+tırmanıp başka noktaya reroute et. Tahmin yok.
+
+Bu depoda:
+
+- **Reaktif yarı korunuyor** — `HOLD` / `ABORT` durumları ve deneme bütçesi
+  aynen duruyor, hiçbiri kaldırılmadı. Tahminin yanıldığı her durumda
+  (dönen engel, hiç izlenmemiş engel) devreye giren bu.
+- **Üstüne prediktif katman eklendi** — `trajectory_clear`, adayı ve rotayı
+  engelin *gideceği* yere karşı önceden eliyor. Bu katman bizim katkımız.
+
+Kod ve commit mesajlarında bu ayrım açıkça yazılı (`detector_node.py` başlığı).
+
+## 12.3 Ölçümler
+
+Hepsi bu makinede SITL'de, `real-time factor 1.00` altında ölçüldü.
+Ham çıktılar `run_sim.sh` koşularından; senaryo parametreleri
+`eland_params.yaml` → `obstacle_driver`.
+
+### Ö1 — Segmentasyon dinamik nesnelerde bozulmuyor
+
+90 s'lik uçuş, 20 m'de asılı, araç 3 m/s ile geçiyor, insan 1.2 m/s yürüyor:
+
+| Ölçüm | Değer |
+|---|---|
+| `/eland/semantic_mask` | 278 kare, **3.11 Hz**, en uzun boşluk 0.43 s |
+| `/eland/ground_map_instant` | 273 kare, 3.11 Hz, en uzun boşluk 1.99 s |
+| Sınıf 8 (araç) tutarlılığı | **278/278 kare (%100)**, 1037 px ort., 221 px std |
+| Sınıf 9 (insan) tutarlılığı | **278/278 kare (%100)**, 80 px ort., 5 px std |
+
+Sınıf hiç kaybolmuyor ve hiç değişmiyor. **Dikkat:** bu ground-truth
+segmentasyon; %100 tutarlılık simülatörün özelliği, öğrenilmiş bir modelin
+değil. Faz 5'te gerçek model gelince bu ölçüm baştan yapılmalı — buradaki
+sayılar o zaman "tavan" olarak kullanılabilir.
+
+Piksel std'si araçta insanınkinin 44 katı: 1.5 m yüksekliğindeki bir gövde
+nadir dışına çıktıkça düz zemin varsayımı altında yayılıyor. Aynı etki
+aşağıdaki hız kestirimini de düşürüyor.
+
+### Ö2 — Yörünge tahmini doğruluğu
+
+Referans: `/eland/obstacle_truth` (komut edilen poz; sürücü engelleri
+ışınlıyor, dolayısıyla referans kestirimden bağımsız).
+
+| | insan (1.2 m/s) | araç (3.0 m/s) |
+|---|---|---|
+| İzlenme oranı | **272/272 (%100)** | 207/272 (%76) |
+| Konum hatası (ort. / maks.) | **1.37 m** / 3.22 m | 1.86 m / 5.99 m |
+| Güven ≥ 0.5 iken konum hatası | 1.37 m | 1.79 m |
+| Kestirilen hız (güven ≥ 0.5) | 1.04 m/s | 2.04 m/s |
+
+Tahmin hatası, ufka göre (güvenilir track'ler):
+
+| ufuk | insan | araç |
+|---|---|---|
+| +2 s | 2.12 m | 3.40 m |
+| +4 s | 3.75 m | 4.64 m |
+| +6 s | 5.92 m | 7.38 m |
+| +8 s | 8.07 m | 11.77 m |
+| +10 s | 10.05 m | 16.87 m |
+
+Üç şeyi açıkça söylemek gerekiyor:
+
+1. **Hız sistematik olarak düşük çıkıyor** (%87 insanda, %68 araçta). İki
+   sebep: (a) 8 örneklik (~2.6 s) pencere dönüş anlarını içine alınca eğim
+   düşüyor, (b) araç haritadan çıkıp girdikçe track yeniden kuruluyor ve taze
+   track'ler hız üretmiyor. Bu **güvensiz yönde** bir hata: koridor gerçekte
+   olması gerekenden kısa çıkıyor. Telafisi §12.4'teki süpürülmüş güzergâh
+   hafızası ve mevcut reaktif HOLD/ABORT.
+2. **10 s ufkun ucu güvenilir değil** (araçta 17 m hata). Koridorun değeri
+   yakın alanda (2–4 s, 3–5 m hata). Ufkun uzun tutulmasının sebebi
+   §12.4'te — kısa ufuk ölçülerek yetersiz bulundu.
+3. Araç %24 oranında hiç izlenmiyor: ±30 m'lik güzergâhının bir kısmı 40 m'lik
+   haritanın dışında.
+
+### Ö3 — Yanlış pozitif yok (çakışmayan senaryo)
+
+Araç `y = +15` hattında, iniş alanına 15 m uzakta; insan `y = +8`'de. Filtre
+**açık**:
+
+```
+SEARCH -> APPROACH: candidate #70 accepted, r=8.16 m
+APPROACH -> VALIDATE: reached candidate, 0.12 m error
+VALIDATE -> HOLD: candidate lost at 2.20 m, too low to re-acquire
+HOLD -> VALIDATE: candidate recovered after 0.57 s hold
+VALIDATE -> COMMIT: at 1.99 m, committing to touchdown
+```
+
+Temas noktası **(−0.09, −0.29)** — baseline'ın seçtiği yerin aynısı,
+aktivasyondan temasa 17 s. Tek HOLD 2.2 m'de ve 0.57 s sürdü; bu, filtre
+öncesinden beri var olan düşük irtifa davranışı, engelle ilgisi yok.
+**Filtre, kesişme yokken iniş noktasını kaydırmıyor.**
+
+### Ö4 — Kesişme senaryosu (filtre açık)
+
+Araç `y = 0` hattında, yani iniş alanının tam içinden geçiyor. Mod, araç
+**yaklaşırken** (x = −21.1 m, kapanıyor) tetiklendi:
+
+```
+SEARCH   -> APPROACH: candidate #68 accepted, r=8.00 m
+APPROACH -> VALIDATE: reached candidate, 0.98 m error
+VALIDATE -> SEARCH:   candidate lost at 19.02 m (attempt 1/3)
+SEARCH   -> APPROACH: candidate #81 accepted, r=8.00 m
+APPROACH -> VALIDATE: reached candidate, 0.21 m error
+VALIDATE -> COMMIT:   at 1.99 m, committing to touchdown
+```
+
+| Ölçüm | Değer |
+|---|---|
+| Temas noktası | (1.26, −4.64) |
+| **Araç hattına (y=0) uzaklık** | **4.64 m** |
+| Aracın temas noktasına en yakın geçişi | 4.64 m |
+| Aktivasyondan temasa | 22 s |
+
+### Ö5 — Karşılaştırma: aynı senaryo, filtre kapalı
+
+`trajectory_filter_enabled: false`, başka her şey aynı, mod yine araç
+yaklaşırken tetiklendi (x = 27.9 m, kapanıyor):
+
+```
+SEARCH -> APPROACH: candidate #97 accepted, r=8.12 m
+APPROACH -> VALIDATE: reached candidate, 0.17 m error
+VALIDATE -> COMMIT: at 1.99 m, committing to touchdown
+```
+
+| | filtre **açık** | filtre **kapalı** |
+|---|---|---|
+| Temas noktası | (1.26, −4.64) | (−0.10, −0.35) |
+| **Araç hattına uzaklık** | **4.64 m** | **0.35 m** |
+| Aracın temas noktasına en yakın geçişi | 4.64 m | **0.35 m** |
+| Durum geçişi sayısı | 6 (1 kayıp aday) | 4 |
+| Aktivasyondan temasa | 22 s | 16 s |
+
+Filtre kapalıyken araç, inmiş aracın **35 cm yanından** geçiyor. Açıkken
+4.64 m. Eklenen katmanın fark yarattığının kanıtı bu satır; bedeli 6 saniye
+ve bir fazladan aday değişimi.
+
+## 12.4 Yol boyunca ölçülerek düzeltilen dört şey
+
+Hepsi çalışır görünen bir sürümü ölçüp yanlış bulmakla ortaya çıktı.
+
+1. **Füzyonlu harita hareket edeni göremez.** Kanıt hücre başına birikiyor ve
+   `rate × tau`'ya oturuyor (3 Hz, τ=30 s → ~90). 1.5 s'de geçen bir araç ~5
+   kanıt bırakıyor ve argmax'ı asla kazanamıyor. Ölçüm: gz'nin kendi
+   segmentasyonunda iki araç lekesi (biri hareketli) görünürken
+   `/eland/ground_map`'te yalnız park hâlindeki vardı, centroid 12 örnek
+   boyunca 0.2 m içinde sabitti. Çözüm: füzyondan önceki kareyi ayrı topic'te
+   yayınlamak (`/eland/ground_map_instant`). Haritanın hafızası
+   **düşürülmedi** — §7/1'deki sebep hâlâ geçerli.
+2. **4 saniyelik ufuk yetmiyor.** 3 m/s'de 12 m'lik bir yol parçasını koruyor,
+   oysa korunması gereken iniş bunun kaç katı sürüyor. Ölçülen sonuç: araç
+   haritanın dışındayken iniş noktasına karar verildi ve araç sonra tam o
+   noktanın üstünden geçti — **en yakın yaklaşma 0.10 m**. Ufuk 10 s yapıldı.
+3. **Belirsizlik yanlış eksende büyütülüyordu.** Ölçülen tahmin hatası
+   (~0.9 m/s) neredeyse tamamen yol *boyunca*; koridor zaten aynı hat üzerinde
+   örneklenmiş disklerin birleşimi olduğu için o hata hâlihazırda kapsanıyor.
+   Her diski o kadar genişletmek hatayı iki kez sayıp haritanın yarısını
+   eliyordu. Disk yarıçapı artık yalnız **yanal** hatayı taşıyor
+   (`pred_sigma_cross_rate_mps: 0.25`).
+4. **İleri koridor tek başına yetmiyor: geçen araç geri geliyor.** Filtre,
+   araç yaklaşırken noktayı doğru şekilde reddetti, bekledi ve araç geçer
+   geçmez tam oraya indi — hattan 0.37 m. Eklenen: **süpürülmüş güzergâh
+   hafızası** (`corridor_memory_s: 25`). Hareket eden bir şey, kendisi
+   hakkında olduğu kadar *zemin* hakkında da kanıttır: az önce buradan bir
+   araç geçtiyse orası bir güzergâhtır ve oturulacak yer değildir.
+   - Hafıza diskleri **yaklaşma rotası testine dahil değil**. İkisi birleşince
+     ölçülen sonuç haritanın **%95'inin** kapanmasıydı; 15 m'den üstünden
+     uçmak tehlike değil, üstüne oturmak tehlike.
+
+Ayrıca: **filtre adayı zıplatıyor, mod bunu "aday kaybı" sayıyor.** Koridor
+kayınca kazanan hücre 12 m öteye atlıyor, mod bunu kayıp sayıp deneme
+bütçesini tüketiyor ve "no retries left, committing anyway" ile zaten
+reddedilmiş yere iniyordu. Eklenen: seçim kararlılığı (`w_stickiness: 0.15`,
+3 m yarıçap), uygunluk testlerinden **sonra** uygulanıyor — bir seçimi
+uzatabilir, reddedilmiş bir hücreyi geri getiremez.
+
+## 12.5 Ölçüm altyapısında bulunan iki tuzak
+
+Bunlar koda değil, ölçüme ait; ama ölçüm yanlışsa kod da yanlış çıkar.
+
+1. **WSL'de `/tmp` oturumlar arasında siliniyor.** Karşılaştırma koşuları için
+   `/tmp` altına yazılan parametre dosyası, koşu başlarken yoktu; `ros2 launch`
+   sessizce her node'u kendi kod içi varsayılanlarıyla başlattı. Sonuç: engeller
+   parametre dosyasının söylediği yerde değildi ve birkaç koşu ölçtüğünü
+   sandığı şeyi ölçmedi. İki düzeltme: `run_sim.sh --params` artık dosya yoksa
+   **hata verip duruyor**, ve varyant dosyalar kalıcı bir dizine yazılıyor.
+2. **Artık ROS node'ları bir sonraki koşuya sızıyor.** İkinci bir
+   `obstacle_driver` aynı topic'e kendi truth'unu yayınlayıp aynı modelleri
+   ışınlıyor; truth 5 saniyede iki farklı faz arasında zıplıyordu. Koşu
+   script'leri artık başlarken pipeline node'larını tek tek öldürüyor.
+
+## 12.6 Yeni ayar noktaları
+
+`eland_params.yaml` içinde, hepsi yorumlu:
+
+| Anahtar | Varsayılan | Ne yapar |
+|---|---|---|
+| `obstacle_driver.*` | — | Senaryo: iki engelin başlangıç/hedef/hızı, `person_kind` (`model`/`actor`) |
+| `tracker_node.horizon_s` | 10.0 | Tahmin ufku |
+| `tracker_node.track_timeout_s` | 6.0 | Haritadan çıkan engel ne kadar "yaşamaya" devam eder |
+| `tracker_node.ignore_border_blobs` | true | Kenardan kırpılmış leke atılır (yoksa hız düşük kestiriliyor) |
+| `detector_node.trajectory_filter_enabled` | true | **Karşılaştırma koşusu için kapatılır** |
+| `detector_node.corridor_memory_s` | 25.0 | Süpürülmüş güzergâh hafızası |
+| `detector_node.check_approach_path` | true | Yaklaşma rotası da test edilir |
+| `detector_node.w_stickiness` | 0.15 | Seçim kararlılığı |
+
+## 12.7 Bu işin bıraktığı açık kusurlar
+
+| # | Konu | Durum |
+|---|---|---|
+| 9 | **Hız kestirimi %30'a varan oranda düşük** | Güvensiz yön: koridor kısa çıkıyor. Sebepleri Ö2'de. Çare adayları: dönüş anını tespit edip pencereyi kısaltmak, ya da lekenin parallaks kaymasını irtifa ile düzeltmek. |
+| 10 | **10 s ufkun ucu güvenilmez** (araçta 17 m) | Sabit hızlı doğrusal model. Koridorun asıl değeri 2–4 s'de. |
+| 11 | **Ping-pong engel gerçekçi değil** | Test tekrarlanabilirliği için seçildi; gerçek trafik geri gelmez. Hafıza süresi (25 s) bu senaryoya göre ayarlandı, gerçek bir sahnede yeniden bakılmalı. |
+| 12 | **Actor kullanılmıyor** | `person_kind: actor` çalışıyor ve etiketleniyor, ama Gazebo actor pozunu yayınlamıyor ve istenen hızda yürütmüyor (33.3 s'lik tur ~28 s sürdü), yani ölçüm için referans yok. Varsayılan `model`. |
+| 13 | **Hafıza + yaklaşma rotası birleşimi denenmedi** | Kasten ayrıldı (%95 kapanma). Zaman-uzay muhakemesi yapan bir sürüm bunu güvenli şekilde birleştirebilir. |
+
+## 12.8 Bu işten sonra sıradakiler
+
+1. **Hız kestirimindeki sistematik düşüklüğü kapat** (kusur 9). Güvenlikle
+   doğrudan ilgili tek açık madde bu.
+2. **Zaman-uzay çakışma testi.** Şu anki test "rota koridoru kesiyor mu" diye
+   soruyor, "aynı anda mı orada olacağız" diye değil. Aracın kendi iniş süresi
+   zaten biliniyor (alçalma yasası), yani bu hesaplanabilir.
+3. **Hareketli engelli senaryoyu HUD'a yansıt.** İzlenen engeller ve koridor
+   şu an yalnız logda; HUD'da çizilirse davranış anlaşılır hâle gelir.
+4. §9'daki eski liste hâlâ geçerli (QGC doğrulaması, operatör kaçış yolu,
+   Faz 5 gerçek segmentasyon).
+
+## 12.9 Yeni komutlar
+
+```bash
+python3 ~/ros2_ws/src/eland_sim/scripts/gen_world.py
+```
+
+```bash
+~/ros2_ws/src/eland_sim/scripts/run_sim.sh --headless --takeoff 20
+```
+
+```bash
+ros2 topic echo /eland/dynamic_obstacles
+```
+
+Filtreyi kapatıp karşılaştırma koşusu yapmak için parametre dosyasının bir
+kopyasında `trajectory_filter_enabled: false` yapıp:
+
+```bash
+~/ros2_ws/src/eland_sim/scripts/run_sim.sh --headless --takeoff 20 --params /kalici/yol/params_off.yaml
+```

@@ -97,6 +97,111 @@ detector_node:
     mask_topic: "/eland/semantic_mask"
     candidate_topic: "/eland/candidate"
 
+    # --- fourth test: where the hazard is going ------------------------
+    # The three tests above describe the world as it is now. A vehicle at
+    # 3 m/s covers 12 m during a descent, so "3 m from a vehicle" can be
+    # satisfied by a spot it will be parked on when the aircraft arrives.
+    #
+    # This is the layer that is ours rather than SafeLand's: SafeLand reacts to
+    # an obstacle entering the safety radius (pause 5 s, then climb and
+    # reroute), which is the reactive half kept in the flight mode's
+    # HOLD/ABORT states. What is added here runs before it and rules out sites
+    # the hazard is heading for.
+    #
+    # Set false for the comparison run. Same scenario with and without is the
+    # only evidence this layer earns its place.
+    trajectory_filter_enabled: true
+    obstacles_topic: "/eland/dynamic_obstacles"
+    # Stale list means "no tracker", not "nothing is moving".
+    obstacle_timeout_s: 2.0
+    obstacle_min_speed_mps: 0.5
+    # Corridor = r_hazard + (base + cross_rate * t) * (2 - confidence).
+    # base is the tracker's measured position error (~1.5 m). cross_rate
+    # covers error ACROSS the path only: the measured 0.9 m/s of prediction
+    # error is almost all along it, and the corridor is a union of discs
+    # sampled along that same line, so along-track error is already covered.
+    # Adding it to every disc would count it twice and reject half the map.
+    pred_sigma_base_m: 1.5
+    pred_sigma_cross_rate_mps: 0.25
+    # Reject sites whose straight-line approach crosses the corridor too, not
+    # just sites inside it. Conservative: it does not ask whether the aircraft
+    # would be there at the same moment.
+    check_approach_path: true
+    # Samples along the predicted path. At 3 m/s over a 10 s horizon that is
+    # 2.5 m between disc centres against discs of at least 4.5 m radius, so
+    # the corridor has no gaps for an obstacle to be missed through.
+    corridor_samples: 12
+    # Discount for keeping the site already chosen, while it stays eligible.
+    # A corridor that sweeps back and forth makes the winner jump between two
+    # far-apart sites, and the flight mode reads a jump as a lost candidate --
+    # three of those exhaust the retry budget and end in "committing anyway".
+    # Applied after the eligibility tests, so it can prolong a choice but
+    # never revive a rejected one.
+    w_stickiness: 0.15
+    stickiness_radius_m: 3.0
+    # How long ground that something moved across stays excluded, seconds.
+    # 0 disables the memory and leaves only the forward-looking corridor.
+    #
+    # Measured reason it exists: with only the forward corridor, the aircraft
+    # correctly refused the landing site while a vehicle was driving towards
+    # it, waited, and then landed on that exact spot the moment the vehicle
+    # had passed -- 0.37 m from the line it drives along, which it drove along
+    # again shortly afterwards. Something that just drove through here is
+    # evidence about the ground, not only about itself.
+    corridor_memory_s: 25.0
+
+# Moving-obstacle tracking. Reads the pre-fusion projection, because the fused
+# map cannot represent anything that moves: evidence settles at about
+# rate * tau (~90 at 3 Hz with tau=30 s) and a vehicle crossing a cell in
+# 1.5 s deposits about 5, so it never wins the argmax. Measured, not assumed --
+# see tracker_node's header.
+tracker_node:
+  ros__parameters:
+    instant_map_topic: "/eland/ground_map_instant"
+    obstacles_topic: "/eland/dynamic_obstacles"
+    # Only these classes are allowed to move. A flickering building edge is
+    # not an obstacle doing 20 m/s.
+    dynamic_classes: [8, 9]
+    # A person is ~0.28 m^2 from above = 7 cells at 0.2 m resolution, so this
+    # cannot go much higher without losing people entirely.
+    min_blob_cells: 5
+    max_blob_cells: 4000
+    # Blobs clipped by the edge of the map are dropped: their centroid tracks
+    # the visible half, so an obstacle leaving the map reads as one slowing
+    # down. Measured cost of not doing this: 2.09 m/s fitted against a true
+    # 3.0 m/s.
+    ignore_border_blobs: true
+    border_margin_cells: 1
+    # At 3 m/s and 3 Hz an obstacle moves 1 m per frame. 4 m absorbs centroid
+    # jitter without letting two obstacles trade identities.
+    association_radius_m: 4.0
+    history_len: 8
+    # Tracks coast for this long after the obstacle was last seen, with
+    # confidence decaying to zero across the window. An obstacle that leaves
+    # the 40 m map is still on the road it was on: forgetting it in 2 s let
+    # the aircraft commit to a site during a gap in coverage, and the vehicle
+    # then drove across the touchdown point.
+    track_timeout_s: 6.0
+    # Below this many centroids the track publishes zero velocity and zero
+    # confidence rather than a guess: two points always fit a line perfectly,
+    # which is arithmetic, not evidence.
+    min_observations_for_velocity: 3
+    max_speed_mps: 15.0
+    # How far ahead the obstacle is extrapolated.
+    #
+    # 4 s was the first choice and it was measurably too short. A 4 s horizon
+    # at 3 m/s protects a 12 m stretch of road, and the descent it is meant to
+    # protect takes longer than that: in the first end-to-end run the aircraft
+    # committed to a site while the vehicle was outside the map entirely, and
+    # the vehicle then drove across the touchdown point -- closest approach
+    # 0.10 m. The horizon has to cover the descent, not the next frame.
+    #
+    # 10 s at 3 m/s is 30 m, which spans the whole 40 m map, so anything
+    # visible and heading for the site is caught. Longer than that is not
+    # supportable: the prediction is a straight line and the world is not.
+    horizon_s: 10.0
+    prediction_steps: 5
+
 emergency_landing_mode:
   ros__parameters:
     # Which PX4 internal mode this one takes over, so that a failsafe -- not
@@ -157,3 +262,63 @@ hud_node:
     state_topic: "/eland/state"
     hud_topic: "/eland/hud"
     vehicle_local_position_topic: "/fmu/out/vehicle_local_position_v1"
+
+# The two moving obstacles. Read twice: by scripts/gen_world.py, which writes
+# their SDF into the world before Gazebo starts, and by obstacle_driver, which
+# moves the vehicle while it runs. One set of numbers, so the geometry and the
+# motion cannot disagree.
+#
+# Simulation only. Nothing in the landing pipeline may read these: the whole
+# point is that the vehicle infers obstacle motion from its camera. The truth
+# topic below exists to MEASURE that inference, not to feed it.
+obstacle_driver:
+  ros__parameters:
+    enable: true
+    world_name: "eland_test"
+    update_rate_hz: 20.0
+
+    # Walking person, an <actor>. Its path runs 8 m north of the origin --
+    # close enough to be in the map the whole time, far enough that it should
+    # never touch a landing site chosen at the origin. This is the negative
+    # control for the trajectory filter: if the vehicle starts avoiding sites
+    # because of this person, the filter is producing false positives.
+    #
+    # North rather than south to keep it away from the static person at
+    # (-6, -6): two same-class blobs 4 m apart is an association test, not a
+    # tracking test, and mixing the two hides which one is failing.
+    #
+    # model | actor. The <actor> is the better-looking option and it does get
+    # segmented correctly -- but Gazebo neither publishes its pose nor walks
+    # it at the requested speed (traced: a 33.3 s scripted round trip took
+    # about 28 s), so with an actor there is no reference to score the
+    # estimator against. The model is teleported by this node, so its truth is
+    # the pose that was commanded.
+    person_name: "dyn_person"
+    person_kind: "model"
+    person_start: [-10.0, 8.0]
+    person_goal: [10.0, 8.0]
+    person_speed: 1.2
+    person_z: 1.0
+
+    # Driving vehicle. Its path runs straight through the origin, which is
+    # where the default scenario lands, so at 3 m/s it covers the 12 m from
+    # "comfortably clear" to "on top of the landing site" in four seconds --
+    # inside the prediction horizon and outside what a snapshot of the current
+    # map can see. This is the scenario the whole trajectory layer exists for.
+    # The turnaround sits outside the 40 m map on purpose. At +/-20 m it
+    # happened exactly at the map edge, where the blob is half out of frame,
+    # so every reversal was both invisible and mis-measured; the fitted speed
+    # came out at 2.09 m/s against a true 3.0. At +/-30 m the vehicle enters,
+    # crosses at a constant 3 m/s, leaves, and comes back 20 s later, so a
+    # crossing is never far away in a test run.
+    vehicle_name: "dyn_vehicle"
+    vehicle_start: [30.0, 0.0]
+    vehicle_goal: [-30.0, 0.0]
+    vehicle_speed: 3.0
+    vehicle_size: [4.4, 1.9, 1.5]
+    # once | pingpong. pingpong keeps the obstacle in the scene for the whole
+    # run; once lets it leave, which silently turns a long test into a
+    # static-world test.
+    vehicle_mode: "pingpong"
+
+    truth_topic: "/eland/obstacle_truth"

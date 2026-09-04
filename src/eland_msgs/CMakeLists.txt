@@ -13,6 +13,8 @@ find_package(geometry_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/LandingCandidate.msg"
   "msg/LandingState.msg"
+  "msg/DynamicObstacle.msg"
+  "msg/DynamicObstacleArray.msg"
   DEPENDENCIES std_msgs geometry_msgs
 )
 

@@ -117,6 +117,23 @@ class MappingNode(Node):
         self.declare_parameter('map_topic', '/eland/ground_map')
         self.declare_parameter('debug_image_topic', '/eland/ground_map_colored')
         self.declare_parameter('publish_debug_image', True)
+        # This frame's projection, before it is fused into the accumulator.
+        #
+        # The fused map cannot see anything that moves, and that is not a bug
+        # to fix here: evidence accumulates to roughly rate * tau (about 90 at
+        # 3 Hz with tau=30 s), so a vehicle crossing a cell in 1.5 s deposits
+        # about 5 against the ground's 90 and loses the argmax every time.
+        # Measured: with a labelled vehicle driving through the origin at
+        # 3 m/s, gz's own segmentation showed two vehicle blobs while
+        # /eland/ground_map showed only the parked one, its centroid steady to
+        # 0.2 m across twelve samples.
+        #
+        # Shortening tau for dynamic classes would trade away the memory the
+        # descent depends on, so instead the raw per-frame projection is
+        # published alongside the fused map and whoever cares about motion --
+        # tracker_node -- reads that. The IPM stays in one place.
+        self.declare_parameter('instant_map_topic', '/eland/ground_map_instant')
+        self.declare_parameter('publish_instant_map', True)
         self.declare_parameter('camera_info_topic', '/camera/camera_info')
         self.declare_parameter(
             'vehicle_local_position_topic', px4_topics.VEHICLE_LOCAL_POSITION)
@@ -164,6 +181,11 @@ class MappingNode(Node):
             OccupancyGrid, self.get_parameter('map_topic').value, SENSOR_QOS)
         self.debug_pub = self.create_publisher(
             Image, self.get_parameter('debug_image_topic').value, SENSOR_QOS)
+        self.publish_instant_map = bool(
+            self.get_parameter('publish_instant_map').value)
+        self.instant_pub = self.create_publisher(
+            OccupancyGrid, self.get_parameter('instant_map_topic').value,
+            SENSOR_QOS)
         self.create_subscription(
             Image, self.get_parameter('mask_topic').value,
             self.on_mask, SENSOR_QOS)
@@ -253,11 +275,13 @@ class MappingNode(Node):
 
         self.slide_to_current_position()
         self.decay()
-        self.observe(mask)
+        instant = self.observe(mask)
         grid = self.fused_grid()
         self.publish_grid(grid, msg.header.stamp)
         if self.publish_debug_image:
             self.publish_debug(grid, msg.header.stamp)
+        if self.publish_instant_map and instant is not None:
+            self.publish_grid(instant, msg.header.stamp, self.instant_pub)
 
     # ------------------------------------------------------------------
     def current_origin(self):
@@ -361,8 +385,14 @@ class MappingNode(Node):
         """Angle between the body's down axis and true down."""
         return math.acos(max(-1.0, min(1.0, float(self.R_ned_body[2, 2]))))
 
-    def observe(self, mask: np.ndarray) -> None:
-        """Warp this frame onto the ground plane and add it to the accumulator."""
+    def observe(self, mask: np.ndarray):
+        """Warp this frame onto the ground plane and add it to the accumulator.
+
+        Returns the warped frame on its own -- cells this frame did not see
+        set to UNKNOWN -- or None if the frame was dropped. That return value
+        is what tracker_node sees; the accumulator it feeds is what everything
+        else sees.
+        """
         tilt = self.tilt_rad()
         if tilt > self.max_tilt_rad:
             self.dropped_tilt += 1
@@ -370,7 +400,7 @@ class MappingNode(Node):
                 f'frame dropped: tilt {math.degrees(tilt):.1f} deg exceeds '
                 f'{math.degrees(self.max_tilt_rad):.0f} deg '
                 f'({self.dropped_tilt} so far)')
-            return
+            return None
 
         h_px, w_px = mask.shape[:2]
         homography = self.ground_homography(w_px, h_px)
@@ -391,12 +421,18 @@ class MappingNode(Node):
 
         rows, cols = np.nonzero(coverage)
         if rows.size == 0:
-            return
+            return None
         np.add.at(self.evidence, (rows, cols, projected[rows, cols]), 1.0)
 
         self.get_logger().debug(
             f'projected {rows.size} cells at alt {self.altitude_agl:.1f} m, '
             f'tilt {math.degrees(tilt):.1f} deg')
+
+        # Uncovered cells carry the border fill, which is numerically UNKNOWN
+        # already; masking is explicit so the intent survives a change of
+        # borderValue.
+        instant = np.where(coverage > 0, projected, classes.UNKNOWN)
+        return instant.astype(np.uint8)
 
     def fused_grid(self) -> np.ndarray:
         """Winner-takes-all over the accumulated evidence.
@@ -411,7 +447,10 @@ class MappingNode(Node):
         return grid
 
     # ------------------------------------------------------------------
-    def publish_grid(self, grid: np.ndarray, stamp) -> None:
+    def publish_grid(self, grid: np.ndarray, stamp, pub=None) -> None:
+        """Publish a class-ID grid. `pub` selects fused (default) or instant;
+        both carry the same geometry, so a consumer can swap topics without
+        changing a line of its own arithmetic."""
         msg = OccupancyGrid()
         msg.header.stamp = stamp
         msg.header.frame_id = self.map_frame
@@ -431,8 +470,11 @@ class MappingNode(Node):
 
         # Class IDs cast to int8 -- NOT 0..100 occupancy probabilities.
         msg.data = grid.astype(np.int8).ravel().tolist()
-        self.map_pub.publish(msg)
-        self.frame_count += 1
+        if pub is None:
+            self.map_pub.publish(msg)
+            self.frame_count += 1
+        else:
+            pub.publish(msg)
 
     def publish_debug(self, grid: np.ndarray, stamp) -> None:
         """Human-readable view of the same grid.

@@ -24,6 +24,12 @@ ROS_DISTRO_SETUP="/opt/ros/jazzy/setup.bash"
 LOG_DIR="${LOG_DIR:-/tmp/eland_logs}"
 
 POSE="0,0,0,0,0,0"
+# A whole parameter file, and arbitrary launch arguments. Both exist for the
+# comparison runs: the trajectory filter has to be measured against itself
+# switched off, in the same world, without editing the tracked parameter file
+# between the two halves of the experiment.
+PARAMS_ARG=""
+EXTRA_LAUNCH_ARGS=""
 HEADLESS=""
 HUD="true"
 STATION="true"
@@ -45,6 +51,9 @@ run_sim.sh [options]
   --auto             --takeoff, then select the mode (full demo)
   --link-drop        --takeoff, then drop a real GCS link and let the PX4
                      failsafe select the mode on its own
+  --params FILE      parameter YAML to launch with, instead of the installed
+                     one. For comparison runs: same world, different settings.
+  --launch-arg A:=B  extra launch argument, repeatable
   --headless         no Gazebo window (faster; software rendering here)
   --no-hud           no HUD and no control station
   --hud-headless     publish /eland/hud but open no window at all
@@ -90,6 +99,25 @@ while [ $# -gt 0 ]; do
 		TAKEOFF_ALT="${TAKEOFF_ALT:-18}"
 		DO_LINK_DROP=1
 		shift
+		;;
+	--params)
+		# Checked, because the failure is otherwise silent and expensive: a
+		# params_file that does not exist leaves every node on the defaults
+		# compiled into its own source, so the run completes, publishes, and
+		# measures a scenario nobody configured. Cost of finding that out the
+		# other way: several comparison runs where the obstacles were not
+		# where the parameter file said they were.
+		# (fail() is defined further down, after argument parsing.)
+		if [ ! -f "$2" ]; then
+			echo "[run_sim] HATA: --params: no such file: $2" >&2
+			exit 1
+		fi
+		PARAMS_ARG="params_file:=$2"
+		shift 2
+		;;
+	--launch-arg)
+		EXTRA_LAUNCH_ARGS="$EXTRA_LAUNCH_ARGS $2"
+		shift 2
 		;;
 	--headless)
 		HEADLESS="1"
@@ -216,6 +244,7 @@ echo "[run_sim]   kopru kuruldu"
 echo "[run_sim] algi zinciri + ucus modu baslatiliyor..."
 ros2 launch eland_sim eland_sim.launch.py \
 	hud:="$HUD" hud_view:="$HUD_VIEW" station:="$STATION" bridge_colored:=false \
+	$PARAMS_ARG $EXTRA_LAUNCH_ARGS \
 	>"$LOG_DIR/pipeline.log" 2>&1 &
 LAUNCH_PID=$!
 

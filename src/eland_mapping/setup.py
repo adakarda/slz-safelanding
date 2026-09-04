@@ -21,6 +21,7 @@ setup(
         'console_scripts': [
             'mapping_node = eland_mapping.mapping_node:main',
             'detector_node = eland_mapping.detector_node:main',
+            'tracker_node = eland_mapping.tracker_node:main',
         ],
     },
 )

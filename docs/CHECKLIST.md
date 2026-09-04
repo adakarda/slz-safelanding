@@ -306,7 +306,7 @@ dönmek yerine burada acil iniş yapar. İstenmiyorsa `replace_internal_mode`
 | Faz | Durum |
 |---|---|
 | 1 — Segmentasyon pipeline testi | ✅ |
-| 2 — Seçim algoritması | ⚠️ çalışıyor; zamansal füzyon ✅, IPM/attitude ❌ |
+| 2 — Seçim algoritması | ✅ zamansal füzyon ✅, IPM/attitude ✅ (bu satır bir süre "IPM ❌" diyordu; bayattı, IPM 2026-09-01'de tamamlandı ve doğrulandı) |
 | 3 — Mod iskeleti | ✅ |
 | 4 — Entegrasyon | ✅ (`replaceInternalMode` hariç) |
 | 5 — Gerçek model | ✗ başlanmadı |
@@ -328,3 +328,110 @@ uygulanmadı; alan bir *eşik*, seçim ölçütü değil.
 `area_ratio`, tavanı bölgenin metrik alanından geliyor, irtifa yalnızca
 `view_bounded` false iken yedek olarak kullanılıyor. İlk geçişteki
 "irtifa tabanlı" sapma kapandı.
+
+---
+
+# 7. Dinamik engeller + yörünge-farkında karar
+
+Değerlendirme tarihi: 2026-09-03. Kaynak gereksinim:
+`dinamik-engel-yorunge-gorev.md`. Ölçüm çıktılarının tamamı
+`docs/DURUM.md` §12'de; burada madde başına uyum.
+
+Özet: **9 değerlendirilebilir madde — 7 ✅, 2 ⚠️, 0 ❌.**
+
+## 7.1 Gazebo'da dinamik modeller
+
+**⚠️ Dinamik insan `<actor>` ile — çalışıyor ama varsayılan değil**
+`gen_world.py` hem `<actor>` hem `<model>` üretebiliyor (`person_kind`).
+Actor'ün Label eklentisiyle etiketlendiği **ölçülerek** doğrulandı: sınama
+dünyasında etiket 3 ile 123 px, centroid 5 s'de 124.8 → 207.0 px kaydı,
+statik kontroller kıpırdamadı. Varsayılanın `model` olmasının sebebi
+ölçülebilirlik: Gazebo actor pozunu yayınlamıyor ve script'in dediği hızda
+yürütmüyor (33.3 s'lik tur ~28 s), yani tahmin doğruluğunu puanlayacak bir
+referans yok. ⚠️ işareti bu sapma için; gereksinim "actor ile" diyordu,
+uygulama actor'ü destekliyor ama ölçüm için modeli kullanıyor.
+
+**✅ Dinamik araç, tanımlı yörüngede sabit hızla**
+`dyn_vehicle`, VEHICLE(8) etiketli kutu, `obstacle_driver` tarafından sim
+saatinde ışınlanıyor. Düz hat, sabit hız, `once` veya `pingpong`.
+
+**✅ Her ikisi de doğru sınıfa etiketli**
+PERSON(9) ve VEHICLE(8), `eland_common/classes.py`'deki tek kaynağa göre.
+Maskede ölçüldü: 278/278 karede her iki sınıf da mevcut, hiç kaybolmadı.
+
+**✅ Yörüngeler kod içinde parametrik**
+`eland_params.yaml` → `obstacle_driver`: `*_start`, `*_goal`, `*_speed`,
+`vehicle_mode`. Aynı sayılar hem dünyayı üretiyor hem çalışma anında sürüyor,
+yani geometri ile yörünge ayrışamıyor. Ölçüm koşularında dört farklı senaryo
+tek satır değiştirilerek kuruldu (±30 y=0, ±12 y=0, ±40 y=0, ±30 y=+15).
+
+**✅ Yörünge iniş alanının içinden geçiyor**
+Varsayılan araç güzergâhı `y = 0`, yani doğuş noktasının ve varsayılan iniş
+alanının tam üstünden. Uzaktan izlenen bir engel değil: filtre kapalıyken
+araç, inmiş aracın 35 cm yanından geçti.
+
+## 7.2 Yörünge tahmini
+
+**✅ Dinamik sınıflar zaman içinde takip ediliyor**
+`tracker_node`: bağlantılı bileşen → en yakın komşu eşleme → son N centroid
+üzerinden en-küçük-kareler hız kestirimi. Kalman yok; gerekçesi node
+başlığında (ölçülen hata bütçesi bir filtrenin modelleyebileceğinden farklı
+kaynaklardan geliyor).
+
+**✅ Gelecek konumlar doğrusal projeksiyonla hesaplanıyor**
+`horizon_s: 10.0`, `prediction_steps: 5`. Ufkun 4 s'den 10 s'ye çıkarılması
+ölçümle zorunlu oldu: 4 s'lik ufukla araç haritanın dışındayken karar verildi
+ve araç sonra temas noktasının 0.10 m yanından geçti.
+
+**✅ Kesişim/yakınlık kontrolü hem nokta hem rota için yapılıyor**
+`detector_node.trajectory_clear`: her aday hücre koridor disklerinin dışında
+olmak zorunda, ve `check_approach_path` açıkken drone→hücre doğru parçası da.
+
+**⚠️ Tahmin doğruluğu ufkun ucunda zayıf**
+Ölçülen (güvenilir track'ler): +2 s'de 2.1 m (insan) / 3.4 m (araç), +10 s'de
+10.1 m / 16.9 m. Ayrıca hız sistematik olarak düşük kestiriliyor (insanda %87,
+araçta %68) ve bu **güvensiz yönde** bir hata — koridor kısa çıkıyor. Kısmen
+telafi ediliyor (süpürülmüş güzergâh hafızası + mevcut reaktif HOLD/ABORT),
+ama kapatılmadı. `docs/PLAN.md` bölüm 4, madde 7.
+
+## 7.3 Karar mantığına entegrasyon
+
+**✅ Dördüncü test eklendi, diğer üçüyle aynı sırada**
+`trajectory_clear`, `min_area_m2` / `r_fit` / `r_hazard` ile aynı seviyede bir
+eleme. Skora terim olarak eklenmedi; gerekçe `PLAN.md` K7'de: SORA ayrımı
+pazarlık konusu değilse, yeterince iyi bir hücre engelin gideceği yerde olmayı
+telafi edemez.
+
+**✅ SafeLand'in reaktif mekanizması korundu**
+`HOLD` / `ABORT` durumları, `candidate_timeout_s`, `max_landing_attempts`
+hiç değiştirilmedi. Ölçüm koşularında ikisinin birlikte çalıştığı görüldü:
+Ö4'te bir aday kaybı reaktif yoldan işlendi (attempt 1/3), iniş yine de
+prediktif filtrenin izin verdiği noktaya yapıldı.
+
+**Not — entegrasyonun ortaya çıkardığı bir sorun ve çözümü.** Filtre, koridor
+kayınca kazanan hücreyi 12 m öteye atlatıyor; mod bunu "aday kaybı" sayıp
+deneme bütçesini tüketiyor ve `no retries left, committing anyway` ile zaten
+reddedilmiş noktaya iniyordu. Eklenen `w_stickiness`, uygunluk testlerinden
+sonra uygulanan bir tercih terimi: seçimi uzatır, reddedilmiş hücreyi geri
+getirmez.
+
+## 7.4 Ölçüm planı
+
+| Madde | Durum | Sonuç |
+|---|---|---|
+| 1. Segmentasyon dayanıklılığı | ✅ | 3.11 Hz, en uzun boşluk 0.43 s; sınıf 8 ve 9 **278/278 karede** mevcut. Not: ground-truth segmentasyon, %100 tutarlılık simülatörün özelliği. |
+| 2. Yörünge tahmini doğruluğu | ✅ | Konum hatası 1.37 m (insan) / 1.79 m (araç); tahmin hatası +2 s'de 2.1 / 3.4 m, +10 s'de 10.1 / 16.9 m. |
+| 3. Yanlış pozitif yok | ✅ | Engel 15 m uzakta ve kesişmiyorken temas (−0.09, −0.29) — baseline'ın seçtiği yer, 17 s, iptal yok. |
+| 4. Kesişme senaryosu | ✅ | Araç yaklaşırken tetiklendi; temas (1.26, −4.64), araç hattından **4.64 m**. Tam SEARCH→COMMIT logu `DURUM.md` §12.3'te. |
+| 5. Karşılaştırma | ✅ | Filtre kapalı, aynı senaryo: temas (−0.10, −0.35), hattan **0.35 m**. Araç, inmiş aracın 35 cm yanından geçti. Fark: 4.29 m. |
+
+## 7.5 Faz durumu (güncel)
+
+| Faz | Durum |
+|---|---|
+| 1 — Segmentasyon pipeline testi | ✅ |
+| 2 — Seçim algoritması | ✅ (zamansal füzyon ✅, IPM ✅ — bu tablonun eski hâli bayattı) |
+| 3 — Mod iskeleti | ✅ |
+| 4 — Entegrasyon | ✅ |
+| 5 — Gerçek segmentasyon modeli | ✗ başlanmadı (GPU bekliyor) |
+| 6 — Dinamik engeller + yörünge-farkında karar | ✅ |
