@@ -348,3 +348,23 @@ obstacle_driver:
     vehicle_mode: "pingpong"
 
     truth_topic: "/eland/obstacle_truth"
+
+# The teleoperation station. Most of its behaviour is keys, not parameters;
+# these are the few things worth changing without editing the node.
+control_station:
+  ros__parameters:
+    # Sticks are streamed at this rate once manual control is taken. PX4 calls
+    # the link lost after COM_RC_LOSS_T of silence, so what matters is not the
+    # average but the longest gap -- see stream_report_s.
+    manual_rate_hz: 33.0
+    # Keep asking for Position mode while the operator is flying and a
+    # failsafe keeps taking it away. false restores the old behaviour: the key
+    # appears to work and the aircraft lands anyway.
+    reassert_manual: true
+    reassert_period_s: 2.0
+    # Start streaming without a keypress. For timing measurements with no
+    # human in the loop; taking control should otherwise be deliberate.
+    start_manual: false
+    # How often the station reports its own stream regularity, seconds.
+    stream_report_s: 10.0
+    gcs_heartbeat: true

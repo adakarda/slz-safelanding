@@ -17,6 +17,7 @@
 
   <depend>px4_ros2_cpp</depend>
   <depend>eland_msgs</depend>
+  <depend>std_msgs</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

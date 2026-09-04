@@ -64,6 +64,7 @@ from px4_msgs.msg import (FailsafeFlags, ManualControlSetpoint, VehicleCommand,
                           VehicleLocalPosition, VehicleStatus)
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from std_msgs.msg import Bool
 from eland_common import px4_topics
 from eland_common.qos import PX4_QOS, SENSOR_QOS
 
@@ -94,6 +95,7 @@ KEY_HELP = [
     ('2', 'kalkis'),
     ('3', 'manuel kontrolu al (POSCTL)'),
     ('0', 'ACIL INIS modunu tetikle'),
+    ('9', 'modu kaydini KALDIR (gercek RTL)'),
     ('L', "PX4 ile in"),
     ('X', 'disarm'),
     ('ESC', 'cik'),
@@ -118,6 +120,20 @@ class ControlStation(Node):
         # pressing a key that appears to do nothing.
         self.declare_parameter('reassert_manual', True)
         self.declare_parameter('reassert_period_s', 2.0)
+        # Start streaming sticks without waiting for a keypress. For measuring
+        # this node's own timing without a human in the loop; leave it false
+        # for flying, where taking control should be a deliberate act.
+        self.declare_parameter('start_manual', False)
+        # How often to report the stream's own regularity. PX4 calls the link
+        # lost after COM_RC_LOSS_T of silence, so the number that matters is
+        # not the average rate but the longest gap -- an average of 20 Hz with
+        # one two-second hole in it is a failsafe, not a healthy link.
+        self.declare_parameter('stream_report_s', 10.0)
+        # Open a window at all. Off means no keyboard -- everything else (the
+        # stick stream, the GCS heartbeat, holding the operator's intent) runs
+        # unchanged, which is what makes the station measurable without a
+        # display and usable over a connection that has none.
+        self.declare_parameter('window', True)
         # 14550 is where PX4 sends; 18570 is where its "Normal" mavlink
         # instance listens. Heartbeats aimed at 14550 are never seen by the
         # autopilot, so the link it is meant to notice would never exist.
@@ -138,6 +154,8 @@ class ControlStation(Node):
         self.wants_manual = False
         self.last_reassert = 0.0
         self.takeovers = 0
+        self.publish_stamps = []
+        self.worst_gap = 0.0
         self.sticks = {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0, 'throttle': 0.0}
         self.notice = 'baslatildi -- 1: arm, 2: kalkis, 3: manuel kontrol'
 
@@ -145,6 +163,14 @@ class ControlStation(Node):
             ManualControlSetpoint, '/fmu/in/manual_control_input', PX4_QOS)
         self.cmd_pub = self.create_publisher(
             VehicleCommand, '/fmu/in/vehicle_command', PX4_QOS)
+        # The escape hatch. While the landing mode is registered in place of
+        # Return, a deliberate RTL lands here instead of flying home, and the
+        # replacement cannot be changed at runtime. What can be changed is
+        # whether the mode is registered at all: this asks it to unregister,
+        # after which PX4 uses its own Return. One way -- coming back is a
+        # relaunch, on the ground.
+        self.mode_enable_pub = self.create_publisher(
+            Bool, '/eland/mode_enable', 10)
         self.create_subscription(
             Image, self.get_parameter('hud_topic').value, self.on_hud, SENSOR_QOS)
         self.create_subscription(
@@ -170,6 +196,17 @@ class ControlStation(Node):
         self.create_timer(period, self.publish_manual)
         self.create_timer(0.1, self.service_pending_mode)
         self.create_timer(0.5, self.hold_manual)
+        self.create_timer(float(self.get_parameter('stream_report_s').value),
+                          self.report_stream)
+
+        if bool(self.get_parameter('start_manual').value):
+            for a in self.sticks:
+                self.sticks[a] = 0.0
+            self.manual_active = True
+            self.wants_manual = True
+            self.posctl_request_at = self.now() + MANUAL_SETTLE_S
+            self.get_logger().info(
+                'start_manual: cubuk akisi tuşa basilmadan baslatildi')
 
         self.gcs = None
         if bool(self.get_parameter('gcs_heartbeat').value):
@@ -296,6 +333,7 @@ class ControlStation(Node):
         manual control link within COM_RC_LOSS_T."""
         if not self.manual_active:
             return
+        self.publish_stamps.append(time.time())
         m = ManualControlSetpoint()
         m.timestamp = m.timestamp_sample = self.stamp()
         m.valid = True
@@ -306,6 +344,30 @@ class ControlStation(Node):
         m.throttle = float(self.sticks['throttle'])
         m.sticks_moving = any(abs(v) > 0.01 for v in self.sticks.values())
         self.manual_pub.publish(m)
+
+    def report_stream(self) -> None:
+        """Say how regular this node's own output actually was.
+
+        Worth logging rather than assuming: the failsafe that keeps taking the
+        aircraft is triggered by a gap in this stream, and a node that is late
+        cannot tell the difference between a link that is broken and a link it
+        is starving. If the longest gap here is under COM_RC_LOSS_T and PX4
+        still calls the link lost, the problem is downstream of this process.
+        """
+        stamps, self.publish_stamps = self.publish_stamps, []
+        if len(stamps) < 3:
+            return
+        gaps = sorted(b - a for a, b in zip(stamps, stamps[1:]))
+        worst = gaps[-1]
+        self.worst_gap = max(self.worst_gap, worst)
+        span = stamps[-1] - stamps[0]
+        over = sum(1 for g in gaps if g > 0.5)
+        level = self.get_logger().warning if worst > 0.5 else self.get_logger().info
+        level(f'manuel akis: {len(stamps)} mesaj, {len(stamps) / span:.1f} Hz, '
+              f'aralik p50 {gaps[len(gaps) // 2] * 1000:.0f} ms, '
+              f'en uzun {worst * 1000:.0f} ms, '
+              f'>0.5 s bosluk {over} (kosu boyunca en uzun '
+              f'{self.worst_gap * 1000:.0f} ms)')
 
     def send_command(self, command: int, p1=0.0, p2=0.0) -> None:
         c = VehicleCommand()
@@ -390,6 +452,10 @@ class ControlStation(Node):
             self.wants_manual = False
             self.set_nav_state(NAV_EXTERNAL1)
             self.notice = 'ACIL INIS modu tetiklendi'
+        elif k == '9':
+            self.mode_enable_pub.publish(Bool(data=False))
+            self.notice = ('acil inis modunun kaydi kaldiriliyor -- '
+                           'RTL artik PX4 kendi Return modu')
         return True
 
     # ------------------------------------------------------------------
@@ -477,6 +543,7 @@ class ControlStation(Node):
 def main(args=None) -> None:
     rclpy.init(args=args)
     node = ControlStation()
+    windowed = bool(node.get_parameter('window').value)
 
     # Spin in the background so the timers keep firing while the main thread is
     # busy drawing. Rendering must never be able to interrupt the flight link.
@@ -484,6 +551,17 @@ def main(args=None) -> None:
     executor.add_node(node)
     spinner = threading.Thread(target=executor.spin, daemon=True)
     spinner.start()
+
+    if not windowed:
+        node.get_logger().info(
+            'window:=false -- klavye yok, akis ve heartbeat calisiyor')
+        try:
+            spinner.join()
+        except KeyboardInterrupt:
+            pass
+        node.destroy_node()
+        rclpy.try_shutdown()
+        return
 
     window = 'eland control station'
     cv2.namedWindow(window, cv2.WINDOW_AUTOSIZE)

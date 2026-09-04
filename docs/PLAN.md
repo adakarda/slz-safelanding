@@ -641,7 +641,15 @@ Tuzak: marker'ı şablonun başlık yorumunda da anmak, metin değiştirme sıra
 engelleri o yoruma da yazdırdı. Üreteç artık marker'ın **tam bir kez**
 geçtiğini doğruluyor.
 
-#### K13 — Simülasyondaki failsafe eşikleri gerçek donanımınkiler değil
+#### K13 — Simülasyondaki failsafe eşikleri (2026-09-04 düzeltildi)
+
+**Bu bölümün ilk hâli yanlış bir ölçüme dayanıyordu ve `COM_RC_LOSS_T`
+gevşetmesi geri alındı; gerekçesi ve yeni ölçümler `docs/DURUM.md` §16'da.
+Kalan tek parametre `NAV_RCL_ACT=1`, ve o bir politika seçimi.**
+
+Aşağıdaki metin kaydı için duruyor.
+
+
 
 `run_sim.sh` açılışta iki PX4 parametresi yazıyor: `NAV_RCL_ACT=1` (Hold) ve
 `COM_RC_LOSS_T=3`. İkisi de ölçüme dayanıyor.

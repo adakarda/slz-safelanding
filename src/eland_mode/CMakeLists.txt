@@ -17,13 +17,15 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(px4_ros2_cpp REQUIRED)
 find_package(eland_msgs REQUIRED)
+# For /eland/mode_enable, the operator escape hatch; see src/main.cpp.
+find_package(std_msgs REQUIRED)
 
 include_directories(include ${Eigen3_INCLUDE_DIRS})
 
 add_executable(emergency_landing_mode src/main.cpp)
 target_link_libraries(emergency_landing_mode
     PUBLIC Eigen3::Eigen px4_ros2_cpp::px4_ros2_cpp rclcpp::rclcpp
-           ${eland_msgs_TARGETS})
+           ${eland_msgs_TARGETS} ${std_msgs_TARGETS})
 
 install(TARGETS emergency_landing_mode DESTINATION lib/${PROJECT_NAME})
 

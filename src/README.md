@@ -290,26 +290,23 @@ burnun baktığı yön. Offboard setpoint **kullanılmıyor** — bu projenin t�
 kaçındığı mekanizma o, ve desteklenen bir giriş yolu varken bir test aracının
 onu kullanması için sebep yok.
 
-#### Failsafe eşikleri simülasyona göre ayarlı
+#### Failsafe politikası
 
-`run_sim.sh` açılışta iki PX4 parametresi yazar:
+`run_sim.sh` açılışta **tek** bir PX4 parametresi yazar:
 
 | Parametre | Değer | Neden |
 |---|---|---|
-| `NAV_RCL_ACT` | 1 (Hold) | Operatör kumandasındaki boşluk aracı park etmeli, indirmemeli |
-| `COM_RC_LOSS_T` | 3 s | Buradaki bağlantı bir verici değil, yazılımsal render ile CPU paylaşan bir DDS köprüsü |
+| `NAV_RCL_ACT` | 1 (Hold) | Operatör kumandasındaki boşluk aracı park etmeli, indirmemeli. Politika, workaround değil. |
 
-Sebebi ölçüldü: istasyon sabit 20 Hz manuel kontrol yayınlarken PX4'ün fiilen
-kullandığı hız 0 ile 31 Hz arasında salınıyor — mesajlar öbekler hâlinde,
-aralarda saniyelerce boşlukla geliyor. 0.5 s'lik varsayılan eşik her boşlukta
-"verici kayboldu" diyordu ve bu mod Return'ün yerine kayıtlı olduğu için her
-biri bir acil inişe dönüşüyordu. Devralma başarılı oluyor, dört saniye sonra
-failsafe geri alıyordu.
+`COM_RC_LOSS_T` **değiştirilmiyor** — PX4 varsayılanı (0.5 s) kullanılıyor.
+Bir ara 3 s'ye çıkarılmıştı; o, yanlış ölçüme dayanan bir workaround'du ve
+geri alındı. Ölçülen: istasyon 33 Hz yayınlıyor, en uzun boşluk boştayken
+36 ms, 8 çekirdek yük altında 60.6 ms; PX4 bir kez bile kumandayı kayıp
+saymıyor ve araç 60 saniye boyunca POSCTL'de kalıyor. Ayrıntı
+`docs/DURUM.md` §16.
 
 **`NAV_DLL_ACT` (GCS datalink) değiştirilmedi** — `--link-drop` senaryosu
 olduğu gibi çalışır.
-
-Bu iki satır gerçek donanıma kopyalanmaz; orada varsayılanlar doğrudur.
 
 #### Manuel kontrol geri alınırken
 
@@ -320,6 +317,25 @@ Bu iki satır gerçek donanıma kopyalanmaz; orada varsayılanlar doğrudur.
   satırda sebebini yazar (`sebep: kumanda baglantisi kopuk sayiliyor` gibi).
   `0` (acil iniş) veya `L` (PX4 ile in) tuşları bu ısrarı bırakır.
 - Durum panelinde `FAILSAFE` satırı ve `nav_state` yanında mod adı görünür.
+- İstasyon kendi yayın düzenliliğini 10 saniyede bir loglar
+  (`manuel akis: ... en uzun NN ms`). Ortalama değil **en uzun boşluk**
+  raporlanır, çünkü failsafe'i tetikleyen odur. 500 ms'yi geçerse uyarı olur.
+
+#### Operatör kaçış yolu — `9` tuşu
+
+Mod, Return'ün yerine kayıtlı olduğu sürece kasıtlı bir RTL de acil inişe
+döner ve bu çalışma anında değiştirilemez. Değiştirilebilen, modun kayıtlı
+olup olmadığı: `9` tuşu `/eland/mode_enable` üzerine `false` yayınlar, mod
+kayıttan düşer ve süreç çıkar; PX4 kendi Return'üne döner.
+
+Tek yönlü. Geri getirmek yeniden başlatmaktır — uçuş ortasında, az önce
+gitmesini istediğin bir modun yeniden belirmesi istenmez.
+
+Aynısı elle:
+
+```bash
+ros2 topic pub -1 /eland/mode_enable std_msgs/msg/Bool "{data: false}"
+```
 
 #### Bilmen gereken: istasyon GCS bağlantısını canlı tutar
 

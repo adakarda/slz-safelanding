@@ -854,3 +854,95 @@ açık madde olarak duruyor.
 
 **Yeni sınıflar görülüyor:** fence 1484 px ve pole 65 px ile her karede
 mevcut — 32 cm'lik bir direk 25 m'den görülüyor.
+
+---
+
+# 16. Teleoperasyon: kök neden, ve önceki teşhisin düzeltilmesi (2026-09-04)
+
+**İstenen:** semptomu bastırmak değil, öbeklenmenin kaynağını izole etmek;
+sonra gerçek düzeltme; ayrıca operatör kaçış yolu (§13.5/16).
+
+## 16.1 Zincir üç noktadan ölçüldü
+
+Manuel komutun geçtiği her aşamaya ayrı sayaç kondu:
+
+| Nokta | Ne ölçer |
+|---|---|
+| **P1** yayıncı zamanlayıcısı | Süreç gerçekte ne zaman gönderebildi |
+| **P2** `/fmu/in/manual_control_input` aboneliği | ROS 2 / DDS teslimi |
+| **P3** `/fmu/out/manual_control_setpoint` | uXRCE-DDS ajanı + PX4 |
+
+Sonuç (60 s, sabit 20 Hz yayın):
+
+```
+P1 yayıncı  : 19.85 Hz, aralık p50 50.0 ms, p99  53.7 ms, en uzun  352.9 ms
+P2 ROS/DDS  : 19.83 Hz, aralık p50 50.0 ms, p99  53.5 ms, en uzun  686.5 ms
+P3 PX4 echo : 20.04 Hz, aralık p50 50.0 ms, p99  83.5 ms, en uzun  686.3 ms
+```
+
+Üç noktada da 60 saniyede **tek** bir >0.5 s boşluk. Yani öbeklenme
+taşımada yok.
+
+## 16.2 Önceki teşhis yanlıştı — düzeltme
+
+§13.1'de "PX4'ün kullandığı hız 0–31 Hz arasında salınıyor" diye rapor
+edilmişti. O sayı, ölçen node'un **kendi** tek-thread'li executor'ında
+yayınlama, abone olma, bayrak işleme ve `print` yapmasıyla üretilmişti:
+executor takıldığında hem yayın duruyor hem de geri sayım 3 saniyelik
+pencerede önce 0 sonra 31 gösteriyordu. PX4 kumandayı haklı olarak kayıp
+saydı — çünkü akış gerçekten durmuştu, ama **tanı aracında**, taşımada değil.
+
+Doğru ifade: *manuel kontrolü meşgul bir tek-thread executor'dan yayınlayan
+her node bu failsafe'i tetikler.* Kontrol istasyonu bunu zaten tasarımıyla
+önlüyordu (arka plan executor + ayrı zamanlayıcı); artık **kanıtlıyor** da.
+
+## 16.3 Gerçek istasyon ölçüldü
+
+İstasyon kendi yayın düzenliliğini 10 saniyede bir raporluyor
+(`stream_report_s`). Ortalama değil **en uzun boşluk** raporlanıyor, çünkü
+failsafe'i tetikleyen odur.
+
+| Koşul | İstasyon akışı | PX4 echo | PX4 "kumanda kayıp" | nav_state |
+|---|---|---|---|---|
+| Yüksüz | 33.1 Hz, en uzun **36 ms** | max 280 ms, >0.5 s: 0 | **0 kez** | — |
+| 8 CPU yükü (yük ort. 16) | 33.1 Hz, en uzun **54 ms** | max 234 ms, >0.5 s: 0 | **0 kez** | — |
+| 8 CPU yükü + **varsayılan 0.5 s eşik** | 33.0 Hz, en uzun **60.6 ms** | max 253 ms, >0.5 s: 0 | **0 kez** | 60 s boyunca POSCTL |
+
+Son satır asıl olan: `COM_RC_LOSS_T` PX4 varsayılanında (0.5 s), makine 12
+çekirdekte 18 yük ortalamasıyla boğulmuşken bile araç bir kez bile operatörün
+elinden çıkmadı.
+
+## 16.4 Yapılan düzeltmeler
+
+| Değişiklik | Gerekçe |
+|---|---|
+| **`COM_RC_LOSS_T` geri alındı** (varsayılan 0.5 s) | 3 s'ye çıkarılması yanlış ölçüme dayanan bir workaround'du. Kök neden anlaşıldığına göre tolerans gevşetmesi kalkmalı. |
+| `NAV_RCL_ACT=1` (Hold) **kaldı** | Bu bir politika: operatör bağlantısındaki boşluk aracı park etmeli, indirmemeli. Workaround değil. `NAV_DLL_ACT` Return'de kaldığı için bağlantı-kopması senaryosu aynen çalışıyor. |
+| İstasyon kendi akışını raporluyor | Bir daha bu tür bir sorun tahminle değil, ölçümle teşhis edilsin: "en uzun boşluk 36 ms" diyen bir node, kendisinin aç bırakılmadığını kanıtlar. |
+| İstasyon `window: false` ile penceresiz çalışabiliyor | Ekransız ölçüm ve ssh üzerinden kullanım. Klavye gider, akış/heartbeat/niyet korunması kalır. |
+
+## 16.5 Operatör kaçış yolu (açık madde #16 kapandı)
+
+Mod, Return'ün yerine kayıtlı olduğu sürece kasıtlı bir RTL de acil inişe
+dönüyordu ve bu **çalışma anında değiştirilemez** — hangi iç modun yerine
+geçildiği kayıt sırasında PX4'e söylenir.
+
+Değiştirilebilen şey, kayıtlı olup olmadığı. `/eland/mode_enable` üzerine
+`false` yayınlamak modu kayıttan düşürüyor ve süreç çıkıyor; PX4 kendi
+Return'üne dönüyor. Bu yeni bir mekanizma değil: Faz 3'te node öldürüldüğünde
+`nav_state 23 → 5 (AUTO_RTL)` olarak zaten ölçülmüştü. Yapılan, o hazır düşüş
+yolunu **kasıtlı ve erişilebilir** kılmak.
+
+Kontrol istasyonunda `9` tuşu. Tek yönlü: uçuş ortasında modun geri gelmesi,
+az önce gitmesini isteyen operatörün altında bir modun belirmesi demek olurdu;
+geri getirmek yeniden başlatmaktır.
+
+Doğrulandı: `9`'a eşdeğer yayın sonrası mod
+`mode_enable(false): unregistering...` yazdı ve süreç sayısı 0'a düştü.
+
+## 16.6 Hâlâ açık
+
+| # | Konu |
+|---|---|
+| 15 | **GUI'li koşu benim tarafımdan doğrulanmadı.** Otomasyon bağlamımda X sunucusuna erişemiyorum (`qt.qpa.xcb: could not connect to display :0`), bu yüzden Gazebo penceresi + istasyon penceresi açıkken ölçemedim. Yerine mekanizmayı sınadım: 8 çekirdek yükü altında akış bozulmadı. GUI'nin ek yükü CPU değil bellek bant genişliği ise bu sınama onu kapsamaz. |
+| 17 | Kaçış yolu tek yönlü; uçuş ortasında modu geri getirmek yok (kasıtlı). |
