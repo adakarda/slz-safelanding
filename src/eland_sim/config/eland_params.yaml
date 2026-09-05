@@ -104,6 +104,11 @@ detector_node:
     w_risk: 0.50
     w_distance: 0.15
     w_clearance: 0.35
+    # Ground something crossed within corridor_memory_s, scaled by how
+    # recently. A cost, not an exclusion: as a hard mask this layer covered
+    # every eligible cell on half the frames of a five-mover landing and the
+    # descent was abandoned three times (docs/DURUM.md 19.4).
+    w_memory: 0.35
     # Not a CPU limit: a decision frame costs about 5 ms, so this throttle is
     # roughly sixty times slower than the loop could run. It is a stabiliser.
     # Measured by raising it to 4.0 on the pinned three-people, two-vehicle

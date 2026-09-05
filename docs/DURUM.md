@@ -1297,5 +1297,106 @@ varsayılanı 0 (kapalı), gerekçesi yapılandırma dosyasında yazılı.
 
 | # | Konu |
 |---|---|
-| 22 | Bellek bırakıldığı karelerde site 4-7 kez 4 m'den fazla sıçrıyor. İniş tek denemede tamamlandığı için kabul edildi, ama bellek "sert dışlama" yerine skora eklenen bir ceza olsaydı sıçrama da olmazdı. |
-| 23 | Araç, karelerin %30-40'ında hiç izlenmiyor (konum hatası ~2 m). Sınır lekeleri ve iki aracın tek lekede birleşmesi şüpheli; ölçülmedi. |
+| 22 | ~~Bellek bırakıldığı karelerde site 4-7 kez 4 m'den fazla sıçrıyor.~~ §20'de kapandı: bellek artık ceza, sıçrama 3-4'e indi. |
+| 23 | ~~Araç karelerin %30-40'ında hiç izlenmiyor.~~ §20.4'te kapandı: 44 karenin 43'ünde araç haritanın dışındaydı, kusur değil. |
+
+# 20. Veto değil fiyat: dördüncü katmanın yeniden düzenlenmesi (madde 22-23)
+
+## 20.1 §19.4'teki teşhis eksikti
+
+Dün "geçilmiş zemin belleği her şeyi kapatıyor" denmişti ve konan yedek dal,
+küme boşalınca `site_blocked` dışındaki her şeyi bırakıyordu — yani yalnızca
+belleği değil, **yaklaşma yolu gölgesini de**. Bellek skora ceza olarak
+taşınıp gölge sert maske olarak bırakılınca boşalma geri geldi (155 karenin
+53'ü), böylece hangi maskenin suçlu olduğu ölçülebildi:
+
+| Kare örneği | Statik testleri geçen | Koridor tek başına bırakır | Gölge tek başına bırakır |
+|---|---|---|---|
+| 1 | 21100 | 12109 | **0** |
+| 2 | 20932 | 8230 | **0** |
+| 3 | 20774 | 4494 | **0** |
+| 4 | 20766 | 6314 | **0** |
+| 5 | 20113 | 8174 | **0** |
+
+Yaklaşma gölgesi trafik varken **her karede haritanın tamamını** örtüyordu.
+Hiçbir şey bırakmayan bir test, test değildir.
+
+İki sebebi vardı. Gölge, her koridor örneği için uçaktan çizilen teğet
+kamadan oluşuyor ve harita köşegeni boyunca uzatılıyordu; 26-78 örnekle bu
+kamaların birleşimi her yönü kapsıyor. İkincisi ve daha ağırı: uçak yatayda
+herhangi bir diskin içine düştüğünde kod `route[:] = 1` ile haritayı tümden
+kapatıyordu — oysa uçak diskin **15 m üstünde**, içinde değil. Altından bir
+insan geçmesi tüm haritayı yasaklıyordu.
+
+## 20.2 Yeni ayrım: tek sert dışlama, iki fiyat
+
+- **Koridor diskleri (sert):** tehlikenin *olacağı* zemin. Uçağın üstüne
+  oturmaması gereken tek şey budur; burası boşalırsa cevap gerçekten
+  "yer yok"tur ve HOLD/ABORT doğrudur — SafeLand'in tepkisel davranışı yedek
+  olarak yerinde durur.
+- **Geçilmiş zemin (fiyat, `w_memory` 0.35):** tazelikle ölçekli. 2 s önce
+  geçilmiş yer tam ceza öder, 28 s önce geçilmiş yer neredeyse hiç; ikisi de
+  alternatif hiçlikse inilebilir kalır.
+- **Yaklaşma gölgesi (fiyat, `w_route` 0.20):** tehlikenin gölgesinde kalan
+  site kaybeder ama yasaklanmaz. Dosyanın kendi ifadesiyle: bir güzergâh
+  oturmak için kötü bir yerdir, on beş metreden üstünden geçmek için değil.
+
+`route[:] = 1` dalı kaldırıldı: uçağın yatayda diskin içinde olması gölge
+üretmez, disk zaten site olarak dışlanmıştır.
+
+## 20.3 Ölçüm (3 kişi + 2 araç, sabit sahne)
+
+| Ölçüm | §19 öncesi | §19'daki yedek dal | Şimdi (2 koşu) |
+|---|---|---|---|
+| Aday üretilmeyen kare | 79/152 | 0/151 | **0/151, 0/154** |
+| Aday kaybı | 3 | 0 | **0, 0** |
+| Durum geçişi | 8 | 3 | **3, 3** |
+| SEARCH'te geçen süre | 15.0 s | 0.3 s | **0.3 s, 0.6 s** |
+| Aday sıçraması (>4 m) | 4-7 | 4-7 | **4, 3** |
+
+Katman devre dışı kalmadı: koridor hâlâ uygun hücrelerin ~%28'ini eliyor
+(`trajectory filter removed 3533 of 13389` tipi satırlar, 39 kez).
+Açık madde 22'nin istediği sıçrama azalması kısmen geldi (4-7 → 3-4); kalanı
+mandalın tuttuğu hücrenin uygun kümeden çıkması, mandal serbest bırakma
+sayısı 0.
+
+## 20.4 Araç neden izlenmiyordu (madde 23): kusur değilmiş
+
+İzlenmeyen kareler üç ayrı sebebe ayrıldı ve sonuç tek satırda çıktı:
+
+| Sebep | Kare |
+|---|---|
+| Araç haritalanmış zeminin **dışında** | 43 (ve ikinci koşuda 34) |
+| Harita içinde, o sınıftan leke yok | **0** |
+| Leke var ama 6 m'den uzak | 1 |
+
+Yani "araç karelerin %30-40'ında izlenmiyor" ifadesi yanlıştı: araç 40×70 m'lik
+rotasında 40×40 m'lik harita alanının dışına çıkıyor. Kamera görüş alanının
+dışındaki bir nesneyi izlememek doğru davranış.
+
+Hız düşüklüğünün bir kısmı da buradan geliyor. Kenara olan uzaklığa göre
+ayrıldığında (gerçek 2.95 m/s):
+
+| Kare kümesi | Kestirilen hız |
+|---|---|
+| Kenara 4 m'den yakın | 1.13 m/s (32 kare) |
+| Kenara 4 m'den uzak | 1.54 m/s (54 kare) |
+
+Kenar yakınlığı ~%27 kaybettiriyor; ama iç karelerde bile gerçeğin %52'sinde
+kalınıyor. Kalan pay büyük olasılıkla rota dönüşleri: araç 3 m/s'de 16-70 m'lik
+bir bacağı 5-23 s'de bitiriyor, LSQ penceresi ~2.6 s, yani pencerelerin kayda
+değer bir bölümü bir dönüşü içeriyor. İnsan için aynı bacak 15-60 s sürdüğü
+için insan kestirimi %80-90'da. Bu, `reversal_leg_m` denemesinin neden insanda
+işe yaramadığını da açıklıyor: sorun insanda zaten yoktu.
+
+**Kalan risk ve neden şimdilik kabul edilebilir:** düşük kestirilen hız
+koridoru kısaltır. Karşı ağırlık, koridor yarıçapının `(2 - confidence)` ile
+ölçeklenmesi — kısa ve gürültülü izler zaten düşük güvenle geliyor ve
+karşılığında daha geniş bir koridor üretiyor.
+
+## 20.5 Açık
+
+| # | Konu |
+|---|---|
+| 24 | Araç hız kestirimi, harita içinde bile gerçeğin ~%52'si. Sebep büyük olasılıkla LSQ penceresinin dönüşleri içermesi; örnek sayısıyla değil süreyle tanımlı, hıza göre kısalan bir pencere denenmedi. |
+| 25 | Aday hâlâ koşu başına 3-4 kez 4 m'den fazla sıçrıyor (mandal serbest bırakılmadan). Mandalın tuttuğu hücre uygun kümeden çıktığında ne olacağı ayrıca ele alınmalı. |

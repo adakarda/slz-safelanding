@@ -87,6 +87,16 @@ class DetectorNode(Node):
         self.declare_parameter('w_risk', 0.50)
         self.declare_parameter('w_distance', 0.15)
         self.declare_parameter('w_clearance', 0.35)
+        # What a site costs for being ground something crossed within the
+        # memory, scaled by how recently. Same order as w_clearance on
+        # purpose: freshly crossed ground should lose to any comparable site
+        # and win against nothing at all.
+        self.declare_parameter('w_memory', 0.35)
+        # What a site costs for sitting in the shadow of a corridor as seen
+        # from the aircraft. Lower than w_memory because the aircraft crosses
+        # that ground at altitude and only briefly, where a landing site is
+        # occupied for the whole descent.
+        self.declare_parameter('w_route', 0.20)
         self.declare_parameter('max_rate_hz', 2.0)
         self.declare_parameter('map_topic', '/eland/ground_map')
         self.declare_parameter('mask_topic', '/eland/semantic_mask')
@@ -239,6 +249,8 @@ class DetectorNode(Node):
         self.check_approach = bool(self.get_parameter('check_approach_path').value)
         self.corridor_samples = max(2, int(self.get_parameter('corridor_samples').value))
 
+        self.w_memory = float(self.get_parameter('w_memory').value)
+        self.w_route = float(self.get_parameter('w_route').value)
         self.w_sticky = float(self.get_parameter('w_stickiness').value)
         self.sticky_radius = float(self.get_parameter('stickiness_radius_m').value)
         self.latch_site = bool(self.get_parameter('latch_site').value)
@@ -424,20 +436,33 @@ class DetectorNode(Node):
         return discs
 
     def memory_discs(self):
-        """Ground something moved across recently. Site exclusion only.
+        """Ground something moved across recently, as (x, y, r, recency).
 
-        These are NOT part of the approach-path test, and the asymmetry is the
-        point. A route is a bad place to sit down; it is not a bad place to
-        fly over at fifteen metres. Including remembered ground in the route
-        test blocked 95% of the map in a measured run -- every direction from
-        the aircraft was shadowed by ground a car had crossed at some point in
-        the last half minute -- which is not caution, it is a stuck vehicle.
+        `recency` runs from 1 at the instant of the crossing to 0 at the end
+        of the memory, and it is a weight, not a veto. Two measured reasons.
+
+        It cannot be part of the approach-path test: a route is a bad place to
+        sit down and a perfectly good place to fly over at fifteen metres, and
+        including remembered ground there once blocked 95% of the map.
+
+        It cannot be a hard site exclusion either. With five movers the
+        remembered discs covered every one of ~20 000 otherwise eligible cells
+        on 79 of 152 frames, so the detector published nothing and the mode
+        abandoned the descent three times -- into PX4's blind Descend, which
+        is worse than any of the ground it was refusing. Ranking that ground
+        last says the same thing without ever emptying the set: a spot a car
+        crossed 2 s ago costs a full `w_memory`, one crossed 28 s ago costs
+        almost nothing, and both stay landable if the alternative is nowhere.
         """
         if not self.traj_enabled or self.corridor_memory_s <= 0.0:
             return []
         now = self.get_clock().now().nanoseconds * 1e-9
-        return [(x, y, r) for (x, y, r, t) in self.swept
-                if now - t <= self.corridor_memory_s]
+        out = []
+        for (x, y, r, t) in self.swept:
+            age = now - t
+            if age <= self.corridor_memory_s:
+                out.append((x, y, r, 1.0 - age / self.corridor_memory_s))
+        return out
 
     def corridor_radius(self, t, confidence):
         """r_hazard, widened by how wrong the prediction is likely to be
@@ -466,23 +491,37 @@ class DetectorNode(Node):
         the obstacle is not excluded for no reason. Both are single OpenCV
         fills over a 200x200 image.
 
-        Returns (site_blocked, route_blocked) as uint8 masks.
+        Returns (site_blocked, route_shadow, memory_cost). Only the first is
+        an exclusion -- ground a hazard is predicted to occupy, which is the
+        one thing the aircraft must not sit on. The other two are costs the
+        score pays.
+
+        The shadow is a cost because as an exclusion it was measured to leave
+        nothing at all: with traffic it covered every one of ~21 000 otherwise
+        eligible cells on every frame, while the corridor alone left 4 000 to
+        12 000. That is the difference between "prefer not to fly over a
+        hazard on the way down" -- true, and worth a weight -- and "never fly
+        over one", which at five movers means never land.
         """
         h, w, res = info.height, info.width, info.resolution
         ox, oy = info.origin.position.x, info.origin.position.y
         site = np.zeros((h, w), dtype=np.uint8)
         route = np.zeros((h, w), dtype=np.uint8)
+        mem_cost = np.zeros((h, w), dtype=np.float32)
 
         def to_px(x, y):
             return (int(round((x - ox) / res)), int(round((y - oy) / res)))
 
-        def circle(img, cx, cy, r):
-            cv2.circle(img, to_px(cx, cy), max(1, int(round(r / res))), 1, -1)
+        def circle(img, cx, cy, r, value=1):
+            cv2.circle(img, to_px(cx, cy), max(1, int(round(r / res))),
+                       value, -1)
 
         for cx, cy, r in discs:
             circle(site, cx, cy, r)
-        for cx, cy, r in memory:
-            circle(site, cx, cy, r)
+        # Stalest first, so where two crossings overlap the fresher one sets
+        # the cost.
+        for cx, cy, r, recency in sorted(memory, key=lambda d: d[3]):
+            circle(mem_cost, cx, cy, r, float(recency))
 
         if self.check_approach and drone is not None:
             reach = math.hypot(w * res, h * res)
@@ -490,10 +529,15 @@ class DetectorNode(Node):
                 dx, dy = cx - drone[0], cy - drone[1]
                 dist = math.hypot(dx, dy)
                 if dist <= r:
-                    # Standing inside the corridor: every direction out of it
-                    # crosses it, so there is no route to protect.
-                    route[:] = 1
-                    break
+                    # Horizontally inside this disc. The old code set the whole
+                    # map here, reasoning that every direction out of the
+                    # corridor crosses it -- but the aircraft is fifteen metres
+                    # above the disc, not in it, and the corridor is a
+                    # ground-plane construct. Blanking the map on a person
+                    # walking under the aircraft is the stuck-vehicle failure
+                    # this file warns about elsewhere. No shadow from this
+                    # disc; the disc itself is still excluded as a site.
+                    continue
                 # Tangent points from the aircraft to the circle, and the wedge
                 # they open beyond it.
                 ang = math.atan2(dy, dx)
@@ -512,7 +556,7 @@ class DetectorNode(Node):
                                 dtype=np.int32)
                 cv2.fillPoly(route, [poly], 1)
 
-        return site, route
+        return site, route, mem_cost
 
     def on_map(self, msg: OccupancyGrid) -> None:
         if self.throttled():
@@ -625,51 +669,33 @@ class DetectorNode(Node):
         discs = self.corridor_discs()
         memory = self.memory_discs()
         n_before = len(cell_x)
+        mem_cost_cells = None
+        route_cost_cells = None
         if discs or memory:
-            site_blocked, route_blocked = self.rasterise_block(
+            site_blocked, route_blocked, mem_cost = self.rasterise_block(
                 msg.info, (drone_x, drone_y), discs, memory)
-            blocked = site_blocked | route_blocked
             if self.publish_block_map:
-                self.publish_block(msg, site_blocked, route_blocked, memory)
-            keep = blocked[ys, xs] == 0
-            self.degraded = ''
+                self.publish_block(msg, site_blocked, route_blocked, mem_cost)
+            keep = site_blocked[ys, xs] == 0
             if not keep.any():
-                # Everything the static tests allowed is covered by our own
-                # fourth layer. Measured on the pinned three-people,
-                # two-vehicle landing: about 20 000 cells passed every static
-                # test and all of them were removed, on 79 of 152 frames, in
-                # six stretches of which the longest ran 23 s. The mode gives
-                # up on a descent after 3 s without a valid candidate, so the
-                # layer meant to make the descent safer was the thing ending
-                # it -- and ending it into PX4's own blind Descend, which is
-                # strictly worse than landing on ground someone walked over.
-                #
-                # So drop the softer half first. The memory says where
-                # something *was*; the corridor says where something *will
-                # be*, and only the second can be hit. If the corridor alone
-                # still leaves nowhere, that is a real answer and HOLD/ABORT
-                # is the right outcome -- SafeLand's reactive behaviour, kept
-                # as the fallback it was always meant to be.
-                keep = site_blocked[ys, xs] == 0
-                self.degraded = 'memory'
-                if not keep.any():
-                    self.publish_invalid(
-                        msg,
-                        f'{n_before} cells passed the static tests, all of '
-                        f'them inside the predicted path '
-                        f'({len(discs)} corridor samples)')
-                    return
-                self.get_logger().warning(
-                    f'swept-path memory ({len(memory)} discs) covered every '
-                    f'one of {n_before} otherwise eligible cells; ignoring it '
-                    f'this frame and keeping only the predicted corridor',
-                    throttle_duration_sec=2.0)
+                # Only the corridor can empty the set now, and when it does
+                # that is a real answer: everywhere the aircraft could sit is
+                # somewhere a hazard is about to be. HOLD/ABORT is right --
+                # SafeLand's reactive behaviour, kept as the fallback it was
+                # always meant to be.
+                self.publish_invalid(
+                    msg,
+                    f'{n_before} cells passed the static tests, all of them '
+                    f'inside the predicted path ({len(discs)} corridor '
+                    f'samples)')
+                return
             ys, xs = ys[keep], xs[keep]
             cell_x, cell_y = cell_x[keep], cell_y[keep]
             self.rejected_by_trajectory = n_before - int(keep.sum())
+            mem_cost_cells = mem_cost[ys, xs]
+            route_cost_cells = route_blocked[ys, xs].astype(np.float32)
         else:
             self.rejected_by_trajectory = 0
-            self.degraded = ''
 
         t0 = self.stage('trajectory', t0)
         d_from_drone = np.hypot(cell_x - drone_x, cell_y - drone_y)
@@ -682,6 +708,12 @@ class DetectorNode(Node):
         score = (self.w_risk * risk
                  + self.w_distance * norm_d
                  + self.w_clearance * shortfall)
+        # Remembered ground is priced, never forbidden (see memory_discs).
+        if mem_cost_cells is not None and self.w_memory > 0.0:
+            score = score + self.w_memory * mem_cost_cells
+        # So is a site whose approach passes over a predicted corridor.
+        if route_cost_cells is not None and self.w_route > 0.0:
+            score = score + self.w_route * route_cost_cells
 
         # 5b. stay where we were, if where we were is still allowed. Applied
         #     after the eligibility tests, never instead of them: a site the
@@ -724,30 +756,24 @@ class DetectorNode(Node):
         self.stage('score+publish', t0)
 
     # ------------------------------------------------------------------
-    def publish_block(self, map_msg, site, route, memory) -> None:
+    def publish_block(self, map_msg, site, route, mem_cost) -> None:
         """The exclusion this frame used, for display only.
 
         The same masks the decision was made from, not a second rendering of
         the same idea: a HUD that draws its own version of the corridor can
         drift away from the detector while both look plausible.
 
-        100 = the predicted corridor and the routes it shadows, 50 = ground
-        something moved across recently.
+        100 = the predicted corridor, the only hard exclusion left. 70 = the
+        approach shadow and 20..60 = ground something moved across, shaded by
+        how recently: both are costs the score pays, not places it may not go,
+        so they deliberately do not look like the corridor.
         """
         info = map_msg.info
-        img = np.where(site | route, np.uint8(100), np.uint8(0))
-        if memory:
-            # Redrawn at the weaker value first, then the live corridor wins
-            # wherever they overlap: the stronger claim should be the one that
-            # shows.
-            mem = np.zeros_like(img)
-            res = info.resolution
-            ox, oy = info.origin.position.x, info.origin.position.y
-            for cx, cy, r in memory:
-                cv2.circle(mem,
-                           (int(round((cx - ox) / res)), int(round((cy - oy) / res))),
-                           max(1, int(round(r / res))), 1, -1)
-            img = np.where((mem > 0) & (img == 0), np.uint8(50), img)
+        img = np.where(route > 0, np.uint8(70), np.uint8(0))
+        img = np.where(site > 0, np.uint8(100), img)
+        if mem_cost is not None:
+            shade = (20.0 + 40.0 * np.clip(mem_cost, 0.0, 1.0)).astype(np.uint8)
+            img = np.where((mem_cost > 0.0) & (img == 0), shade, img)
 
         out = OccupancyGrid()
         out.header = map_msg.header
