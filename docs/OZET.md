@@ -175,3 +175,29 @@ kayıttan düşürüyor, PX4 kendi Return'üne dönüyor. Doğrulandı.
 
 **Hâlâ açık:** GUI'li koşu benim tarafımdan doğrulanamadı (otomasyon
 bağlamında X sunucusu yok); yerine 8 çekirdek CPU yüküyle mekanizma sınandı.
+
+## Karar döngüsü (madde 8, 2026-09-05)
+
+Şikâyet "iniş yeri seçimi uzun sürüyor" idi; ölçüldüğünde sebep CPU da,
+yayın hızı tavanı da değildi. **Kendi dördüncü katmanımız kendi döngüsünü aç
+bırakıyordu:** statik testleri geçen ~20.000 hücrenin tamamı, 5 hareketli için
+biriken "geçilmiş zemin" diskleriyle siliniyor, 152 karenin 79'unda hiç aday
+üretilmiyordu. Mod 3 s aday göremeyince inişi bırakıyordu — üstelik PX4'ün kör
+Descend'ine.
+
+Bellek geçmişi, koridor geleceği anlatır ve yalnızca ikincisine çarpılabilir:
+küme boşalırsa önce bellek bırakılır, koridor durur, o da her yeri kapatıyorsa
+HOLD/ABORT doğru cevaptır.
+
+| Ölçüm (3 kişi + 2 araç, sabit sahne) | Öncesi | Sonrası (3 koşu) |
+|---|---|---|
+| Aday üretilmeyen kare | 79/152 | 0/151, 0/152, 0/151 |
+| Aday kaybı | 3 | 0, 0, 0 |
+| Durum geçişi | 8 | 3, 3, 3 |
+| SEARCH'te geçen süre | 15.0 s | 0.3 / 0.2 / 0.6 s |
+| Sonuç | 3/3 deneme tükendi | tek denemede iniş |
+
+Ayrıca: yörünge testi 44.2 ms → 2.6 ms (rasterleme), mandal hücre yerine 2 m
+yarıçapa bağlandı (site'ın gezdiği yol 32.7/144.3 m → 6.2 m), izleme eşleşmesi
+kestirilen konuma taşındı (insan hız kestirimi %68 → %80). Ayrıntı ve
+reddedilen denemeler: `docs/DURUM.md` §19.
