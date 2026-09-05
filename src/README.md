@@ -110,6 +110,31 @@ Script'in kendi başlığında ayrıntısı var.
 
 ---
 
+## Denemek için — `dene.sh`
+
+Ölçümlerin alındığı senaryoyu birebir açar: sabit spawn, sabit mob düzeni,
+üç kişi + iki araç. `run_sim.sh`'in yerine geçmez; iki koşuyu karşılaştırılabilir
+kılan argümanları ve önceki koşudan kalan süreçlerin temizliğini ekler
+(aynı topic'e çakışan truth basan ikinci bir `obstacle_driver`, buradaki
+hatalardan çoğundan daha fazla ölçüm bozdu).
+
+```bash
+~/ros2_ws/src/eland_sim/scripts/dene.sh hud
+```
+
+| Mod | Ne yapar |
+|---|---|
+| `hud` (varsayılan) | Gazebo penceresi + HUD + kontrol istasyonu. Kendin uçur: `t` kalkış, `m` mod seçimi, `9` modu kayıttan düşür. |
+| `otomatik` | Penceresiz; kalkış ve mod seçimi otomatik. Sonunda karar döngüsünün sayılarını yazar: aday hızı, aday üretilmeyen kare, 3 s'yi aşan boşluk, durum geçişleri, aday kaybı, karar karesi maliyeti. |
+| `olcum` | Penceresiz; 90 s izleme skoru — gerçek vs kestirilen hız, konum ve öngörü hatası, izlenmeyen karelerin sebebi. |
+
+`KISI` ve `ARAC` ortam değişkenleriyle hareketli sayısı değişir:
+`ARAC=1 KISI=1 ./dene.sh olcum`.
+
+Beklenen çıktı (docs/DURUM.md §20'deki düzeltmelerden sonra): `aday
+uretilmeyen 0/150`, `aday kaybi: 0`, üç durum geçişi ve tek denemede iniş.
+Bunlardan sapma varsa önce `/tmp/eland_logs/pipeline.log`'a bak.
+
 ## Çalıştırma — tek komut
 
 ```bash
