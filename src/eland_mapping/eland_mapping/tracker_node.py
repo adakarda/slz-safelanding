@@ -81,6 +81,55 @@ class Track:
     def position(self):
         return self.xs[-1], self.ys[-1]
 
+    def predict(self, t, vx, vy):
+        """Where this track should be at time t, given its current fit.
+
+        Association compares against this rather than against the last
+        observation. Measured cost of using the last observation: with two
+        vehicles on the map the fitted speed came out at 64% of the truth
+        against 77% with one, because a track kept grabbing its neighbour's
+        blob -- and a swap does not look like an error, it looks like an
+        obstacle that briefly stood still.
+        """
+        dt = max(0.0, t - self.last_seen)
+        return self.xs[-1] + vx * dt, self.ys[-1] + vy * dt
+
+    def trim_at_reversal(self, min_leg):
+        """Drop the history from before the obstacle turned round.
+
+        A least-squares line through a turn is a line through two opposite
+        directions, and its slope is their average: near zero at the moment of
+        the turn and low for a window afterwards. With a 2.6 s window and a
+        16.7 s leg that is about a sixth of the flight underestimating a speed
+        the corridor is built from, and short is the unsafe direction.
+
+        The split is only accepted when both legs are longer than `min_leg`,
+        which is the whole difficulty. Comparing raw consecutive steps instead
+        was measured and was much worse than doing nothing -- a person moves
+        about 0.3 m between frames while the blob centroid moves about 1 m as
+        the mask flickers, so consecutive steps point backwards constantly,
+        the history was cut to two or three samples and the fitted speed fell
+        to 32% of the truth against 93% with no trimming at all. A turn has to
+        be bigger than the noise before it may be believed.
+        """
+        n = len(self.xs)
+        if min_leg <= 0.0 or n < 6:
+            return
+        for k in range(n - 2, 1, -1):
+            rx = self.xs[-1] - self.xs[k]
+            ry = self.ys[-1] - self.ys[k]
+            if math.hypot(rx, ry) < min_leg:
+                continue
+            ex = self.xs[k] - self.xs[0]
+            ey = self.ys[k] - self.ys[0]
+            if math.hypot(ex, ey) < min_leg:
+                return
+            if rx * ex + ry * ey < 0.0:
+                del self.times[:k]
+                del self.xs[:k]
+                del self.ys[:k]
+            return
+
     def fit(self):
         """Least-squares velocity, plus the residual that fit left behind.
 
@@ -130,6 +179,10 @@ class TrackerNode(Node):
         # Same reasoning as the detector's view_bounded flag: a measurement
         # bounded by the frame rather than by the object is not a measurement
         # of the object.
+        # How far both legs of a turn must run before a reversal is believed
+        # and the pre-turn history dropped. Below the blob-centroid noise this
+        # does more harm than good (see Track.trim_at_reversal); 0 disables it.
+        self.declare_parameter('reversal_leg_m', 0.0)
         self.declare_parameter('ignore_border_blobs', True)
         self.declare_parameter('border_margin_cells', 1)
         # Nearest-neighbour gate. At 3 m/s and 3 Hz an obstacle moves 1 m per
@@ -160,6 +213,8 @@ class TrackerNode(Node):
         self.ignore_border = bool(gp('ignore_border_blobs').value)
         self.border_margin = int(gp('border_margin_cells').value)
         self.assoc_r = float(gp('association_radius_m').value)
+        self.reversal_leg_m = float(
+            self.get_parameter('reversal_leg_m').value)
         self.history_len = int(gp('history_len').value)
         self.timeout_s = float(gp('track_timeout_s').value)
         self.min_obs = int(gp('min_observations_for_velocity').value)
@@ -232,7 +287,9 @@ class TrackerNode(Node):
         unmatched = list(detections)
         for track in self.tracks:
             best, best_d = None, self.assoc_r
-            tx, ty = track.position
+            # Where the track says it should be now, not where it last was.
+            vx, vy, _rms = track.fit()
+            tx, ty = track.predict(t, vx, vy)
             for det in unmatched:
                 if det[0] != track.class_id:
                     continue
@@ -241,6 +298,7 @@ class TrackerNode(Node):
                     best, best_d = det, d
             if best is not None:
                 track.add(t, best[1], best[2], self.history_len)
+                track.trim_at_reversal(self.reversal_leg_m)
                 unmatched.remove(best)
 
         for cid, cx, cy, _area in unmatched:
