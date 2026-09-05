@@ -48,35 +48,39 @@ mapping_node:
 
 detector_node:
   ros__parameters:
-    safe_classes: [1, 2, 3, 12]    # grass, dirt, gravel, sand
+    # The segmentation model's own seven classes, in its own order, plus
+    # UNKNOWN(7) which the model never emits and the pipeline needs. See
+    # eland_common/classes.py.
+    #   0 safe-soft  1 safe-hard  2 terrain-hazard  3 structure
+    #   4 water      5 vehicle-animal              6 person      7 unknown
+    safe_classes: [0, 1]           # safe-soft, safe-hard
     # Things a landing site owes an absolute separation distance to. Note this
-    # is NOT "everything that is not safe": UNKNOWN and VEGETATION are not
+    # is NOT "everything that is not safe": UNKNOWN and TERRAIN_HAZARD are not
     # landable but do not demand 3 m of clearance, they are covered by r_fit.
-    hazard_classes: [6, 7, 8, 9, 10, 11]  # building, water, vehicle, person, fence, pole
-    # SORA risk ordering. The two entries that matter most are the ones that
-    # are NOT about the surface: vehicle and person are 1.0 not because a drone
-    # cannot physically land there, but because SORA does not permit it.
-    # unknown is 1.0 for the same reason -- an unlabelled pixel is an
-    # unevaluated pixel, and an unevaluated pixel is not a cleared one.
+    hazard_classes: [3, 4, 5, 6]   # structure, water, vehicle-animal, person
+    # SORA risk ordering.
+    #
+    # NOT the thesis table's class weights. Those are inverse-frequency
+    # training weights -- weight = 0.35 * sqrt(46.167 / pixel_percent)
+    # reproduces all seven to two decimals -- so they rank structure (0.44) as
+    # safer than safe-soft (0.61), which says a building is a better landing
+    # site than grass because buildings are commoner in the dataset. The
+    # weights are kept in classes.py as TRAIN_WEIGHTS for the training side;
+    # what follows is what SORA says.
+    #
+    # safe-hard above safe-soft: tarmac is landable, but it is harder on the
+    # airframe and it is where the infrastructure and the traffic are.
     class_risk:
-      "0": 1.0                     # unknown  -> not landable
-      "1": 0.0                     # grass    -> SORA safe-soft
-      "2": 0.1                     # dirt     -> SORA safe-soft
-      "3": 0.2                     # gravel   -> SORA safe-hard
-      "4": 0.4                     # pavement -> SORA safe-hard
-      "5": 0.7                     # vegetation -> SORA terrain-hazard
-      "6": 1.0                     # building -> SORA structure
-      "7": 1.0                     # water
-      "8": 1.0                     # vehicle  -> SORA vehicle-animal
-      "9": 1.0                     # person
-      # Added 2026-09-04. Thin structures: a fence is 12 cm across and a pole
-      # 32 cm, one or two cells at the map resolution. They are here to check
-      # that a hazard does not have to be big to be respected.
-      "10": 1.0                    # fence
-      "11": 1.0                    # pole
-      # Landable, softer than gravel, so the risk ordering has something to do
-      # besides separating safe from unsafe.
-      "12": 0.15                   # sand
+      "0": 0.0                     # safe-soft
+      "1": 0.2                     # safe-hard
+      "2": 0.7                     # terrain-hazard -- a canopy hides the
+                                   # ground under it, so it was never seen
+      "3": 1.0                     # structure
+      "4": 1.0                     # water
+      "5": 1.0                     # vehicle-animal
+      "6": 1.0                     # person
+      "7": 1.0                     # unknown -> an unevaluated pixel is not a
+                                   # cleared one
     # SORA separation from hazards. Absolute and non-negotiable.
     r_hazard: 3.0
     # "Does the aircraft fit here" -- x500 is ~0.5 m across, so this is mostly
@@ -177,7 +181,7 @@ tracker_node:
     obstacles_topic: "/eland/dynamic_obstacles"
     # Only these classes are allowed to move. A flickering building edge is
     # not an obstacle doing 20 m/s.
-    dynamic_classes: [8, 9]
+    dynamic_classes: [5, 6]  # vehicle-animal, person
     # A person is ~0.28 m^2 from above = 7 cells at 0.2 m resolution, so this
     # cannot go much higher without losing people entirely.
     min_blob_cells: 5

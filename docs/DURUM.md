@@ -1025,3 +1025,137 @@ yanlış eşleme).
 |---|---|
 | 18 | Mob sayısı kalabalık bölgelerde düşebiliyor (odak (0,0)'da 4.92). Rotalar düz çizgi; gerçek trafik engellerin etrafından dolaşır. |
 | 19 | İzleyici 5 gerçek mob'a karşı 6 track gösterdi — aynı sınıftan komşu lekelerin eşleme gürültüsü, açık madde #9 ile aynı kök. |
+
+---
+
+# 18. SORA taksonomisi: sim ile modelin aynı sınıf uzayı (2026-09-05)
+
+**İstenen:** simülasyon dünyasının sınıf şeması, gerçek segmentasyon modelinin
+eğitildiği 7 sınıflık SORA şemasıyla birebir aynı olsun; risk skoru da o
+tablodaki ağırlık sütunundan üretilsin.
+
+## 18.1 Taksonomi birebir alındı
+
+`eland_common/classes.py` artık modelin kendi indekslerini, kendi sırasıyla
+taşıyor:
+
+| idx | sınıf | Gazebo'da hangi nesneler |
+|---|---|---|
+| 0 | `safe-soft` | çim, toprak, kum |
+| 1 | `safe-hard` | çakıl, asfalt |
+| 2 | `terrain-hazard` | ağaçlar, çalı |
+| 3 | `structure` | binalar, çitler, direkler |
+| 4 | `water` | göletler |
+| 5 | `vehicle-animal` | araçlar |
+| 6 | `person` | insanlar |
+| 7 | `unknown` | **modelde yok**, boru hattına ait |
+
+Sim'in ürettiği ground-truth ile modelin çıktısı artık aynı uzayda: çeviri
+tablosu olmadan piksel piksel karşılaştırılabilir.
+
+**Vegetation → terrain-hazard** (safe-soft değil). Yukarıdan bakınca bir
+"vegetation" pikseli bir tepe örtüsüdür ve örtünün altındaki zemin hiç
+gözlenmemiştir; araç görmediği bir zemine kendini bağlamış olur. 25 m'den bir
+çalı da bir çim de yeşildir, ama yalnızca birine inilebilir — taksonomide tam
+olarak bu ayrım için bir sınıf var.
+
+## 18.2 Etiket kaydırması: neden dünyada `indeks + 1` yazılı
+
+Gazebo etiketsiz her şeye **0** döndürüyor ve taksonomide 0 = `safe-soft`.
+Doğrudan indeks yazılsaydı gökyüzü, etiketsiz bir model ve her etiketleme
+hatası dünyanın en güvenli zemini olarak okunurdu.
+
+Bu yüzden dünya `indeks + 1` yazıyor, `perception_node` bir çıkarıyor ve
+Gazebo'nun 0'ı **UNKNOWN(7)** oluyor — inilemez, yani hata güvenli yöne
+düşüyor. Kaydırma tam iki yerde: etiketleri yazan üreteç/şablon ve okuyan
+node.
+
+## 18.3 Ağırlık sütunu risk değil — ölçülerek gösterildi
+
+Tez tablosundaki ağırlıkların **ters-frekans eğitim ağırlıkları** olduğu
+aritmetikle doğrulandı:
+
+```
+ağırlık = 0.35 · sqrt(46.167 / piksel%)
+```
+
+| sınıf | piksel % | tablodaki ağırlık | formül |
+|---|---|---|---|
+| safe-soft | 15.558 | 0.61 | 0.60 |
+| safe-hard | 46.167 | 0.35 | 0.35 |
+| terrain-hazard | 5.705 | 1.00 | 1.00 |
+| structure | 29.411 | 0.44 | 0.44 |
+| water | 1.047 | 2.33 | 2.32 |
+| vehicle-animal | 1.738 | 1.81 | 1.80 |
+| person | 0.374 | 3.91 | 3.89 |
+
+Yedisi de iki ondalıkta tutuyor. Bunlar risk olsaydı `structure` (0.44)
+`safe-soft`'tan (0.61) **daha güvenli** sayılırdı — yani bir binaya inmek çime
+inmekten iyi, çünkü veri setinde bina çok, çim az. Bu, sınıf dengeleme
+ağırlığının tanımıdır, risk sıralaması değil.
+
+**Yapılan:** ağırlıklar `classes.py`'de `TRAIN_WEIGHTS` olarak aynen duruyor
+(eğitim tarafı için, tek kopya), risk ise SORA sıralamasından geliyor:
+
+| sınıf | risk | gerekçe |
+|---|---|---|
+| safe-soft | 0.0 | |
+| safe-hard | 0.2 | inilebilir ama gövdeye sert, ve altyapının/trafiğin olduğu yer |
+| terrain-hazard | 0.7 | örtünün altı görülmemiş |
+| structure / water / vehicle-animal / person | 1.0 | SORA izin vermiyor |
+| unknown | 1.0 | değerlendirilmemiş piksel, temizlenmiş değildir |
+
+## 18.4 Su sınıfı artık gerçekten görülüyor (madde 5)
+
+Ölçüm: taksonomi geçişinden hemen sonraki 90 s'lik uçuşta altı sınıf 271/271
+karede vardı, **water hiçbirinde yoktu** — tek gölet (−34, −4)'te ve çoğu
+doğuş noktasından kamera ayak izinin dışında. Dünyanın hiç göstermediği bir
+SORA sınıfı, boru hattının hiç sınanmadığı bir sınıftır.
+
+İkinci ve küçük bir gölet (−17, −7) eklendi. Sonuç:
+
+| sınıf | 271 karede görülme | ortalama piksel |
+|---|---|---|
+| safe-soft | **271/271** | 56314 |
+| safe-hard | **271/271** | 10907 |
+| terrain-hazard | **271/271** | 4159 |
+| structure | **271/271** | 1598 |
+| water | **271/271** | **2321** |
+| vehicle-animal | **271/271** | 1338 |
+| person | **271/271** | 164 |
+
+Yedi SORA sınıfının **hepsi** tek karede temsil ediliyor.
+
+## 18.5 Ölçüm: taksonomi neyi değiştirdi
+
+Sabitlenmiş senaryo (`--fixed` + `randomize_mobs: false`), 90 s:
+
+| | 13 sınıflık şema | 7 sınıflık SORA şeması |
+|---|---|---|
+| Maske hızı | 3.19 Hz | **3.02 Hz** |
+| Tek karede sınıf | 11 | **7/7** (tamamı) |
+| İnsan izleme | 150/150, hata 1.32 m | 136/136, hata **1.40 m** |
+| Araç izleme | 114/150, hata 2.16 m | 97/136, hata **2.14 m** |
+| Araç truth hızı (duvar saati) | — | 2.92 m/s (yapılandırılan 3.0) |
+
+İzleme performansı değişmedi; sınıfların birleştirilmesi lekeleri ne
+iyileştirdi ne bozdu. Hız farkı koşular arası gürültü.
+
+## 18.6 Yol boyunca bulunan bir tutarsızlık
+
+Sabit düzen dalı mob'ları **insanlar önce** yazıyordu, oysa hem rastgele dal
+hem truth topic'inin sözleşmesi "önce araçlar" diyor. Sonuç: indeks 0 bir
+insan oluyordu ve araç ölçümü, bir aracın tahminini bir insanın truth'una
+karşı karşılaştırıp **"araç hiç izlenmedi"** diye raporluyordu. Araç gayet iyi
+izleniyordu.
+
+Bu, katman dosyasının önlemek için var olduğu sessiz tutarsızlığın ta
+kendisi — ama sıra sözleşmesi dosyada değil kodda olduğu için oradan sızdı.
+Düzeltildi; her iki dal da aynı sırayı yazıyor.
+
+## 18.7 Açık
+
+| # | Konu |
+|---|---|
+| 20 | Eski 13 sınıflık ölçümler (§15, §12) artık başka bir şema ile alınmış; sayılar tarihsel, doğrudan kıyaslanamaz. |
+| 21 | `TRAIN_WEIGHTS` boru hattında kullanılmıyor. Eğitim tarafı bunu okumaya başlarsa iki kopya olmasın diye buraya kondu, ama şu an tek yönlü bir kayıt. |

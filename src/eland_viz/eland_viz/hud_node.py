@@ -280,7 +280,7 @@ class HudNode(Node):
                 p = self.world_to_px(ob.position.x, ob.position.y)
                 conf = min(max(ob.confidence, 0.0), 1.0)
                 shade = int(90 + 165 * conf)
-                colour = ((60, shade, shade) if ob.class_id == classes.VEHICLE
+                colour = ((60, shade, shade) if ob.class_id == classes.VEHICLE_ANIMAL
                           else (60, 60, shade))
                 cv2.circle(img, p, 5, colour, -1)
                 horizon = float(self.obstacles.horizon_s) or 0.0

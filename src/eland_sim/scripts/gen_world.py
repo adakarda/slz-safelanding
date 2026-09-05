@@ -310,7 +310,7 @@ def person_model_block(p, name=None, start=None) -> str:
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
+        <label>7</label>
       </plugin>
     </model>
 """
@@ -357,7 +357,7 @@ def person_actor_block(p, name=None, start=None, goal=None) -> str:
         </trajectory>
       </script>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
+        <label>7</label>
       </plugin>
     </actor>
 """
@@ -394,7 +394,7 @@ def vehicle_block(p, name=None, start=None, goal=None) -> str:
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>8</label>
+        <label>6</label>
       </plugin>
     </model>
 """
@@ -466,13 +466,14 @@ def render(params) -> str:
         # The fixed layout: obstacle 0 on the configured leg, the rest offset
         # sideways from it. Kept for comparison runs, where two halves of an
         # experiment have to face the same traffic.
+        #
+        # Vehicles first, then people -- the same order the random branch uses
+        # and the order the truth topic's contract states. This branch had it
+        # the other way round, which put a person at index 0 and made every
+        # vehicle measurement compare an estimate against the wrong obstacle:
+        # reported as "vehicle never tracked" when the vehicle was tracked
+        # perfectly well.
         layout = []
-        for i in range(max(0, int(params.get('person_count', 1)))):
-            start, goal = leg_for(i, params['person_start'], params['person_goal'],
-                                  float(params.get('person_spacing_m', 6.0)))
-            layout.append({'kind': 'person', 'name': f"{params['person_name']}_{i}",
-                           'start': list(start), 'goal': list(goal),
-                           'speed': float(params['person_speed']), 'z': 0.9})
         for i in range(max(0, int(params.get('vehicle_count', 1)))):
             start, goal = leg_for(i, params['vehicle_start'], params['vehicle_goal'],
                                   float(params.get('vehicle_spacing_m', 7.0)))
@@ -480,6 +481,12 @@ def render(params) -> str:
                            'start': list(start), 'goal': list(goal),
                            'speed': float(params['vehicle_speed']),
                            'z': float(params['vehicle_size'][2]) / 2.0})
+        for i in range(max(0, int(params.get('person_count', 1)))):
+            start, goal = leg_for(i, params['person_start'], params['person_goal'],
+                                  float(params.get('person_spacing_m', 6.0)))
+            layout.append({'kind': 'person', 'name': f"{params['person_name']}_{i}",
+                           'start': list(start), 'goal': list(goal),
+                           'speed': float(params['person_speed']), 'z': 0.9})
         seed = None
 
     write_layout({'seed': seed, 'mobs': layout})

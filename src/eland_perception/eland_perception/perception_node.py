@@ -132,13 +132,20 @@ class PerceptionNode(Node):
     def remap_gt(self, msg: Image) -> np.ndarray:
         """Passthrough path: Gazebo ground-truth labels -> our class IDs.
 
-        The remap is the identity, and that is a design decision rather than a
-        shortcut: eland_sim/worlds/eland_test.sdf assigns its Label plugin
-        values straight out of eland_common.classes, so there is exactly one
-        class numbering in the project and no lookup table to drift out of
-        sync. Label a new world object with a number that is not in classes.py
-        and the guard below turns it into UNKNOWN, i.e. un-landable -- which is
-        the safe direction to fail in.
+        The remap is a subtraction, and the offset it undoes is the only
+        translation in the project.
+
+        The mask carries the segmentation model's own class indices, 0..6, so
+        that simulator ground truth and model output can be compared without a
+        lookup table. But Gazebo returns label 0 for anything unlabelled, and
+        index 0 is safe-soft: with no offset, the sky, an unlabelled model and
+        every labelling mistake would read as the safest ground in the world.
+        So the world writes `index + 1` and this subtracts it, which leaves
+        Gazebo's 0 free to mean UNKNOWN -- not landable, which is the safe
+        direction to fail in.
+
+        The offset therefore exists in exactly two places: gen_world.py and
+        the template, which write the labels, and here, which reads them.
         """
         raw = self.bridge.imgmsg_to_cv2(msg)
         if raw.ndim == 3:
@@ -146,7 +153,13 @@ class PerceptionNode(Node):
             # rgb8 with the label replicated across all three channels. Taking
             # the red one is arbitrary but stable.
             raw = raw[:, :, 0]
-        mask = raw.astype(np.uint8)
+        raw = raw.astype(np.uint8)
+        mask = np.empty_like(raw)
+        # 0 is Gazebo's "no label", which is the one value that must not map
+        # into the taxonomy.
+        unlabelled = raw == 0
+        mask[unlabelled] = classes.UNKNOWN
+        mask[~unlabelled] = raw[~unlabelled] - classes.GZ_LABEL_OFFSET
         # Anything outside the known ID range is untrusted -> unknown.
         mask[mask >= classes.NUM_CLASSES] = classes.UNKNOWN
         return np.ascontiguousarray(mask)
@@ -158,8 +171,8 @@ class PerceptionNode(Node):
         image centre -- enough structure for the detector to produce a
         non-degenerate candidate on the left side.
         """
-        mask = np.full((height, width), classes.GRASS, dtype=np.uint8)
-        mask[:, width // 2:] = classes.BUILDING
+        mask = np.full((height, width), classes.SAFE_SOFT, dtype=np.uint8)
+        mask[:, width // 2:] = classes.STRUCTURE
 
         cy, cx = height // 2, width // 2
         yy, xx = np.ogrid[:height, :width]

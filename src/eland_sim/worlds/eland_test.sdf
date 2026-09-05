@@ -20,19 +20,26 @@
   simulation plugins through PX4_GZ_SERVER_CONFIG, so no <plugin> entries for
   physics/sensors/user-commands are needed here either.
 
-  WHAT MAKES THIS WORLD DIFFERENT: every model carries a Label system plugin
-  assigning it one of the class IDs in eland_common/classes.py. The
-  segmentation camera reports label 0 for anything unlabelled, and class 0 is
-  UNKNOWN with risk 1.0, so an unlabelled model is not "safe by default" -- it
-  is correctly treated as un-landable. That is why ground_plane itself is
-  labelled GRASS rather than left bare: without a label the entire world floor
-  would read as UNKNOWN and no landing site would ever be found.
+  WHAT MAKES THIS WORLD DIFFERENT: every model carries a Label system plugin,
+  and the label is the segmentation model's own class index PLUS ONE.
 
-  Class IDs (see eland_common/classes.py -- that file is the single source,
-  this list is a reader's convenience and must follow it):
-    1 GRASS    2 DIRT      3 GRAVEL   4 PAVEMENT  5 VEGETATION
-    6 BUILDING 7 WATER     8 VEHICLE  9 PERSON   10 FENCE
-   11 POLE    12 SAND
+  The offset is what keeps "unlabelled" from meaning "safest". Gazebo reports
+  label 0 for anything without a Label plugin, and index 0 in the taxonomy is
+  safe-soft, so writing the indices directly would make the sky, an unlabelled
+  model and every labelling mistake read as the best ground in the world.
+  perception_node subtracts the one and maps Gazebo's 0 to UNKNOWN, which is
+  not landable. ground_plane is labelled for the same reason: an unlabelled
+  floor would leave no landing site anywhere.
+
+  Labels in THIS file (taxonomy index + 1; the taxonomy itself is in
+  eland_common/classes.py, which is the single source this list must follow):
+    1 = safe-soft        grass, dirt, sand
+    2 = safe-hard        gravel, pavement
+    3 = terrain-hazard   trees and canopy
+    4 = structure        buildings, fences, poles
+    5 = water            the pond
+    6 = vehicle-animal   vehicles
+    7 = person           people
 
   Layout, in the ENU world frame with the vehicle spawning at the origin:
 
@@ -126,7 +133,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>4</label>
+        <label>2</label>
       </plugin>
     </model>
 
@@ -147,7 +154,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>4</label>
+        <label>2</label>
       </plugin>
     </model>
 
@@ -168,7 +175,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>2</label>
+        <label>1</label>
       </plugin>
     </model>
 
@@ -189,7 +196,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>3</label>
+        <label>2</label>
       </plugin>
     </model>
 
@@ -210,7 +217,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>7</label>
+        <label>5</label>
       </plugin>
     </model>
 
@@ -253,7 +260,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>4</label>
+        <label>2</label>
       </plugin>
     </model>
 
@@ -279,7 +286,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -303,7 +310,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -324,7 +331,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
+        <label>7</label>
       </plugin>
     </model>
 
@@ -341,7 +348,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
+        <label>7</label>
       </plugin>
     </model>
 
@@ -364,7 +371,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>6</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -384,7 +391,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>6</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -404,7 +411,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>6</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -439,7 +446,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -469,7 +476,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -499,7 +506,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -529,7 +536,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -559,7 +566,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -589,7 +596,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>8</label>
+        <label>6</label>
       </plugin>
     </model>
 
@@ -609,7 +616,33 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
+        <label>7</label>
+      </plugin>
+    </model>
+
+    <!-- ============================================================
+         Added 2026-09-05: a second, smaller water body.
+
+         WATER(4) existed only as the pond at (-34, -4), which is outside the
+         camera footprint from most spawn points -- measured: a 90 s flight in
+         which every other class appeared in all 271 frames and water in none.
+         A SORA class the world never shows is a class the pipeline is never
+         tested on.
+         ============================================================ -->
+    <model name="pond_near">
+      <static>true</static>
+      <pose>-17 -7 0.01 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>11 8 0.02</size></box></geometry>
+          <material>
+            <ambient>0.10 0.24 0.40 1</ambient>
+            <diffuse>0.14 0.34 0.56 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>5</label>
       </plugin>
     </model>
 
@@ -642,7 +675,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>10</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -659,7 +692,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>10</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -676,7 +709,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>10</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -693,7 +726,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>11</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -710,7 +743,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>11</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -727,7 +760,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>11</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -744,7 +777,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>12</label>
+        <label>1</label>
       </plugin>
     </model>
 
@@ -768,7 +801,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -792,7 +825,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -816,7 +849,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>5</label>
+        <label>3</label>
       </plugin>
     </model>
 
@@ -833,7 +866,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>6</label>
+        <label>4</label>
       </plugin>
     </model>
 
@@ -848,7 +881,7 @@
          ============================================================ -->
     <model name="dyn_vehicle_0">
       <static>true</static>
-      <pose>7.37 9.21 0.75 0 0 2.8502</pose>
+      <pose>30.0 0.0 0.75 0 0 3.1416</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>4.4 1.9 1.5</size></box></geometry>
@@ -862,13 +895,13 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>8</label>
+        <label>6</label>
       </plugin>
     </model>
 
     <model name="dyn_vehicle_1">
       <static>true</static>
-      <pose>15.91 -5.68 0.75 0 0 -1.5247</pose>
+      <pose>30.0 -9.0 0.75 0 0 3.1416</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>4.4 1.9 1.5</size></box></geometry>
@@ -882,13 +915,13 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>8</label>
+        <label>6</label>
       </plugin>
     </model>
 
     <model name="dyn_person_0">
       <static>true</static>
-      <pose>17.62 -22.82 0.9 0 0 0</pose>
+      <pose>-10.0 8.0 0.9 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
@@ -902,13 +935,13 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
+        <label>7</label>
       </plugin>
     </model>
 
     <model name="dyn_person_1">
       <static>true</static>
-      <pose>-16.69 -0.02 0.9 0 0 0</pose>
+      <pose>-10.0 14.0 0.9 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
@@ -922,13 +955,13 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
+        <label>7</label>
       </plugin>
     </model>
 
     <model name="dyn_person_2">
       <static>true</static>
-      <pose>-6.44 14.2 0.9 0 0 0</pose>
+      <pose>-10.0 2.0 0.9 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
@@ -942,7 +975,7 @@
         </visual>
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
+        <label>7</label>
       </plugin>
     </model>
 
