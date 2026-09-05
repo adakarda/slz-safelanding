@@ -39,6 +39,7 @@ is computed.
 from __future__ import annotations
 
 import math
+import os
 
 from geometry_msgs.msg import Pose as RosPose
 from geometry_msgs.msg import PoseArray
@@ -80,6 +81,12 @@ class ObstacleDriver(Node):
         self.declare_parameter('vehicle_count', 1)
         self.declare_parameter('vehicle_spacing_m', 7.0)
         self.declare_parameter('truth_topic', '/eland/obstacle_truth')
+        # Written by scripts/gen_world.py when it placed the models. Reading it
+        # rather than re-deriving the same layout from the same seed is the
+        # whole point: two programs that each compute where the mobs are will
+        # eventually disagree, and the disagreement will be silent -- models
+        # standing in one place, poses commanded to another.
+        self.declare_parameter('mob_layout_file', '')
 
         gp = self.get_parameter
         self._enabled = gp('enable').value
@@ -93,31 +100,13 @@ class ObstacleDriver(Node):
         # with no names in it, so the order is the contract, and it has to be
         # written down in exactly one place.
         self._movers = []
-        self._movers += self._build(
-            kind='vehicle',
-            name=gp('vehicle_name').value,
-            count=int(gp('vehicle_count').value),
-            start=list(gp('vehicle_start').value),
-            goal=list(gp('vehicle_goal').value),
-            speed=float(gp('vehicle_speed').value),
-            spacing=float(gp('vehicle_spacing_m').value),
-            z=float(gp('vehicle_size').value[2]) / 2.0,
-            driven=True)
-        self._movers += self._build(
-            kind='person',
-            name=gp('person_name').value,
-            count=int(gp('person_count').value),
-            start=list(gp('person_start').value),
-            goal=list(gp('person_goal').value),
-            speed=float(gp('person_speed').value),
-            spacing=float(gp('person_spacing_m').value),
-            # 0.9 m: half of the 1.8 m cylinder, so it stands on the ground
-            # rather than half-buried, matching the static people.
-            z=0.9,
-            # An actor is driven by its own script; these commands would be
-            # ignored, and the published truth is then nominal rather than
-            # commanded.
-            driven=self._person_kind == 'model')
+        layout = self._load_layout(gp('mob_layout_file').value)
+        if layout:
+            self._movers = layout
+            self.get_logger().info(
+                f'{len(layout)} mob loaded from the generated layout')
+        else:
+            self._movers = self._from_parameters(gp)
 
         self._gz = GzNode()
         self._service = f'/world/{self._world}/set_pose'
@@ -150,6 +139,90 @@ class ObstacleDriver(Node):
                 f"{[round(v, 1) for v in m['goal']]} at {m['speed']} m/s "
                 f"({self._mode}), {m['leg_time']:.1f} s per leg, "
                 f"phase {m['phase']:.2f}")
+
+    def _from_parameters(self, gp):
+        movers = []
+        movers += self._build(
+            kind='vehicle',
+            name=gp('vehicle_name').value,
+            count=int(gp('vehicle_count').value),
+            start=list(gp('vehicle_start').value),
+            goal=list(gp('vehicle_goal').value),
+            speed=float(gp('vehicle_speed').value),
+            spacing=float(gp('vehicle_spacing_m').value),
+            z=float(gp('vehicle_size').value[2]) / 2.0,
+            driven=True)
+        movers += self._build(
+            kind='person',
+            name=gp('person_name').value,
+            count=int(gp('person_count').value),
+            start=list(gp('person_start').value),
+            goal=list(gp('person_goal').value),
+            speed=float(gp('person_speed').value),
+            spacing=float(gp('person_spacing_m').value),
+            # 0.9 m: half of the 1.8 m cylinder, so it stands on the ground
+            # rather than half-buried, matching the static people.
+            z=0.9,
+            # An actor is driven by its own script; these commands would be
+            # ignored, and the published truth is then nominal rather than
+            # commanded.
+            driven=self._person_kind == 'model')
+        return movers
+
+    def _load_layout(self, path):
+        """Movers straight from the file the world was written from.
+
+        Falls back to the parameter rule when there is no file: a fresh
+        checkout that has not run the generator yet still starts.
+        """
+        if not path:
+            path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                'worlds', 'mob_layout.yaml')
+            # Installed packages keep the worlds under share/, not next to the
+            # python module, so try that too before giving up.
+            if not os.path.exists(path):
+                try:
+                    from ament_index_python.packages import get_package_share_directory
+                    path = os.path.join(get_package_share_directory('eland_sim'),
+                                        'worlds', 'mob_layout.yaml')
+                except Exception:  # noqa: BLE001
+                    return []
+        if not os.path.exists(path):
+            return []
+        try:
+            import yaml
+            with open(path, 'r', encoding='utf-8') as handle:
+                doc = yaml.safe_load(handle) or {}
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().warning(f'mob layout unreadable ({exc})')
+            return []
+
+        movers = []
+        count = len(doc.get('mobs', []))
+        for i, mob in enumerate(doc.get('mobs', [])):
+            start = [float(v) for v in mob['start']]
+            goal = [float(v) for v in mob['goal']]
+            speed = float(mob['speed'])
+            dist = math.hypot(goal[0] - start[0], goal[1] - start[1])
+            movers.append({
+                'kind': mob['kind'],
+                'name': mob['name'],
+                'start': start,
+                'goal': goal,
+                'speed': speed,
+                'z': float(mob['z']),
+                # An actor drives itself; everything else is teleported.
+                'driven': mob['kind'] != 'person' or self._person_kind == 'model',
+                'leg_time': dist / speed if speed > 0 else 0.0,
+                'yaw_out': math.atan2(goal[1] - start[1], goal[0] - start[0]),
+                # Spread the phases so a drawn scenario is traffic rather than
+                # a starting grid.
+                'phase': i / count if count else 0.0,
+            })
+        if doc.get('seed') is not None:
+            self.get_logger().info(f'mob layout seed {doc["seed"]}')
+        return movers
 
     # --------------------------------------------------------------- movers
 

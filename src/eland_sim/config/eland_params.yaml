@@ -317,6 +317,39 @@ obstacle_driver:
     # they do not march in lockstep.
     person_count: 3
     person_spacing_m: 6.0
+    # --- how many mobs, and where -------------------------------------
+    # Routes are drawn fresh each run, within mob_bounds, clear of anything
+    # standing and of each other, and written to worlds/mob_layout.yaml.
+    # Both the world and obstacle_driver read that file, so the models and
+    # the motion cannot disagree.
+    randomize_mobs: true
+    # 0 = fresh draw each run; the seed used is printed and recorded in the
+    # layout file, so a scenario can be repeated.
+    mob_seed: 0
+    # Hard cap on moving obstacles. Every extra mob is another blob for the
+    # tracker to confuse with its neighbours and another set of discs for the
+    # corridor test to rasterise; a scenario should get more varied without
+    # getting slower. person_count + vehicle_count are trimmed to fit.
+    max_mobs: 6
+    mob_bounds: [-30.0, -30.0, 30.0, 30.0]
+    # Metres a route keeps from anything standing, and from other routes.
+    # 2.5 m, not 4: a route is a line a vehicle drives along, and these
+    # obstacles are metres across at most. Four metres of margin on top of the
+    # obstacle's own radius left the middle of this world -- trees, fences,
+    # poles within thirty metres of the origin -- with almost nowhere a
+    # straight 30 m route could go, and the draw returned one mob instead of
+    # five.
+    mob_clearance_m: 2.5
+    mob_route_gap_m: 6.0
+    mob_route_length_m: [16.0, 70.0]
+    # Routes are drawn through a disc of this radius around the aircraft's
+    # start, not anywhere in the world. Traffic the aircraft never sees is not
+    # a scenario: the first version scattered five mobs across sixty metres
+    # and the tracker had nothing to track for an entire flight.
+    mob_focus_radius_m: 18.0
+    # ...but not on top of it. A run should not begin with a vehicle already
+    # inside the exclusion zone.
+    mob_spawn_gap_m: 8.0
     person_start: [-10.0, 8.0]
     person_goal: [10.0, 8.0]
     person_speed: 1.2

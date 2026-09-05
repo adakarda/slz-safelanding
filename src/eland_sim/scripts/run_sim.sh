@@ -227,30 +227,17 @@ command -v MicroXRCEAgent >/dev/null ||
 [ -e "$PX4_DIR/Tools/simulation/gz/worlds/eland_test.sdf" ] ||
 	fail "Gazebo varliklari bagli degil: scripts/link_px4_assets.sh calistir"
 
-# Rebuild the world from the parameters this run will actually use, before
-# Gazebo reads it. The dynamic obstacles exist in two places -- their SDF and
-# obstacle_driver's parameters -- and this is what stops those two drifting
-# apart: change a start point in the YAML and the world already agrees on the
-# next run, with no separate step to forget.
-GEN_ARGS=""
-if [ -n "$PARAMS_ARG" ]; then
-	GEN_ARGS="--params ${PARAMS_ARG#params_file:=}"
-fi
-# shellcheck disable=SC2086
-python3 "$(dirname "$0")/gen_world.py" $GEN_ARGS >/dev/null ||
-	fail "dunya uretilemedi: scripts/gen_world.py"
-
 # --------------------------------------------------------------- spawn pose
 #
-# After the world is generated, because the picker reads that world to find
-# out what it has to stay away from, and the dynamic obstacles are only in it
-# once the generator has run.
+# Picked BEFORE the world is generated, because the mob routes are drawn
+# around this pose. The picker therefore reads the template, which carries
+# every standing obstacle -- all it needs to avoid.
 if [ "$SPAWN_MODE" = "random" ]; then
 	SPAWN_ARGS=""
 	[ -n "$SPAWN_SEED" ] && SPAWN_ARGS="$SPAWN_ARGS --seed $SPAWN_SEED"
 	[ -n "$SPAWN_BOUNDS" ] && SPAWN_ARGS="$SPAWN_ARGS --bounds $SPAWN_BOUNDS"
 	# shellcheck disable=SC2086
-	SPAWN_OUT=$(python3 "$(dirname "$0")/pick_spawn.py" $SPAWN_ARGS 2>/dev/null)
+	SPAWN_OUT=$(python3 "$(dirname "$0")/pick_spawn.py" --world "$WS_DIR/src/eland_sim/worlds/eland_test.sdf.in" $SPAWN_ARGS 2>/dev/null)
 	if [ -n "$SPAWN_OUT" ]; then
 		POSE=$(echo "$SPAWN_OUT" | head -1)
 		SPAWN_SEED=$(echo "$SPAWN_OUT" | tail -1)
@@ -263,6 +250,23 @@ if [ "$SPAWN_MODE" = "random" ]; then
 		echo "[run_sim] UYARI: dogus noktasi secilemedi, orijin kullaniliyor" >&2
 	fi
 fi
+
+# Rebuild the world from the parameters this run will actually use, before
+# Gazebo reads it. The dynamic obstacles exist in two places -- their SDF and
+# obstacle_driver's parameters -- and this is what stops those two drifting
+# apart: change a start point in the YAML and the world already agrees on the
+# next run, with no separate step to forget.
+# The mob routes are drawn through a disc around the spawn, so the traffic
+# is where the aircraft is rather than somewhere it will never look.
+GEN_ARGS="--focus ${POSE%%,*},$(echo "$POSE" | cut -d, -f2)"
+if [ -n "$PARAMS_ARG" ]; then
+	# Appended, not assigned: overwriting here silently dropped the focus and
+	# scattered the traffic across the whole world again.
+	GEN_ARGS="$GEN_ARGS --params ${PARAMS_ARG#params_file:=}"
+fi
+# shellcheck disable=SC2086
+python3 "$(dirname "$0")/gen_world.py" $GEN_ARGS >/dev/null ||
+	fail "dunya uretilemedi: scripts/gen_world.py"
 
 mkdir -p "$LOG_DIR"
 # Kept with the run's own logs, so a recording and the pose it was made from

@@ -946,3 +946,82 @@ Doğrulandı: `9`'a eşdeğer yayın sonrası mod
 |---|---|
 | 15 | **GUI'li koşu benim tarafımdan doğrulanmadı.** Otomasyon bağlamımda X sunucusuna erişemiyorum (`qt.qpa.xcb: could not connect to display :0`), bu yüzden Gazebo penceresi + istasyon penceresi açıkken ölçemedim. Yerine mekanizmayı sınadım: 8 çekirdek yükü altında akış bozulmadı. GUI'nin ek yükü CPU değil bellek bant genişliği ise bu sınama onu kapsamaz. |
 | 17 | Kaçış yolu tek yönlü; uçuş ortasında modu geri getirmek yok (kasıtlı). |
+
+---
+
+# 17. Sınırlı sayıda, rastgele konumlu çoklu mob (2026-09-05)
+
+**İstenen:** aynı anda daha fazla hareketli varlık, ama üst sınırlı; her
+mob'un güzergâhı da rastgele ve çakışmasız; her koşu gerçekten farklı bir
+senaryo.
+
+## 17.1 Tek çekiliş, tek kayıt
+
+Rotalar `gen_world.py` tarafından çiziliyor ve `worlds/mob_layout.yaml`'a
+yazılıyor. Hem dünya modelleri hem `obstacle_driver` **o dosyayı** okuyor.
+
+Alternatif (ikisinin de aynı seed'den aynı düzeni yeniden türetmesi) reddedildi:
+iki program aynı hesabı iki kere yaparsa er geç ayrışır ve ayrışma sessiz olur —
+modeller bir yerde durur, pozlar başka yere komut edilir.
+
+Katman kurulu paylaşım dizinine de kopyalanıyor; yoksa yeni çekiliş modelleri
+taşırken sürücü son `colcon build` anındaki konumlara komut etmeye devam ederdi.
+
+## 17.2 Sıra değişti: önce doğuş, sonra dünya
+
+Mob rotaları **aracın doğduğu noktanın çevresinden** geçirilmek zorunda, yoksa
+trafik aracın hiç bakmadığı yerde olur. Bu yüzden `run_sim.sh` artık önce
+doğuş noktasını seçiyor (şablondaki statik engellere karşı), sonra dünyayı o
+noktaya odaklı üretiyor.
+
+Ölçülen gerekçe: ilk sürüm rotaları dünyaya rastgele saçtı; 5 mob çizildi,
+sürücü hepsini sürdü, ve **izleyici bütün uçuş boyunca 0 hareketli gördü.**
+
+## 17.3 Yol boyunca düzeltilen üç şey
+
+1. **Engeller disk değil kapsül.** 12 m'lik bir çit, sınırlayıcı kutusunun
+   yarı-köşegeniyle 6 m yarıçaplı bir disk oluyordu; 4 m boşluk istenince
+   rota, bir metre yanından geçebileceği çitten 10 m uzak durmak zorunda
+   kalıyordu. Ölçülen bedel: **300 aday rotanın 300'ü de reddedildi.** Artık
+   her engel bir eksen + yarıçap (kapsül); direk ve ağaç sıfır uzunlukta,
+   yani disk.
+2. **Bir mob yerleşemeyince kalanlar atlanıyordu.** `break` yerine `continue`:
+   erken bir başarısızlık koşuyu "tek araç, hiç insan" hâline getiriyordu ki bu
+   "daha az mob" değil, başka bir senaryo.
+3. **Rotalar kesişebilmeli.** "Her yerde 6 m uzak" kuralı, hepsi aynı 18 m'lik
+   diskten geçmek zorunda olunca ikinci mob'u imkânsız kılıyordu. Kural artık
+   yalnızca **aracın yanından geçtikleri noktalar** arasında; trafik kesişir,
+   ama iki mob aynı hattı kullanmaz.
+
+## 17.4 Ölçüm
+
+100 çekiliş, `max_mobs: 6`, istenen 3 insan + 2 araç:
+
+| | öncesi (sabit düzen) | sonrası (rastgele) |
+|---|---|---|
+| Mob sayısı | 5, hep aynı yerde | **5** (min 5, max 5) |
+| Farklı başlangıç noktası | 5 | **498/500** |
+| Rota–engel boşluğu | — | min **2.50 m**, ort. 4.79 m |
+| Rota–araç mesafesi | — | min **8.05 m**, max **17.99 m** |
+| 0 mob çıkan koşu | — | 0/240 (dört farklı odak noktasında) |
+
+Odak noktasına göre yerleştirme başarısı (60 çekiliş, her odak için):
+
+| Odak | ortalama mob |
+|---|---|
+| (0, 0) — dünyanın kalabalık ortası | 4.92 |
+| (5, −8) | 5.00 |
+| (−15, 10) | 5.00 |
+| (20, −20) | 5.00 |
+
+Canlı doğrulama (`--fixed`, 25 m'de asılı): 5 mob çizildi, sürücü beşini de
+katmandaki bacaklarla yükledi (faz 0.00/0.20/0.40/0.60/0.80), truth topic'i 5
+poz yayınladı, ve **izleyici aynı anda 6 hareketli gördü** (beş gerçek + bir
+yanlış eşleme).
+
+## 17.5 Açık
+
+| # | Konu |
+|---|---|
+| 18 | Mob sayısı kalabalık bölgelerde düşebiliyor (odak (0,0)'da 4.92). Rotalar düz çizgi; gerçek trafik engellerin etrafından dolaşır. |
+| 19 | İzleyici 5 gerçek mob'a karşı 6 track gösterdi — aynı sınıftan komşu lekelerin eşleme gürültüsü, açık madde #9 ile aynı kök. |

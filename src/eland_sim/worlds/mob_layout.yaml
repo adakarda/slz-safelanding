@@ -1,0 +1,52 @@
+seed: 713265854
+mobs:
+- kind: vehicle
+  name: dyn_vehicle_0
+  start:
+  - 7.37
+  - 9.21
+  goal:
+  - -11.1
+  - 14.75
+  speed: 3.0
+  z: 0.75
+- kind: vehicle
+  name: dyn_vehicle_1
+  start:
+  - 15.91
+  - -5.68
+  goal:
+  - 18.31
+  - -57.72
+  speed: 3.0
+  z: 0.75
+- kind: person
+  name: dyn_person_0
+  start:
+  - 17.62
+  - -22.82
+  goal:
+  - 12.32
+  - 5.44
+  speed: 1.2
+  z: 0.9
+- kind: person
+  name: dyn_person_1
+  start:
+  - -16.69
+  - -0.02
+  goal:
+  - -44.71
+  - 9.09
+  speed: 1.2
+  z: 0.9
+- kind: person
+  name: dyn_person_2
+  start:
+  - -6.44
+  - 14.2
+  goal:
+  - -17.36
+  - 53.08
+  speed: 1.2
+  z: 0.9

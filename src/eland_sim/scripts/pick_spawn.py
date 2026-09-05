@@ -45,26 +45,36 @@ def _floats(text, n):
 
 
 def _geometry_extent(geom):
-    """(horizontal radius, top height) of one geometry element."""
+    """(half-length along the long axis, radius, top height, long axis is x).
+
+    Obstacles are capsules, not discs. A fence is twelve metres long and
+    twelve centimetres thick; describing it by the half-diagonal of its
+    bounding box gives a six-metre disc, and a route asked to keep four
+    metres from that has to stay ten metres from a fence it could pass a
+    metre away from. Measured cost of the disc version: every one of 300
+    candidate routes rejected.
+    """
     box = geom.find('box')
     if box is not None:
         sx, sy, sz = _floats(box.find('size').text, 3)
-        return math.hypot(sx, sy) / 2.0, sz / 2.0
+        if sx >= sy:
+            return max(0.0, (sx - sy) / 2.0), sy / 2.0, sz / 2.0, True
+        return max(0.0, (sy - sx) / 2.0), sx / 2.0, sz / 2.0, False
     cyl = geom.find('cylinder')
     if cyl is not None:
         r = float(cyl.find('radius').text)
         length = float(cyl.find('length').text)
-        return r, length / 2.0
+        return 0.0, r, length / 2.0, True
     sph = geom.find('sphere')
     if sph is not None:
         r = float(sph.find('radius').text)
-        return r, r
+        return 0.0, r, r, True
     plane = geom.find('plane')
     if plane is not None:
         # The ground itself. Infinite in extent, zero in height, never an
         # obstacle -- returning a huge radius here would reject every pose.
-        return 0.0, 0.0
-    return 0.0, 0.0
+        return 0.0, 0.0, 0.0, True
+    return 0.0, 0.0, 0.0, True
 
 
 #: `--` inside an XML comment is illegal, and every comment in this project
@@ -75,7 +85,13 @@ COMMENT = re.compile(r'<!--.*?-->', re.S)
 
 
 def obstacles_from_world(path, min_height):
-    """[(x, y, radius)] for every model tall enough to matter."""
+    """[(ax, ay, bx, by, radius, name)] for every model tall enough to matter.
+
+    Each obstacle is a capsule: a segment with a radius. A pole or a tree has
+    a zero-length segment and is a disc; a fence or a building wall is a line
+    with a thickness. Distance to the obstacle is then distance to that
+    segment minus the radius.
+    """
     with open(path, 'r', encoding='utf-8') as handle:
         text = COMMENT.sub('', handle.read())
     root = ET.fromstring(text)
@@ -85,7 +101,10 @@ def obstacles_from_world(path, min_height):
         name = model.get('name', '')
         pose = model.find('pose')
         mx, my, _mz = _floats(pose.text, 3) if pose is not None else (0.0, 0.0, 0.0)
+        yaw = _floats(pose.text, 6)[5] if pose is not None else 0.0
         radius = 0.0
+        half_len = 0.0
+        along_x = True
         top = 0.0
         for link in model.findall('link'):
             for tag in ('visual', 'collision'):
@@ -93,13 +112,19 @@ def obstacles_from_world(path, min_height):
                     geom = vis.find('geometry')
                     if geom is None:
                         continue
-                    r, h = _geometry_extent(geom)
+                    hl, r, h, ax_is_x = _geometry_extent(geom)
                     vpose = vis.find('pose')
                     ox, oy, oz = _floats(vpose.text, 3) if vpose is not None else (0.0, 0.0, 0.0)
-                    radius = max(radius, r + math.hypot(ox, oy))
+                    if r + math.hypot(ox, oy) > radius or hl > half_len:
+                        radius = max(radius, r + math.hypot(ox, oy))
+                        if hl > half_len:
+                            half_len, along_x = hl, ax_is_x
                     top = max(top, oz + h)
         if top >= min_height and radius > 0.0:
-            out.append((mx, my, radius, name))
+            heading = yaw if along_x else yaw + math.pi / 2.0
+            dx = math.cos(heading) * half_len
+            dy = math.sin(heading) * half_len
+            out.append((mx - dx, my - dy, mx + dx, my + dy, radius, name))
     return out
 
 
@@ -134,8 +159,8 @@ def pick(bounds, clearance, path_clearance, obstacles, paths, rng, tries=500):
     for _ in range(tries):
         x = rng.uniform(x0, x1)
         y = rng.uniform(y0, y1)
-        if any(math.hypot(x - ox, y - oy) < r + clearance
-               for ox, oy, r, _n in obstacles):
+        if any(_point_segment_distance(x, y, ax, ay, bx, by) < r + clearance
+               for ax, ay, bx, by, r, _n in obstacles):
             continue
         if any(_point_segment_distance(x, y, *leg) < path_clearance
                for leg in paths):
@@ -185,8 +210,8 @@ def main():
     if args.verbose:
         print(f'pick_spawn: {len(obstacles)} standing obstacles, '
               f'{len(paths)} obstacle routes', file=sys.stderr)
-        nearest = min((math.hypot(x - ox, y - oy) - r, n)
-                      for ox, oy, r, n in obstacles) if obstacles else (0, '-')
+        nearest = min((_point_segment_distance(x, y, ax, ay, bx, by) - r, n)
+                      for ax, ay, bx, by, r, n in obstacles) if obstacles else (0, '-')
         print(f'pick_spawn: nearest obstacle {nearest[1]} at '
               f'{nearest[0]:.1f} m', file=sys.stderr)
 

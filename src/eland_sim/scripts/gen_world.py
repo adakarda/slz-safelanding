@@ -69,17 +69,32 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import random
 import sys
 
 import yaml
+
+# Same directory: the spawn picker already knows how to read standing
+# obstacles out of a world, and mobs have to avoid the same things the
+# aircraft does.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pick_spawn import (_point_segment_distance,  # noqa: E402
+                        obstacles_from_world)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.dirname(HERE)
 TEMPLATE = os.path.join(PKG, 'worlds', 'eland_test.sdf.in')
 OUTPUT = os.path.join(PKG, 'worlds', 'eland_test.sdf')
+# Where the drawn mob routes are written. The world and obstacle_driver both
+# read this file rather than each re-deriving the layout from a seed: one draw,
+# one record, and no way for the models and the motion to disagree.
+LAYOUT = os.path.join(PKG, 'worlds', 'mob_layout.yaml')
 PARAMS = os.path.join(PKG, 'config', 'eland_params.yaml')
 
 MARKER = '@DYNAMIC_OBSTACLES@'
+
+#: Where the aircraft will start, when the caller knows. Set from --focus.
+FOCUS = None
 
 # Fuel is only reached the first time: gz caches the mesh under ~/.gz/fuel and
 # every later run is offline. Recorded here because a first run on a machine
@@ -121,6 +136,152 @@ def leg_for(index, start, goal, spacing):
     off = step * spacing
     return ([start[0] + nx * off, start[1] + ny * off],
             [goal[0] + nx * off, goal[1] + ny * off])
+
+
+def _closest_point(point, seg):
+    """Where along `seg` it passes closest to `point`."""
+    ax, ay, bx, by = seg
+    dx, dy = bx - ax, by - ay
+    denom = dx * dx + dy * dy
+    if denom <= 1e-9:
+        return ax, ay
+    t = max(0.0, min(1.0, ((point[0] - ax) * dx + (point[1] - ay) * dy) / denom))
+    return ax + t * dx, ay + t * dy
+
+
+def _segment_clearance(seg, obstacles):
+    """Smallest gap between a route and any standing obstacle."""
+    if not obstacles:
+        return float('inf')
+    best = float('inf')
+    for ox, oy, px, py, r, _n in obstacles:
+        # Both ways round: the shortest distance between two segments is not
+        # found by measuring one segment's endpoints against the other.
+        best = min(best, _segment_gap(seg, (ox, oy, px, py)) - r)
+    return best
+
+
+def _segment_gap(a, b, samples=12):
+    """Rough distance between two routes.
+
+    Sampled points from each segment against the other, and both directions
+    are needed: sampling only one way is asymmetric, and a pair that passed
+    the check measured the other way round came out at 5.90 m against a 6.00 m
+    threshold. Exact segment-to-segment distance is not worth the algebra for
+    a threshold that is a judgement call anyway, but the check should at least
+    give the same answer whichever route was drawn first.
+    """
+    best = float('inf')
+    for first, second in ((a, b), (b, a)):
+        for i in range(samples + 1):
+            t = i / samples
+            px = first[0] + (first[2] - first[0]) * t
+            py = first[1] + (first[3] - first[1]) * t
+            best = min(best, _point_segment_distance(px, py, *second))
+    return best
+
+
+def draw_mobs(params, obstacles, rng, focus=None):
+    """Pick routes for the moving obstacles: how many, from where to where.
+
+    Capped rather than open-ended. Every extra mob is another blob for the
+    tracker to confuse with its neighbours and another set of discs for the
+    corridor test to rasterise, and the point of the cap is that a scenario
+    should get more varied without getting slower.
+
+    `focus` is where the aircraft will start. Routes are drawn through a disc
+    around it rather than anywhere in the world, because traffic the aircraft
+    never sees is not a scenario -- measured on the first version, which
+    scattered five mobs across sixty metres and left the tracker with nothing
+    to track for the whole flight. They still keep their distance from the
+    spawn itself, so the run does not begin with a vehicle on top of the
+    aircraft.
+    """
+    n_max = max(0, int(params.get('max_mobs', 6)))
+    want_people = max(0, int(params.get('person_count', 3)))
+    want_vehicles = max(0, int(params.get('vehicle_count', 2)))
+    total = want_people + want_vehicles
+    if total > n_max and total > 0:
+        # Trim proportionally, keeping at least one of each that was asked for.
+        keep_p = max(1 if want_people else 0, round(n_max * want_people / total))
+        keep_v = max(1 if want_vehicles else 0, n_max - keep_p)
+        want_people, want_vehicles = keep_p, keep_v
+
+    bounds = [float(v) for v in params.get('mob_bounds', [-30.0, -30.0, 30.0, 30.0])]
+    clearance = float(params.get('mob_clearance_m', 2.5))
+    route_gap = float(params.get('mob_route_gap_m', 6.0))
+    length_range = params.get('mob_route_length_m', [16.0, 70.0])
+    focus_r = float(params.get('mob_focus_radius_m', 18.0))
+    spawn_gap = float(params.get('mob_spawn_gap_m', 8.0))
+
+    layout = []
+    routes = []
+    crossings = []
+    for kind, count, speed, z in (
+            ('vehicle', want_vehicles, float(params['vehicle_speed']),
+             float(params['vehicle_size'][2]) / 2.0),
+            ('person', want_people, float(params['person_speed']), 0.9)):
+        for i in range(count):
+            seg = None
+            for _try in range(500):
+                heading = rng.uniform(-math.pi, math.pi)
+                length = rng.uniform(float(length_range[0]), float(length_range[1]))
+                # Drawn anywhere, then kept only if it happens to pass the
+                # aircraft at a sensible distance. Constructing the route
+                # around a point near the aircraft is the obvious alternative
+                # and it is worse: forcing the crossing to be the midpoint
+                # pins both ends too, and near the middle of this world --
+                # trees at (-12, 5) and (9, -13), fences along y = -15 -- most
+                # of those routes run into something. Measured: 2.15 mobs
+                # placed on average against a requested five.
+                x0 = rng.uniform(bounds[0], bounds[2])
+                y0 = rng.uniform(bounds[1], bounds[3])
+                cand = (x0, y0,
+                        x0 + math.cos(heading) * length,
+                        y0 + math.sin(heading) * length)
+                if _segment_clearance(cand, obstacles) < clearance:
+                    continue
+                if focus is not None:
+                    passes = _point_segment_distance(focus[0], focus[1], *cand)
+                    # Close enough that the aircraft will see it, far enough
+                    # that the run does not begin inside its exclusion zone.
+                    if passes > focus_r or passes < spawn_gap:
+                        continue
+                    px = focus[0]
+                    py = focus[1]
+                # Routes may cross -- traffic does -- but must not run down
+                # the same line. Requiring a gap everywhere along their length
+                # made the second mob impossible to place once every route had
+                # to thread the same disc; requiring it only where they pass
+                # the aircraft is the constraint that actually matters.
+                if focus is not None:
+                    near = [_closest_point(focus, cand)]
+                    if any(math.hypot(near[0][0] - qx, near[0][1] - qy) < route_gap
+                           for qx, qy in crossings):
+                        continue
+                elif any(_segment_gap(cand, other) < route_gap for other in routes):
+                    continue
+                seg = cand
+                break
+            if seg is None:
+                # This one did not fit. Try the next rather than abandoning the
+                # rest of its kind: an early failure used to leave a run with a
+                # single vehicle and no people at all, which is not "fewer
+                # mobs", it is a different scenario.
+                continue
+            routes.append(seg)
+            if focus is not None:
+                crossings.append(_closest_point(focus, seg))
+            name = f"{params['vehicle_name'] if kind == 'vehicle' else params['person_name']}_{len([m for m in layout if m['kind'] == kind])}"
+            layout.append({
+                'kind': kind,
+                'name': name,
+                'start': [round(seg[0], 2), round(seg[1], 2)],
+                'goal': [round(seg[2], 2), round(seg[3], 2)],
+                'speed': speed,
+                'z': z,
+            })
+    return layout
 
 
 def person_model_block(p, name=None, start=None) -> str:
@@ -239,6 +400,27 @@ def vehicle_block(p, name=None, start=None, goal=None) -> str:
 """
 
 
+def write_layout(doc):
+    """Record the drawn layout where obstacle_driver will look for it.
+
+    Written twice when the workspace is installed: the source tree, which is
+    what Gazebo reads through the symlinks, and the installed share directory,
+    which is where an installed node looks. Without the second copy a fresh
+    draw would move the models while the driver kept teleporting them to the
+    positions from the last colcon build -- the exact silent disagreement this
+    file exists to prevent.
+    """
+    targets = [LAYOUT]
+    installed = os.path.join(os.path.expanduser('~'), 'ros2_ws', 'install',
+                             'eland_sim', 'share', 'eland_sim', 'worlds')
+    if os.path.isdir(installed):
+        targets.append(os.path.join(installed, 'mob_layout.yaml'))
+    for target in targets:
+        with open(target, 'w', encoding='utf-8') as handle:
+            yaml.safe_dump(doc, handle, default_flow_style=False,
+                           sort_keys=False)
+
+
 def load_params(path=PARAMS):
     with open(path, 'r', encoding='utf-8') as handle:
         doc = yaml.safe_load(handle)
@@ -270,38 +452,66 @@ def render(params) -> str:
 
     blocks = []
 
-    # Names carry the index even when there is only one. A name that says
-    # nothing about how many there are is a name that silently changes meaning
-    # the day a second one is added.
-    n_people = max(0, int(params.get('person_count', 1)))
-    p_spacing = float(params.get('person_spacing_m', 6.0))
-    for i in range(n_people):
-        start, goal = leg_for(i, params['person_start'], params['person_goal'],
-                              p_spacing)
-        name = f"{params['person_name']}_{i}"
-        blocks.append(person_actor_block(params, name, start, goal)
-                      if kind == 'actor'
-                      else person_model_block(params, name, start))
+    if params.get('randomize_mobs', True):
+        # Routes drawn fresh, then written down. Both the models below and
+        # obstacle_driver read that record, so there is exactly one draw and
+        # no seed for two programs to re-derive identically.
+        seed = params.get('mob_seed')
+        seed = random.randrange(1 << 30) if seed in (None, 0) else int(seed)
+        rng = random.Random(seed)
+        obstacles = obstacles_from_world(TEMPLATE, 0.5)
+        layout = draw_mobs(params, obstacles, rng, focus=FOCUS)
+        print(f'{len(layout)} mob drawn (seed {seed})')
+    else:
+        # The fixed layout: obstacle 0 on the configured leg, the rest offset
+        # sideways from it. Kept for comparison runs, where two halves of an
+        # experiment have to face the same traffic.
+        layout = []
+        for i in range(max(0, int(params.get('person_count', 1)))):
+            start, goal = leg_for(i, params['person_start'], params['person_goal'],
+                                  float(params.get('person_spacing_m', 6.0)))
+            layout.append({'kind': 'person', 'name': f"{params['person_name']}_{i}",
+                           'start': list(start), 'goal': list(goal),
+                           'speed': float(params['person_speed']), 'z': 0.9})
+        for i in range(max(0, int(params.get('vehicle_count', 1)))):
+            start, goal = leg_for(i, params['vehicle_start'], params['vehicle_goal'],
+                                  float(params.get('vehicle_spacing_m', 7.0)))
+            layout.append({'kind': 'vehicle', 'name': f"{params['vehicle_name']}_{i}",
+                           'start': list(start), 'goal': list(goal),
+                           'speed': float(params['vehicle_speed']),
+                           'z': float(params['vehicle_size'][2]) / 2.0})
+        seed = None
 
-    n_vehicles = max(0, int(params.get('vehicle_count', 1)))
-    v_spacing = float(params.get('vehicle_spacing_m', 7.0))
-    for i in range(n_vehicles):
-        start, goal = leg_for(i, params['vehicle_start'], params['vehicle_goal'],
-                              v_spacing)
-        blocks.append(vehicle_block(params, f"{params['vehicle_name']}_{i}",
-                                    start, goal))
+    write_layout({'seed': seed, 'mobs': layout})
 
-    return template.replace(MARKER, '\n'.join(blocks))
+    for mob in layout:
+        if mob['kind'] == 'person':
+            blocks.append(person_actor_block(params, mob['name'], mob['start'],
+                                             mob['goal'])
+                          if kind == 'actor'
+                          else person_model_block(params, mob['name'], mob['start']))
+        else:
+            blocks.append(vehicle_block(params, mob['name'], mob['start'],
+                                        mob['goal']))
+
+    return template.replace(MARKER, chr(10).join(blocks))
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--params', default=PARAMS)
     ap.add_argument('--output', default=OUTPUT)
+    ap.add_argument('--focus', default=None,
+                    help='x,y the mob routes should pass near -- normally the '
+                         'spawn pose, so the traffic is where the aircraft is')
     ap.add_argument('--check', action='store_true',
                     help='exit 1 if the output is stale, write nothing')
     args = ap.parse_args()
 
+    global FOCUS
+    if args.focus:
+        parts = [float(v) for v in args.focus.split(',')[:2]]
+        FOCUS = (parts[0], parts[1])
     text = render(load_params(args.params))
 
     if args.check:

@@ -846,69 +846,9 @@
          parameters and re-run the generator; editing the output is lost on
          the next run.
          ============================================================ -->
-    <model name="dyn_person_0">
-      <static>true</static>
-      <pose>-10.0 8.0 0.9 0 0 0</pose>
-      <link name="link">
-        <collision name="collision">
-          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
-          <material>
-            <ambient>0.70 0.45 0.10 1</ambient>
-            <diffuse>0.90 0.58 0.13 1</diffuse>
-          </material>
-        </visual>
-      </link>
-      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
-      </plugin>
-    </model>
-
-    <model name="dyn_person_1">
-      <static>true</static>
-      <pose>-10.0 14.0 0.9 0 0 0</pose>
-      <link name="link">
-        <collision name="collision">
-          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
-          <material>
-            <ambient>0.70 0.45 0.10 1</ambient>
-            <diffuse>0.90 0.58 0.13 1</diffuse>
-          </material>
-        </visual>
-      </link>
-      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
-      </plugin>
-    </model>
-
-    <model name="dyn_person_2">
-      <static>true</static>
-      <pose>-10.0 2.0 0.9 0 0 0</pose>
-      <link name="link">
-        <collision name="collision">
-          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
-          <material>
-            <ambient>0.70 0.45 0.10 1</ambient>
-            <diffuse>0.90 0.58 0.13 1</diffuse>
-          </material>
-        </visual>
-      </link>
-      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
-        <label>9</label>
-      </plugin>
-    </model>
-
     <model name="dyn_vehicle_0">
       <static>true</static>
-      <pose>30.0 0.0 0.75 0 0 3.1416</pose>
+      <pose>7.37 9.21 0.75 0 0 2.8502</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>4.4 1.9 1.5</size></box></geometry>
@@ -928,7 +868,7 @@
 
     <model name="dyn_vehicle_1">
       <static>true</static>
-      <pose>30.0 -9.0 0.75 0 0 3.1416</pose>
+      <pose>15.91 -5.68 0.75 0 0 -1.5247</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>4.4 1.9 1.5</size></box></geometry>
@@ -943,6 +883,66 @@
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
         <label>8</label>
+      </plugin>
+    </model>
+
+    <model name="dyn_person_0">
+      <static>true</static>
+      <pose>17.62 -22.82 0.9 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
+          <material>
+            <ambient>0.70 0.45 0.10 1</ambient>
+            <diffuse>0.90 0.58 0.13 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>9</label>
+      </plugin>
+    </model>
+
+    <model name="dyn_person_1">
+      <static>true</static>
+      <pose>-16.69 -0.02 0.9 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
+          <material>
+            <ambient>0.70 0.45 0.10 1</ambient>
+            <diffuse>0.90 0.58 0.13 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>9</label>
+      </plugin>
+    </model>
+
+    <model name="dyn_person_2">
+      <static>true</static>
+      <pose>-6.44 14.2 0.9 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>1.8</length></cylinder></geometry>
+          <material>
+            <ambient>0.70 0.45 0.10 1</ambient>
+            <diffuse>0.90 0.58 0.13 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>9</label>
       </plugin>
     </model>
 
