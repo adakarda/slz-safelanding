@@ -82,6 +82,19 @@ class DetectorNode(Node):
         self.declare_parameter('hazard_classes', classes.DEFAULT_HAZARD_CLASSES)
         self.declare_parameter('r_hazard', 3.0)
         self.declare_parameter('r_fit', 1.0)
+        # Distance to the nearest cell of a DIFFERENT class, whatever that
+        # class is. r_fit cannot see the seam between two landable classes,
+        # because both are in safe_classes and the distance transform runs on
+        # their union: a site on the kerb between grass and pavement reports
+        # the clearance of the whole open area around it.
+        #
+        # That seam is worth a criterion of its own for two reasons that have
+        # nothing to do with SORA. It is where the mask is least reliable --
+        # every class boundary flickers by a cell or two per frame, and the
+        # flat-ground IPM misplaces a raised kerb by more than that. And in
+        # this world it is usually a real step: grass to road is a kerb, not a
+        # painted line, and a leg on a kerb is a tip-over.
+        self.declare_parameter('r_class_edge', 0.0)
         self.declare_parameter('min_area_m2', 9.0)
         self.declare_parameter('r_ideal', 8.0)
         self.declare_parameter('w_risk', 0.50)
@@ -223,6 +236,7 @@ class DetectorNode(Node):
         self.hazard_classes = [int(c) for c in self.get_parameter('hazard_classes').value]
         self.r_hazard = float(self.get_parameter('r_hazard').value)
         self.r_fit = float(self.get_parameter('r_fit').value)
+        self.r_class_edge = float(self.get_parameter('r_class_edge').value)
         self.min_area_m2 = float(self.get_parameter('min_area_m2').value)
         self.r_ideal = float(self.get_parameter('r_ideal').value)
         self.w_risk = float(self.get_parameter('w_risk').value)
@@ -598,6 +612,18 @@ class DetectorNode(Node):
         t0 = self.stage('safe-mask', t0)
         dist_fit_m = cv2.distanceTransform(safe, cv2.DIST_L2, cv2.DIST_MASK_PRECISE) * res
 
+        # Distance to the nearest class boundary. The boundary itself is any
+        # cell with a 4-neighbour of a different class, so the edge of the
+        # camera footprint counts too -- ground the aircraft cannot see the
+        # far side of is not ground it should aim at the middle of.
+        edge = np.zeros(grid.shape, dtype=np.uint8)
+        edge[:, :-1] |= (grid[:, :-1] != grid[:, 1:]).astype(np.uint8)
+        edge[:, 1:] |= (grid[:, 1:] != grid[:, :-1]).astype(np.uint8)
+        edge[:-1, :] |= (grid[:-1, :] != grid[1:, :]).astype(np.uint8)
+        edge[1:, :] |= (grid[1:, :] != grid[:-1, :]).astype(np.uint8)
+        dist_edge_m = cv2.distanceTransform(
+            1 - edge, cv2.DIST_L2, cv2.DIST_MASK_PRECISE) * res
+
         hazard = np.isin(grid, self.hazard_classes).astype(np.uint8)
         if hazard.any():
             # distanceTransform measures distance to the nearest ZERO pixel, so
@@ -622,11 +648,14 @@ class DetectorNode(Node):
         # 4. eligibility: all three criteria, each answering its own question
         eligible = (big_enough[labels]
                     & (dist_fit_m >= self.r_fit)
+                    & (dist_edge_m >= self.r_class_edge)
                     & (dist_hazard_m >= self.r_hazard))
         if not eligible.any():
             self.publish_invalid(
                 msg,
                 f'nothing eligible (best fit {dist_fit_m.max():.2f}/{self.r_fit} m, '
+                f'best class-edge sep {dist_edge_m.max():.2f}/'
+                f'{self.r_class_edge} m, '
                 f'best hazard sep {np.max(dist_hazard_m[safe > 0]) if safe.any() else 0:.2f}'
                 f'/{self.r_hazard} m, largest region '
                 f'{areas_m2[1:].max() if len(areas_m2) > 1 else 0:.1f}/'
@@ -703,7 +732,10 @@ class DetectorNode(Node):
         norm_d = d_from_drone / max_d if max_d > 0.0 else np.zeros_like(d_from_drone)
 
         risk = self.class_risk[grid[ys, xs]]
-        clearance = dist_fit_m[ys, xs]
+        # The ranking uses whichever clearance is worse. A site three metres
+        # from a kerb is not as open as one three metres from a kerb and
+        # thirty from anything else, and only this term can tell them apart.
+        clearance = np.minimum(dist_fit_m[ys, xs], dist_edge_m[ys, xs])
         shortfall = np.clip(1.0 - clearance / max(self.r_ideal, 1e-6), 0.0, 1.0)
         score = (self.w_risk * risk
                  + self.w_distance * norm_d
@@ -752,6 +784,7 @@ class DetectorNode(Node):
             area_m2=float(areas_m2[best_label]),
             n_eligible=len(cell_x),
             score=float(score[best]),
+            edge_m=float(dist_edge_m[ys[best], xs[best]]),
         )
         self.stage('score+publish', t0)
 
@@ -782,7 +815,7 @@ class DetectorNode(Node):
         self.block_pub.publish(out)
 
     def publish_candidate(self, map_msg, x, y, radius, risk, area_m2,
-                          n_eligible, score) -> None:
+                          n_eligible, score, edge_m=float('nan')) -> None:
         out = LandingCandidate()
         out.header.stamp = map_msg.header.stamp
         out.header.frame_id = map_msg.header.frame_id or 'map'
@@ -809,6 +842,13 @@ class DetectorNode(Node):
             f'area={area_m2:.1f} m2 ratio={out.area_ratio:.3f} risk={risk:.2f} '
             f'V={score:.3f} eligible={n_eligible} '
             f'trajectory-rejected={self.rejected_by_trajectory}')
+        # Info, throttled: the one number request 1 is about. "Clearance
+        # 7.40 m" said nothing about how far the site sat from the seam
+        # between two landable classes, because nothing measured it.
+        self.get_logger().info(
+            f'secilen site: sinif sinirina {edge_m:.2f} m, '
+            f'inilebilir alanin kenarina {radius:.2f} m',
+            throttle_duration_sec=5.0)
         # Info level, and only when it actually changed something: a filter
         # that silently discards two thirds of the map should say so once per
         # crossing, not never and not every frame.

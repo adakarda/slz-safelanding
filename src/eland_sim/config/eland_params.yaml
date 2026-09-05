@@ -88,6 +88,16 @@ detector_node:
     # grass in an empty field selectable; a single 3 m threshold rejected any
     # region under 6 m across regardless of what was around it.
     r_fit: 1.0
+    # Distance to the nearest cell of a DIFFERENT class. r_fit cannot see the
+    # seam between two landable classes -- safe_classes holds grass and
+    # pavement both, and the transform runs on their union -- so a site on the
+    # kerb between them reported the clearance of the whole open area.
+    # Measured on the pinned landing, distance from the chosen site to the
+    # nearest class seam: median 0.80 m and under 2 m on 14 of 22 samples
+    # before this, median 7.58 m and never under 2.34 m after. No cost in
+    # availability: no empty frames and a first-attempt landing in both the
+    # open scene and the paved yard.
+    r_class_edge: 2.0
     # Smallest region worth considering, independent of its shape. A radius
     # test alone cannot express this: a long thin strip can clear r_fit
     # everywhere along its spine while offering nowhere sensible to sit.
