@@ -211,28 +211,41 @@ class HudNode(Node):
         img = cv2.resize(img, (self.map_px, self.map_px),
                          interpolation=cv2.INTER_NEAREST)
 
-        # Where the trajectory filter refuses to land, tinted over the map
-        # before anything else is drawn so the markers stay readable on top.
-        # Two shades because they are two different claims: red is "the
-        # obstacle is predicted to be here", amber is "something moved across
-        # here recently". Blended rather than filled -- the terrain
-        # underneath is still the thing being judged.
+        # What the trajectory filter thinks of each patch of ground, tinted
+        # under the markers so they stay readable. Three claims, drawn as
+        # three different things on purpose -- only one of them is a refusal:
+        #
+        #   corridor (100)   red, outlined. The obstacle is predicted to be
+        #                    here; this is the one hard exclusion.
+        #   shadow (70)      faint blue, no outline. The approach to a site
+        #                    here passes over a corridor: a cost, not a bar.
+        #   memory (1..69)   faint amber, no outline, and the shade is the
+        #                    recency the score actually pays for.
+        #
+        # Drawing all three in the same red -- which is what this did while
+        # the block map still had two values -- makes two thirds of the map
+        # look unlandable when it is merely expensive.
         if self.block is not None and self.block.shape == self.grid.shape:
             block = cv2.resize(np.flipud(self.block).astype(np.uint8),
                                (self.map_px, self.map_px),
                                interpolation=cv2.INTER_NEAREST)
-            for value, colour, alpha in ((50, (60, 150, 240), 0.22),
-                                         (100, (70, 70, 240), 0.32)):
-                mask = block == value
+            bands = (((block > 0) & (block < 70), (60, 150, 240), 0.16, False),
+                     (block == 70, (200, 160, 60), 0.16, False),
+                     (block == 100, (70, 70, 240), 0.32, True))
+            for mask, colour, alpha, outline in bands:
                 if not mask.any():
                     continue
                 tint = np.zeros_like(img)
                 tint[:] = colour
                 img[mask] = ((1.0 - alpha) * img[mask]
                              + alpha * tint[mask]).astype(np.uint8)
-                # An outline as well as a tint. Tinted grass just looks like
-                # different grass; the edge is what makes it read as a border
-                # the aircraft is not allowed to cross.
+                if not outline:
+                    continue
+                # An outline as well as a tint, for the exclusion only.
+                # Tinted grass just looks like different grass; the edge is
+                # what makes it read as a border the aircraft may not cross,
+                # which is precisely the claim the other two bands do not
+                # make.
                 contours, _ = cv2.findContours(mask.astype(np.uint8),
                                                cv2.RETR_EXTERNAL,
                                                cv2.CHAIN_APPROX_SIMPLE)
@@ -376,10 +389,13 @@ class HudNode(Node):
                  (170, 170, 170), 0.38, 15)
         if self.block is not None:
             live = int((self.block == 100).sum())
-            mem = int((self.block == 50).sum())
+            shadow = int((self.block == 70).sum())
+            mem = int(((self.block > 0) & (self.block < 70)).sum())
             total = self.block.size
-            line(f'predicted     {100.0 * live / total:4.1f} % of map',
+            line(f'excluded      {100.0 * live / total:4.1f} % of map',
                  (120, 120, 240), 0.38, 15)
+            line(f'approach cost {100.0 * shadow / total:4.1f} % of map',
+                 (200, 170, 90), 0.38, 15)
             line(f'recently used {100.0 * mem / total:4.1f} % of map',
                  (100, 170, 235), 0.38, 15)
 
@@ -406,8 +422,9 @@ class HudNode(Node):
         # if read as RGB. Getting that backwards is how the legend ended up
         # promising blue and drawing orange.
         line('thin blue     SORA separation', (255, 170, 80), 0.36, 14)
-        line('red wash      predicted path', (70, 70, 240), 0.36, 14)
-        line('amber wash    recently crossed', (60, 150, 240), 0.36, 14)
+        line('red wash      predicted path (EXCLUDED)', (70, 70, 240), 0.36, 14)
+        line('amber wash    approach cost', (200, 160, 60), 0.36, 14)
+        line('blue wash     recently crossed (cost)', (60, 150, 240), 0.36, 14)
         line('arrow         tracked mover', (200, 200, 200), 0.36, 14)
         return img
 
