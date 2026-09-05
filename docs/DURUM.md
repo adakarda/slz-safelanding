@@ -1400,3 +1400,78 @@ karşılığında daha geniş bir koridor üretiyor.
 |---|---|
 | 24 | Araç hız kestirimi, harita içinde bile gerçeğin ~%52'si. Sebep büyük olasılıkla LSQ penceresinin dönüşleri içermesi; örnek sayısıyla değil süreyle tanımlı, hıza göre kısalan bir pencere denenmedi. |
 | 25 | Aday hâlâ koşu başına 3-4 kez 4 m'den fazla sıçrıyor (mandal serbest bırakılmadan). Mandalın tuttuğu hücre uygun kümeden çıktığında ne olacağı ayrıca ele alınmalı. |
+
+# 21. Sınıf dikişi ve HUD'un iki farklı iddiası (2026-09-04 istekleri)
+
+## 21.1 İniş alanı sınıf sınırına oturuyordu — ölçüldü
+
+Şikâyet: "iki sınıf arasında kalmış, drone çapını karşılamayan bir alanı
+seçmesin." Koda bakınca sebep açıktı ve bir ayar değil, bir tanım eksikliğiydi:
+`dist_fit_m`, **inilebilir olmayan** en yakın hücreye uzaklıktır ve
+`safe_classes` hem çimeni hem asfaltı içerir. Mesafe dönüşümü ikisinin
+birleşimi üzerinde çalıştığı için **iki inilebilir sınıfın arasındaki dikiş
+görünmez**. Site tam dikişin üstünde otursa bile çevresindeki tüm açık alanın
+açıklığını raporlar — fotoğraftaki "clearance 7.40 m" bu.
+
+Dikişin kendi başına bir ölçüt olmayı hak etmesinin iki sebebi var, ikisi de
+SORA ile ilgisiz: maskenin en güvenilmez olduğu yer sınırdır (her sınıf sınırı
+kare başına bir iki hücre oynar, düz zemin varsayan IPM yükseltilmiş bir
+bordürü bundan fazla kaydırır) ve bu dünyada dikiş genelde gerçek bir
+basamaktır — çimden asfalta geçiş boyalı çizgi değil bordürdür, bordüre basan
+bir ayak devrilmedir.
+
+Eklenen: `r_class_edge`, **farklı sınıftan** en yakın hücreye uzaklık. Sert
+eşik olarak uygunluk testine, skorda ise açıklık terimi
+`min(dist_fit, dist_edge)` olarak girer — üç metre ötesi bordür olan bir site,
+otuz metre boyunca hiçbir şey olmayan bir siteyle aynı açıklıkta sayılmaz.
+
+| Ölçüm (sabit sahne, seçilen site 21-22 örnek) | Öncesi | Sonrası (eşik 2.0 m) |
+|---|---|---|
+| Sınıf dikişine uzaklık, ortanca | **0.80 m** | **7.58 m** |
+| Sınıf dikişine uzaklık, en küçük | 0.80 m | **2.40 m** |
+| 2 m'nin altında kalan örnek | **14/22** | **0/22** |
+| İnilebilir alanın kenarına, ortalama | 3.20 m | 6.48 m |
+| Aday üretilmeyen kare | 0/154 | 0/152 |
+| Durum geçişi / aday kaybı | 3 / 0 | 3 / 0 |
+
+Aç bırakma riski ayrıca dar dünyada sınandı (`--scenario yard`, taşlı avlu):
+0/154 boş kare, üç geçiş, tek denemede iniş.
+
+## 21.2 HUD üç iddiayı iki renkle çiziyordu
+
+§20'den sonra blok haritası üç değer taşıyor: 100 koridor (tek sert dışlama),
+70 yaklaşma gölgesi, 20..60 tazelikle gölgelenmiş bellek. HUD ise hâlâ yalnızca
+`== 100` ve `== 50` çiziyordu. Sonuç: **yaklaşma gölgesi hiç görünmüyordu**,
+bellek yalnızca gölgesi tam 50'ye denk geldiğinde çiziliyordu ve görünen her
+şey koridorla aynı "buraya inilmez" kırmızısındaydı.
+
+Kullanıcının "daireler çok büyük, sanki oraya inilmeyecekmiş gibi" dediği
+yanılsama tam olarak buydu: maliyetler yasak gibi boyanıyordu. Artık üç bant
+üç ayrı şey:
+
+| Bant | Anlam | Çizim |
+|---|---|---|
+| 100 | koridor — tehlikenin olacağı yer | kırmızı, **çerçeveli**, tek yasak |
+| 70 | yaklaşma gölgesi — maliyet | soluk amber, çerçevesiz |
+| 1..69 | geçilmiş zemin — maliyet, tazelikle | soluk mavi, çerçevesiz |
+
+Panel de aynı üçe ayrıldı (`excluded` / `approach cost` / `recently used`);
+eskiden `recently used` yalnızca tam 50 değerini saydığı için gerçeğin çok
+altını gösteriyordu.
+
+**Değişmeyenler:** adayın etrafındaki üç daire (yeşil = elde edilen açıklık,
+kesikli = `r_ideal`, mavi = `r_hazard`) ve hareketlilerin ok uzunluğu
+(hız × ufuk) algoritmanın kullandığı değerlerdir; isteğin kendi kuralı gereği
+küçültülmedi.
+
+## 21.3 Araç vektörleri nereden geliyor (soruya cevap, kod değişmedi)
+
+`/eland/dynamic_obstacles` **ground-truth değil**. Zincir: kamera → segmentasyon
+maskesi → IPM ile yer düzlemine izdüşüm (`/eland/ground_map_instant`) → leke
+merkezleri → en küçük kareler ile hız. `/eland/obstacle_truth` yalnızca ölçüm
+betiklerinin okuduğu bir konudur; uçuş boru hattında hiçbir düğüm ona abone
+değil.
+
+Tek gerçek-veri kalıntısı **piksellerin sınıfı**: maske şu an Gazebo'nun etiket
+kamerasından geliyor. Yani konum ve hız zaten tahmin; sınıf henüz değil. Bu da
+madde 7'nin (segmentasyon modeli) konusu ve isteğin gereği ellenmedi.
