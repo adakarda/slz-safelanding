@@ -54,6 +54,80 @@ namespace eland {
 /// registered modes; a stable release may not refresh the list.
 static const std::string kModeName = "Emergency Landing";
 
+/// Vertical rate loop: feedforward + PI, with the two guards a PI needs when
+/// its actuator saturates and its measurement is noisy.
+///
+/// The feedforward term is the reference itself, because the plant is PX4's
+/// own velocity controller rather than a thrust command: asking for v and
+/// getting v is the expected case, and the PI only has to remove what is left
+/// -- the bias from the outer position controller, and the lag of the smoothed
+/// profile. Starting from u = v_ref also means a zero-gain configuration
+/// reproduces the old open-loop behaviour exactly, which is what makes the
+/// two comparable.
+///
+/// Anti-windup is back-calculation: when the output is clamped, the integral
+/// is unwound by the amount that was clamped away, scaled by `kaw`. Without
+/// it the integrator charges up during the seconds the aircraft spends at the
+/// floor speed near the ground and then overshoots on the way out.
+class DescentRateController
+{
+public:
+  void configure(float kp, float ki, float kd, float d_tau, float kaw)
+  {
+    _kp = kp;
+    _ki = ki;
+    _kd = kd;
+    _d_tau = d_tau;
+    _kaw = kaw;
+  }
+
+  /// Bumpless: the next update starts from the reference with no history, so
+  /// entering a descent never steps the command.
+  void reset()
+  {
+    _integral = 0.f;
+    _d_state = 0.f;
+    _have_prev = false;
+  }
+
+  float update(float v_ref, float v_meas, float dt_s, float lo, float hi)
+  {
+    if (dt_s <= 0.f) {
+      return std::clamp(v_ref, lo, hi);
+    }
+    const float error = v_ref - v_meas;
+
+    // Derivative on the measurement, low-pass filtered. On the measurement
+    // rather than the error so a step in the reference does not kick the
+    // output; filtered because vz here is an EKF output at 30 Hz and raw
+    // differencing of it is mostly noise.
+    float d_term = 0.f;
+    if (_kd > 0.f) {
+      const float alpha = dt_s / std::max(_d_tau + dt_s, 1e-3f);
+      _d_state += alpha * (v_meas - _d_state);
+      if (_have_prev) {
+        d_term = -_kd * (_d_state - _d_prev) / dt_s;
+      }
+      _d_prev = _d_state;
+      _have_prev = true;
+    }
+
+    const float u = v_ref + _kp * error + _integral + d_term;
+    const float u_sat = std::clamp(u, lo, hi);
+    _integral += (_ki * error + _kaw * (u_sat - u)) * dt_s;
+    _last_error = error;
+    return u_sat;
+  }
+
+  float integral() const { return _integral; }
+  float lastError() const { return _last_error; }
+
+private:
+  float _kp{0.f}, _ki{0.f}, _kd{0.f}, _d_tau{0.2f}, _kaw{1.f};
+  float _integral{0.f}, _d_state{0.f}, _d_prev{0.f}, _last_error{0.f};
+  bool _have_prev{false};
+};
+
 class EmergencyLandingMode : public px4_ros2::ModeBase {
  public:
   /// Mirrors the constants in eland_msgs/msg/LandingState.msg.
@@ -244,6 +318,27 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
         const Eigen::Vector3f cand = candidateNed();
         target_ned = {cand.x(), cand.y(), -_landing_altitude_m};
         max_vertical_speed = descentSpeed(altitude_m);
+        if (_descent_closed_loop) {
+          // The descent law's output is a reference to be tracked, not a
+          // ceiling to be planned under. Horizontal stays position
+          // controlled -- the site was validated at a position, and nothing
+          // about the vertical loop should let the aircraft drift off it.
+          const float v_meas = _local_position->velocityNed().z();  // down +
+          const float v_cmd =
+              _rate_controller.update(max_vertical_speed, v_meas, dt_s,
+                                      0.f, _descent_max_mps);
+          _last_measured_mps = v_meas;
+          _last_rate_cmd_mps = v_cmd;
+          px4_ros2::TrajectorySetpoint descent;
+          descent.withPositionX(cand.x()).withPositionY(cand.y()).withVelocityZ(v_cmd);
+          _trajectory_setpoint->update(descent);
+          _reason = "descending at " + toStr(v_cmd) + " m/s (ref " +
+                    toStr(max_vertical_speed) + ", measured " + toStr(v_meas) +
+                    ") [" + std::string(_view_bounded ? "area" : "altitude") +
+                    "], alt " + toStr(altitude_m) + " m";
+          publishState(altitude_m);
+          return;
+        }
         _reason = "descending at <=" + toStr(max_vertical_speed) + " m/s [" +
                   std::string(_view_bounded ? "area" : "altitude") + "], region " +
                   toStr(_area_m2) + " m2 filling " + toStr(_area_ratio * 100.f) +
@@ -364,6 +459,17 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
     _descent_max_mps = declare("descent_max_mps", 2.0);
     // Fallback only: used when no area measurement is available yet.
     _descent_altitude_gain = declare("descent_altitude_gain", 0.35);
+    // Closed-loop vertical rate. Off reproduces the open-loop behaviour the
+    // baseline numbers were taken with, so the two can be compared on the
+    // same scenario.
+    _descent_closed_loop = _node.declare_parameter<bool>("descent_closed_loop", false);
+    _descent_kp = declare("descent_kp", 0.8);
+    _descent_ki = declare("descent_ki", 0.6);
+    _descent_kd = declare("descent_kd", 0.0);
+    _descent_d_tau = declare("descent_d_tau", 0.2);
+    _descent_kaw = declare("descent_kaw", 1.0);
+    _rate_controller.configure(_descent_kp, _descent_ki, _descent_kd,
+                               _descent_d_tau, _descent_kaw);
 
     _candidate_topic = _node.declare_parameter<std::string>("candidate_topic", "/eland/candidate");
     _state_topic = _node.declare_parameter<std::string>("state_topic", "/eland/state");
@@ -501,6 +607,13 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
                 reason.c_str());
     _state = next;
     _reason = reason;
+    // Every entry into a descent starts the rate loop from its reference with
+    // no accumulated history. A PI that carries an integral across a HOLD, an
+    // aborted attempt or a re-approach steps the command at the moment the
+    // aircraft is closest to the ground.
+    if (next == State::Validate || next == State::Commit) {
+      _rate_controller.reset();
+    }
     if (next == State::Hold) {
       _hold_start = _node.get_clock()->now();
       _have_frozen_target = false;
@@ -585,6 +698,8 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
   rclcpp::Time _last_state_pub{0, 0, RCL_ROS_TIME};
 
   Eigen::Vector3f _frozen_target_ned{0.f, 0.f, 0.f};
+  float _last_measured_mps{0.f};
+  float _last_rate_cmd_mps{0.f};
   bool _have_frozen_target{false};
   bool _completed{false};
 
@@ -609,6 +724,13 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
   float _descent_min_mps{0.3f};
   float _descent_max_mps{2.f};
   float _descent_altitude_gain{0.35f};
+  bool _descent_closed_loop{false};
+  float _descent_kp{0.8f};
+  float _descent_ki{0.6f};
+  float _descent_kd{0.f};
+  float _descent_d_tau{0.2f};
+  float _descent_kaw{1.f};
+  DescentRateController _rate_controller;
   float _area_ratio{0.f};
   float _area_m2{0.f};
   bool _view_bounded{false};

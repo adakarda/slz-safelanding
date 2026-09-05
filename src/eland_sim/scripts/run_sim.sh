@@ -40,6 +40,7 @@ SPAWN_BOUNDS=""
 # between the two halves of the experiment.
 PARAMS_ARG=""
 EXTRA_LAUNCH_ARGS=""
+PX4_PARAMS=""
 HEADLESS=""
 HUD="true"
 STATION="true"
@@ -69,6 +70,9 @@ run_sim.sh [options]
   --params FILE      parameter YAML to launch with, instead of the installed
                      one. For comparison runs: same world, different settings.
   --launch-arg A:=B  extra launch argument, repeatable
+  --px4-param K=V    set a PX4 parameter once SITL is up, repeatable. For
+                     control experiments: the descent law can only command
+                     what MPC_Z_V_AUTO_DN allows.
   --headless         no Gazebo window (faster; software rendering here)
   --no-hud           no HUD and no control station
   --hud-headless     publish /eland/hud but open no window at all
@@ -149,6 +153,10 @@ while [ $# -gt 0 ]; do
 			exit 1
 		fi
 		PARAMS_ARG="params_file:=$2"
+		shift 2
+		;;
+	--px4-param)
+		PX4_PARAMS="$PX4_PARAMS ${2:-}"
 		shift 2
 		;;
 	--launch-arg)
@@ -320,6 +328,18 @@ echo "[run_sim]   PX4 hazir"
 # 36 ms idle and 54 ms under eight busy cores, and PX4 never declares the
 # link lost. The default half second is the right number and is left alone.
 "$PX4_BIN/px4-param" set NAV_RCL_ACT 1 >/dev/null 2>&1
+
+# Anything the caller asked for on top. Measured reason this exists: the
+# descent law's ceiling is 2.0 m/s while MPC_Z_V_AUTO_DN defaults to 1.5, so
+# the top quarter of the commanded range was unreachable and every comparison
+# of descent speeds was really a comparison against that limit.
+for kv in $PX4_PARAMS; do
+	k="${kv%%=*}"
+	v="${kv#*=}"
+	[ -n "$k" ] || continue
+	"$PX4_BIN/px4-param" set "$k" "$v" >/dev/null 2>&1
+	echo "[run_sim]   PX4 param $k = $v"
+done
 
 # ------------------------------------------------------------------ agent
 echo "[run_sim] uXRCE-DDS ajani baslatiliyor..."

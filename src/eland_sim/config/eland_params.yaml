@@ -292,9 +292,37 @@ emergency_landing_mode:
     # every altitude and not only at the end.
     descent_size_gain: 0.20
     descent_min_mps: 0.3
-    descent_max_mps: 2.0
+    # 1.5, not 2.0, because that is what the plant can do: GotoControl clamps
+    # any requested vertical speed to MPC_Z_V_AUTO_DN (default 1.5), so the top
+    # quarter of the old range was unreachable and the law was modulating a
+    # number nothing acted on. Raising the PX4 limit instead was tried and did
+    # not help -- the goto controller plans its own smoothed profile, so the
+    # speed stayed at 1.5 and the descent got slower.
+    descent_max_mps: 1.5
     # Only used before the first area measurement arrives.
     descent_altitude_gain: 0.35
+
+    # --- vertical rate loop -------------------------------------------
+    # The law above produces a reference; this tracks it. Measured on the
+    # pinned landing, tracking error (achieved - commanded):
+    #
+    #   open loop, ceiling 2.0   mean -0.40 m/s, -0.70 above 10 m
+    #   open loop, ceiling 1.5   mean -0.26 m/s, RMS 0.413
+    #   closed loop (this)       mean -0.09 m/s, RMS 0.207
+    #
+    # A speed limit on a goto setpoint is not a reference: PX4 plans under it.
+    # Commanding the rate directly, with position held horizontally, is what
+    # makes the law's output mean something.
+    descent_closed_loop: true
+    descent_kp: 0.8
+    descent_ki: 0.6
+    # Off by default: with kd 0 the RMS error is already 0.207 m/s against a
+    # 30 Hz EKF velocity, and a derivative on that measurement buys noise.
+    descent_kd: 0.0
+    descent_d_tau: 0.2
+    # Back-calculation gain. The output saturates for most of the last two
+    # metres, where the reference sits at the floor speed.
+    descent_kaw: 1.0
     candidate_topic: "/eland/candidate"
     state_topic: "/eland/state"
 
