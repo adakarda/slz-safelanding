@@ -58,6 +58,7 @@ horizon and with the tracker's own stated confidence -- see ``corridor_radius``.
 """
 
 import math
+import time
 
 import cv2
 import numpy as np
@@ -158,6 +159,17 @@ class DetectorNode(Node):
         # up, better by this much on the 0..1 score, the latch releases.
         self.declare_parameter('latch_site', True)
         self.declare_parameter('latch_release_margin', 0.20)
+        # How far the held site may be re-found before it counts as the same
+        # site. Requiring the identical cell (the old behaviour, res * 1.5)
+        # made the latch an all-or-nothing thing: one frame in which that one
+        # cell was not eligible -- a flickering mask edge, a mover's disc
+        # grazing it -- dropped the latch entirely and the next candidate
+        # arrived a clearing away. Measured on the pinned three-people,
+        # two-vehicle landing: candidates jumping more than 4 m, and the mode
+        # logging "candidate lost at 11-14 m" while already hovering over the
+        # site. A landing site is a disc metres across, so the nearest still
+        # eligible cell within this radius is the same site, not a new one.
+        self.declare_parameter('latch_radius_m', 2.0)
         # How long a stretch of ground that something drove or walked over
         # stays excluded, seconds. 0 disables the memory.
         #
@@ -231,6 +243,7 @@ class DetectorNode(Node):
         self.sticky_radius = float(self.get_parameter('stickiness_radius_m').value)
         self.latch_site = bool(self.get_parameter('latch_site').value)
         self.latch_margin = float(self.get_parameter('latch_release_margin').value)
+        self.latch_radius = float(self.get_parameter('latch_radius_m').value)
 
         self.corridor_memory_s = float(
             self.get_parameter('corridor_memory_s').value)
@@ -244,6 +257,7 @@ class DetectorNode(Node):
         self.swept = []          # (x, y, r, t) ground something moved over
 
         self.bridge = CvBridge()
+        self.stage_times = {}
         self.last_pub_time = None
         self.candidate_id = 0
         self.area_ratio = 0.0
@@ -267,6 +281,7 @@ class DetectorNode(Node):
         self.create_subscription(
             DynamicObstacleArray, self.get_parameter('obstacles_topic').value,
             self.on_obstacles, DECISION_QOS)
+        self.create_timer(10.0, self.report_stages)
         self.block_pub = self.create_publisher(
             OccupancyGrid, self.get_parameter('block_map_topic').value,
             SENSOR_QOS)
@@ -330,6 +345,32 @@ class DetectorNode(Node):
         self.have_mask = True
 
     # ------------------------------------------------------------------
+    def stage(self, name, t0):
+        now = time.perf_counter()
+        self.stage_times.setdefault(name, []).append(now - t0)
+        return now
+
+    def report_stages(self):
+        """Where a decision frame goes, p50 and p95, every ten seconds.
+
+        The trajectory test rasterises a corridor per moving obstacle and the
+        approach test walks every candidate cell against every disc, so this
+        is the part that grows with traffic. Whether it is actually the
+        expensive part is a question with an answer, and this is it.
+        """
+        if not self.stage_times:
+            return
+        parts = []
+        for name, samples in self.stage_times.items():
+            if not samples:
+                continue
+            ordered = sorted(samples)
+            p50 = ordered[len(ordered) // 2] * 1000.0
+            p95 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))] * 1000.0
+            parts.append(f'{name} {p50:.1f}/{p95:.1f}')
+        self.stage_times = {}
+        self.get_logger().info('decision ms (p50/p95): ' + '  '.join(parts))
+
     def on_obstacles(self, msg: DynamicObstacleArray) -> None:
         self.obstacles = msg
         self.obstacles_time = self.get_clock().now()
@@ -408,39 +449,70 @@ class DetectorNode(Node):
         conf = min(max(float(confidence), 0.0), 1.0)
         return self.r_hazard + (self.sigma_base + self.sigma_rate * t) * (2.0 - conf)
 
-    @staticmethod
-    def _segment_point_distance(px, py, ax, ay, bx, by):
-        """Distance from each point (px, py) to the segment AB. Vectorised."""
-        dx, dy = bx - ax, by - ay
-        # Any of these may be arrays -- the caller passes a scalar disc centre
-        # against an array of candidate cells -- so the degenerate case is
-        # selected elementwise rather than branched on.
-        denom = dx * dx + dy * dy
-        safe_denom = np.where(denom > 1e-9, denom, 1.0)
-        s = np.clip(((px - ax) * dx + (py - ay) * dy) / safe_denom, 0.0, 1.0)
-        s = np.where(denom > 1e-9, s, 0.0)
-        return np.hypot(px - (ax + s * dx), py - (ay + s * dy))
+    def rasterise_block(self, info, drone, discs, memory):
+        """Draw the exclusion instead of computing it per cell.
 
-    def trajectory_clear(self, cell_x, cell_y, drone_x, drone_y, discs,
-                         site_only_discs=()):
-        """True where a cell is outside every corridor disc, and -- when
-        check_approach_path is on -- where the straight line from the aircraft
-        to that cell is too.
+        The arithmetic version tested every candidate cell against every disc,
+        twice -- once for the site and once for the route -- and it dominated
+        the decision frame: profiled at 44 ms of a 48 ms frame, against 0.9 ms
+        for the distance transform and 0.2 ms for the connected components.
+        With traffic there are a hundred-odd discs and twenty thousand
+        candidate cells, so that is a couple of million element operations per
+        frame to answer a question about geometry.
 
-        The approach test is the same distance test read the other way round:
-        the route is a segment, so a disc blocks it when the disc's centre is
-        within its radius of that segment.
+        Drawn instead: each disc is a filled circle, and each route shadow is
+        the quadrilateral between the two tangent lines from the aircraft,
+        starting at the tangency points so the ground between the aircraft and
+        the obstacle is not excluded for no reason. Both are single OpenCV
+        fills over a 200x200 image.
+
+        Returns (site_blocked, route_blocked) as uint8 masks.
         """
-        clear = np.ones(cell_x.shape, dtype=bool)
+        h, w, res = info.height, info.width, info.resolution
+        ox, oy = info.origin.position.x, info.origin.position.y
+        site = np.zeros((h, w), dtype=np.uint8)
+        route = np.zeros((h, w), dtype=np.uint8)
+
+        def to_px(x, y):
+            return (int(round((x - ox) / res)), int(round((y - oy) / res)))
+
+        def circle(img, cx, cy, r):
+            cv2.circle(img, to_px(cx, cy), max(1, int(round(r / res))), 1, -1)
+
         for cx, cy, r in discs:
-            clear &= np.hypot(cell_x - cx, cell_y - cy) >= r
-            if self.check_approach:
-                d = self._segment_point_distance(
-                    cx, cy, drone_x, drone_y, cell_x, cell_y)
-                clear &= d >= r
-        for cx, cy, r in site_only_discs:
-            clear &= np.hypot(cell_x - cx, cell_y - cy) >= r
-        return clear
+            circle(site, cx, cy, r)
+        for cx, cy, r in memory:
+            circle(site, cx, cy, r)
+
+        if self.check_approach and drone is not None:
+            reach = math.hypot(w * res, h * res)
+            for cx, cy, r in discs:
+                dx, dy = cx - drone[0], cy - drone[1]
+                dist = math.hypot(dx, dy)
+                if dist <= r:
+                    # Standing inside the corridor: every direction out of it
+                    # crosses it, so there is no route to protect.
+                    route[:] = 1
+                    break
+                # Tangent points from the aircraft to the circle, and the wedge
+                # they open beyond it.
+                ang = math.atan2(dy, dx)
+                half = math.asin(min(1.0, r / dist))
+                tangent_len = math.sqrt(max(0.0, dist * dist - r * r))
+                pts = []
+                for sign in (1.0, -1.0):
+                    a = ang + sign * half
+                    near = (drone[0] + math.cos(a) * tangent_len,
+                            drone[1] + math.sin(a) * tangent_len)
+                    far = (drone[0] + math.cos(a) * (tangent_len + reach),
+                           drone[1] + math.sin(a) * (tangent_len + reach))
+                    pts.append((near, far))
+                poly = np.array([to_px(*pts[0][0]), to_px(*pts[0][1]),
+                                 to_px(*pts[1][1]), to_px(*pts[1][0])],
+                                dtype=np.int32)
+                cv2.fillPoly(route, [poly], 1)
+
+        return site, route
 
     def on_map(self, msg: OccupancyGrid) -> None:
         if self.throttled():
@@ -459,6 +531,7 @@ class DetectorNode(Node):
         grid = np.asarray(msg.data, dtype=np.int16).reshape(h, w)
         grid = np.clip(grid, 0, classes.NUM_CLASSES - 1).astype(np.uint8)
 
+        t0 = time.perf_counter()
         # 1. binary safe mask
         safe = np.isin(grid, self.safe_classes).astype(np.uint8)
         if not safe.any():
@@ -478,6 +551,7 @@ class DetectorNode(Node):
         # -- the shore was not where I assumed -- and the separation measures
         # 3.004 m either way. The change stands on its own merits, not on that
         # diagnosis.)
+        t0 = self.stage('safe-mask', t0)
         dist_fit_m = cv2.distanceTransform(safe, cv2.DIST_L2, cv2.DIST_MASK_PRECISE) * res
 
         hazard = np.isin(grid, self.hazard_classes).astype(np.uint8)
@@ -491,6 +565,7 @@ class DetectorNode(Node):
             # everywhere, so do not let a missing constraint reject anything.
             dist_hazard_m = np.full(grid.shape, np.inf, dtype=np.float32)
 
+        t0 = self.stage('distance', t0)
         # 3. connected component analysis: region identity and metric area
         n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
             safe, connectivity=8)
@@ -499,6 +574,7 @@ class DetectorNode(Node):
         big_enough = areas_m2 >= self.min_area_m2
         big_enough[0] = False  # background is never a landing site
 
+        t0 = self.stage('components', t0)
         # 4. eligibility: all three criteria, each answering its own question
         eligible = (big_enough[labels]
                     & (dist_fit_m >= self.r_fit)
@@ -545,28 +621,57 @@ class DetectorNode(Node):
         #     other three rather than to the whole grid: it is the expensive
         #     one, and a cell that is not landable now does not become
         #     interesting because nothing is driving towards it.
+        t0 = self.stage('eligibility', t0)
         discs = self.corridor_discs()
         memory = self.memory_discs()
-        if self.publish_block_map:
-            self.publish_block(msg, discs, memory)
         n_before = len(cell_x)
         if discs or memory:
-            keep = self.trajectory_clear(cell_x, cell_y, drone_x, drone_y,
-                                         discs, memory)
+            site_blocked, route_blocked = self.rasterise_block(
+                msg.info, (drone_x, drone_y), discs, memory)
+            blocked = site_blocked | route_blocked
+            if self.publish_block_map:
+                self.publish_block(msg, site_blocked, route_blocked, memory)
+            keep = blocked[ys, xs] == 0
+            self.degraded = ''
             if not keep.any():
-                self.publish_invalid(
-                    msg,
-                    f'{n_before} cells passed the static tests, all of them '
-                    f'inside the predicted path ({len(discs)} corridor '
-                    f'samples) or on ground something moved across '
-                    f'({len(memory)} remembered discs)')
-                return
+                # Everything the static tests allowed is covered by our own
+                # fourth layer. Measured on the pinned three-people,
+                # two-vehicle landing: about 20 000 cells passed every static
+                # test and all of them were removed, on 79 of 152 frames, in
+                # six stretches of which the longest ran 23 s. The mode gives
+                # up on a descent after 3 s without a valid candidate, so the
+                # layer meant to make the descent safer was the thing ending
+                # it -- and ending it into PX4's own blind Descend, which is
+                # strictly worse than landing on ground someone walked over.
+                #
+                # So drop the softer half first. The memory says where
+                # something *was*; the corridor says where something *will
+                # be*, and only the second can be hit. If the corridor alone
+                # still leaves nowhere, that is a real answer and HOLD/ABORT
+                # is the right outcome -- SafeLand's reactive behaviour, kept
+                # as the fallback it was always meant to be.
+                keep = site_blocked[ys, xs] == 0
+                self.degraded = 'memory'
+                if not keep.any():
+                    self.publish_invalid(
+                        msg,
+                        f'{n_before} cells passed the static tests, all of '
+                        f'them inside the predicted path '
+                        f'({len(discs)} corridor samples)')
+                    return
+                self.get_logger().warning(
+                    f'swept-path memory ({len(memory)} discs) covered every '
+                    f'one of {n_before} otherwise eligible cells; ignoring it '
+                    f'this frame and keeping only the predicted corridor',
+                    throttle_duration_sec=2.0)
             ys, xs = ys[keep], xs[keep]
             cell_x, cell_y = cell_x[keep], cell_y[keep]
             self.rejected_by_trajectory = n_before - int(keep.sum())
         else:
             self.rejected_by_trajectory = 0
+            self.degraded = ''
 
+        t0 = self.stage('trajectory', t0)
         d_from_drone = np.hypot(cell_x - drone_x, cell_y - drone_y)
         max_d = math.hypot(w * res, h * res) / 2.0
         norm_d = d_from_drone / max_d if max_d > 0.0 else np.zeros_like(d_from_drone)
@@ -595,8 +700,8 @@ class DetectorNode(Node):
             d_prev = np.hypot(cell_x - self.last_choice[0],
                               cell_y - self.last_choice[1])
             held = int(np.argmin(d_prev))
-            # Same cell, give or take the grid it is drawn on.
-            if d_prev[held] <= res * 1.5:
+            # The same site, not necessarily the same cell (see latch_radius_m).
+            if d_prev[held] <= max(self.latch_radius, res * 1.5):
                 if score[held] - score[best] <= self.latch_margin:
                     best = held
                 else:
@@ -616,30 +721,33 @@ class DetectorNode(Node):
             n_eligible=len(cell_x),
             score=float(score[best]),
         )
+        self.stage('score+publish', t0)
 
     # ------------------------------------------------------------------
-    def publish_block(self, map_msg, discs, memory) -> None:
-        """Rasterise the exclusion this frame used, for display only.
+    def publish_block(self, map_msg, site, route, memory) -> None:
+        """The exclusion this frame used, for display only.
 
-        Drawn with filled circles rather than a per-cell distance test because
-        it is a picture, not a decision: the decision was already made against
-        the discs themselves, on the cells that mattered.
+        The same masks the decision was made from, not a second rendering of
+        the same idea: a HUD that draws its own version of the corridor can
+        drift away from the detector while both look plausible.
+
+        100 = the predicted corridor and the routes it shadows, 50 = ground
+        something moved across recently.
         """
         info = map_msg.info
-        h, w, res = info.height, info.width, info.resolution
-        img = np.zeros((h, w), dtype=np.uint8)
-
-        def stamp(items, value):
-            for cx, cy, r in items:
-                col = int(round((cx - info.origin.position.x) / res))
-                row = int(round((cy - info.origin.position.y) / res))
-                cv2.circle(img, (col, row), max(1, int(round(r / res))),
-                           int(value), -1)
-
-        # Memory first so the live corridor overwrites it where they overlap:
-        # the stronger claim should be the one that shows.
-        stamp(memory, 50)
-        stamp(discs, 100)
+        img = np.where(site | route, np.uint8(100), np.uint8(0))
+        if memory:
+            # Redrawn at the weaker value first, then the live corridor wins
+            # wherever they overlap: the stronger claim should be the one that
+            # shows.
+            mem = np.zeros_like(img)
+            res = info.resolution
+            ox, oy = info.origin.position.x, info.origin.position.y
+            for cx, cy, r in memory:
+                cv2.circle(mem,
+                           (int(round((cx - ox) / res)), int(round((cy - oy) / res))),
+                           max(1, int(round(r / res))), 1, -1)
+            img = np.where((mem > 0) & (img == 0), np.uint8(50), img)
 
         out = OccupancyGrid()
         out.header = map_msg.header
@@ -698,7 +806,13 @@ class DetectorNode(Node):
         out.valid = False
         self.candidate_pub.publish(out)
         self.candidate_id += 1
-        self.get_logger().debug(f'no candidate: {reason}')
+        # Info, throttled, not debug: the mode abandons a descent after 3 s
+        # without a valid candidate, and on a measured landing 3 of the 6 empty
+        # stretches crossed that threshold -- the longest ran 10 s from 9.9 m.
+        # A node that is the direct cause of a state transition should say so
+        # in the log the operator already reads.
+        self.get_logger().info(f'aday yok: {reason}',
+                               throttle_duration_sec=2.0)
 
 
 def main(args=None) -> None:

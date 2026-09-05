@@ -104,6 +104,12 @@ detector_node:
     w_risk: 0.50
     w_distance: 0.15
     w_clearance: 0.35
+    # Not a CPU limit: a decision frame costs about 5 ms, so this throttle is
+    # roughly sixty times slower than the loop could run. It is a stabiliser.
+    # Measured by raising it to 4.0 on the pinned three-people, two-vehicle
+    # landing: candidate rate 1.46 -> 2.18 Hz, state transitions 5 -> 8, time
+    # spent in SEARCH 15.4 -> 31.3 s. Deciding more often made the aircraft
+    # change its mind more often, which is not the same as deciding sooner.
     max_rate_hz: 2.0
     map_topic: "/eland/ground_map"
     mask_topic: "/eland/semantic_mask"
@@ -159,6 +165,13 @@ detector_node:
     latch_site: true
     # Release the latch if something scores better by this much (0..1 scale).
     latch_release_margin: 0.20
+    # The held site may be re-found this far away and still count as the same
+    # site. Requiring the identical cell made the latch all-or-nothing: one
+    # frame in which that cell was not eligible dropped it entirely. Measured
+    # in a 90 s hover over traffic, total distance travelled by the published
+    # site: 32.7 m and 144.3 m across two runs of the old behaviour against
+    # 6.2 m with this, and jumps over 4 m fell from 4 and 10 to zero.
+    latch_radius_m: 2.0
     # How long ground that something moved across stays excluded, seconds.
     # 0 disables the memory and leaves only the forward-looking corridor.
     #
@@ -194,6 +207,14 @@ tracker_node:
     border_margin_cells: 1
     # At 3 m/s and 3 Hz an obstacle moves 1 m per frame. 4 m absorbs centroid
     # jitter without letting two obstacles trade identities.
+    # Trim the history when an obstacle turns round, so the fit is not the
+    # average of two opposite directions. 0 disables it, which is the default
+    # because it did not survive measurement: at 1.5 m legs the person's
+    # fitted speed went from 80% to 83% of the truth and the vehicle from 57%
+    # to 61%, both inside the run-to-run spread. Comparing raw consecutive
+    # steps instead was far worse -- 32% of the truth -- because the blob
+    # centroid moves further between frames than the person does.
+    reversal_leg_m: 0.0
     association_radius_m: 4.0
     history_len: 8
     # Tracks coast for this long after the obstacle was last seen, with

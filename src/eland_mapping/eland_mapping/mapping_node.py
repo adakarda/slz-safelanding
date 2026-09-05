@@ -53,6 +53,7 @@ expected. The only consumer is ``detector_node``, which reads them as IDs.
 """
 
 import math
+import time
 
 import cv2
 import numpy as np
@@ -152,6 +153,7 @@ class MappingNode(Node):
 
         self.cells = max(1, int(round(self.map_size_m / self.resolution)))
         self.bridge = CvBridge()
+        self.stage_times = {}
 
         # Per-cell, per-class evidence. The map is vehicle-centred and slides
         # with it, so this array is rolled to match whenever the origin moves.
@@ -189,6 +191,7 @@ class MappingNode(Node):
         self.create_subscription(
             Image, self.get_parameter('mask_topic').value,
             self.on_mask, SENSOR_QOS)
+        self.create_timer(10.0, self.report_stages)
         self.create_subscription(
             CameraInfo, self.get_parameter('camera_info_topic').value,
             self.on_camera_info, SENSOR_QOS)
@@ -251,6 +254,32 @@ class MappingNode(Node):
         ], dtype=np.float64)
 
     # ------------------------------------------------------------------
+    def stage(self, name, t0):
+        """Record how long one stage of the frame took."""
+        now = time.perf_counter()
+        self.stage_times.setdefault(name, []).append(now - t0)
+        return now
+
+    def report_stages(self):
+        """Where the frame time goes, p50 and p95, every report_period_s.
+
+        Logged rather than guessed at: "the pipeline is slow" is not
+        actionable, and the obvious suspect -- the projection -- is not
+        always the expensive one.
+        """
+        if not self.stage_times:
+            return
+        parts = []
+        for name, samples in self.stage_times.items():
+            if not samples:
+                continue
+            ordered = sorted(samples)
+            p50 = ordered[len(ordered) // 2] * 1000.0
+            p95 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))] * 1000.0
+            parts.append(f'{name} {p50:.1f}/{p95:.1f}')
+        self.stage_times = {}
+        self.get_logger().info('frame ms (p50/p95): ' + '  '.join(parts))
+
     def on_mask(self, msg: Image) -> None:
         if self.pos_enu is None:
             if not self.warned_no_pose:
@@ -273,15 +302,21 @@ class MappingNode(Node):
             mask = mask[:, :, 0]
         mask = np.clip(mask.astype(np.uint8), 0, classes.NUM_CLASSES - 1)
 
+        t0 = time.perf_counter()
         self.slide_to_current_position()
+        t0 = self.stage('slide', t0)
         self.decay()
+        t0 = self.stage('decay', t0)
         instant = self.observe(mask)
+        t0 = self.stage('project', t0)
         grid = self.fused_grid()
+        t0 = self.stage('fuse', t0)
         self.publish_grid(grid, msg.header.stamp)
         if self.publish_debug_image:
             self.publish_debug(grid, msg.header.stamp)
         if self.publish_instant_map and instant is not None:
             self.publish_grid(instant, msg.header.stamp, self.instant_pub)
+        self.stage('publish', t0)
 
     # ------------------------------------------------------------------
     def current_origin(self):

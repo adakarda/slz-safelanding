@@ -1159,3 +1159,143 @@ Düzeltildi; her iki dal da aynı sırayı yazıyor.
 |---|---|
 | 20 | Eski 13 sınıflık ölçümler (§15, §12) artık başka bir şema ile alınmış; sayılar tarihsel, doğrudan kıyaslanamaz. |
 | 21 | `TRAIN_WEIGHTS` boru hattında kullanılmıyor. Eğitim tarafı bunu okumaya başlarsa iki kopya olmasın diye buraya kondu, ama şu an tek yönlü bir kayıt. |
+
+# 19. Karar döngüsü: profil, darboğaz ve çıkan asıl kusur (madde 8)
+
+Şikâyet "iniş yeri seçimi uzun sürüyor" idi. Öneri, dinamik nesnenin kabuğu
+uzaktayken tahmin yapıp inebilmekti. Ölçmeden hangi katmanın yavaşlattığı
+bilinmediği için önce her aşama ayrı ayrı zamanlandı.
+
+## 19.1 Kare maliyeti nereye gidiyor
+
+`mapping_node` ve `detector_node` içine aşama sayacı kondu (`stage()` /
+`report_stages()`, 10 s'de bir p50/p95 olarak loglanır). Sabitlenmiş sahnede,
+trafik varken:
+
+| Aşama | Öncesi p50/p95 (ms) | Sonrası p50/p95 (ms) |
+|---|---|---|
+| Harita: izdüşüm | 3.1 / 3.9 | 3.1 / 3.9 |
+| Harita: füzyon | 0.9 / 1.3 | 0.9 / 1.3 |
+| Harita: yayın | 3.3 / 4.2 | 3.3 / 4.2 |
+| Karar: güvenli maske | 0.3 / 0.5 | 0.3 / 0.5 |
+| Karar: mesafe dönüşümü | 0.9 / 0.9 | 0.8 / 1.3 |
+| Karar: bileşenler | 0.2 / 0.3 | 0.1 / 0.6 |
+| Karar: uygunluk | 0.9 / 1.4 | 0.7 / 0.8 |
+| **Karar: yörünge testi** | **44.2 / 65.1** | **0.1 / 0.1** |
+| Karar: skor + yayın | 1.1 / 1.2 | 2.0 / 2.5 |
+
+Yörünge testi karar karesinin ~%95'iydi: her aday hücre için her koridor
+diskine uzaklık, Python döngüsünde. Yerine maskeyi bir kez rasterleyen
+`rasterise_block()` geldi — diskler `cv2.circle`, yaklaşma yolu gölgesi
+teğet dörtgen olarak `cv2.fillPoly`. Aynı geometri, aynı karar, 44.2 ms →
+0.1–2.6 ms. Ölü kod (`trajectory_clear`, `_segment_point_distance`) silindi.
+
+## 19.2 Hız tavanı darboğaz değil, dengeleyici
+
+Karar karesi ~5 ms'ye indikten sonra `max_rate_hz: 2.0` tavanı akla geldi.
+Açmak işleri **kötüleştirdi**:
+
+| Ölçüm | tavan 2.0 Hz | tavan 4.0 Hz |
+|---|---|---|
+| `/eland/candidate` | 1.46 Hz | 2.18 Hz |
+| Durum geçişi | 5 | 8 |
+| SEARCH'te geçen süre | 15.4 s | 31.3 s |
+| Aday sıçraması (>4 m) | 4 | 8 |
+
+Daha sık karar vermek, daha erken karar vermek değil; daha sık fikir
+değiştirmek. Tavan 2.0'da bırakıldı — gerekçesi artık yapılandırma
+dosyasında yazılı.
+
+## 19.3 Mandal hücreye değil bölgeye bağlandı
+
+Mandal yalnızca **aynı hücre** hâlâ uygunsa tutuyordu; maskenin bir karelik
+oynaması mandalı tümden düşürüyordu. 90 s sabit irtifada, trafik altında
+yayınlanan site'ın kat ettiği toplam yol:
+
+| Ölçüm | eski (aynı hücre) k1 | eski k2 | yeni (2.0 m yarıçap) |
+|---|---|---|---|
+| Ardışık kayma ortalaması | 0.25 m | 1.12 m | **0.05 m** |
+| En büyük kayma | 5.75 m | 24.72 m | **3.09 m** |
+| >4 m sıçrama | 4 | 10 | **0** |
+| Site'ın kat ettiği yol | 32.7 m | 144.3 m | **6.2 m** |
+
+Ölçüm kasten sabit irtifada yapıldı: kapalı çevrimde aynı ayar koşudan koşuya
+1 ile 7 arası sıçrama veriyor, çünkü sıçrama uçağın nereye gittiğini, o da bir
+sonraki karede ne gördüğünü değiştiriyor.
+
+## 19.4 Asıl kusur: dördüncü katman kendi döngüsünü aç bırakıyordu
+
+Mod günlüğündeki `candidate lost at 12.03 m` satırındaki sayı **mesafe değil
+irtifa**. Kaybı tetikleyen şey adayın kayması değil, 3 s boyunca hiç geçerli
+aday gelmemesi (`candidate_timeout_s`). Sayılınca:
+
+- 152 karenin **79'unda** hiç aday yayınlanmamış,
+- 6 boşluk serisinin **hepsi** 3 s eşiğini aşmış, en uzunu 23.2 s.
+
+Sebep loglanınca tek bir cümleye indi: statik testleri geçen **~20.000 hücrenin
+tamamı** bizim dördüncü katmanımız tarafından siliniyordu — 5 hareketli için
+biriken ~50 "geçilmiş zemin" diski görüş alanını kaplıyordu. İnişi güvenli
+kılmak için eklenen katman, inişi bitiren şeydi; üstelik PX4'ün kendi kör
+Descend'ine bırakarak, ki bu birinin yürüdüğü zemine inmekten kesinlikle daha
+kötü.
+
+Düzeltme sıralamaya dayanıyor: **bellek geçmişi, koridor geleceği anlatır ve
+yalnızca ikincisine çarpılabilir.** Küme boşalırsa önce bellek maskesi
+bırakılır (uyarı loglanır), koridor durur. Koridor tek başına da her yeri
+kapatıyorsa bu gerçek bir cevaptır ve HOLD/ABORT doğru sonuçtur — SafeLand'in
+tepkisel davranışı, baştan beri tasarlandığı gibi yedek olarak kalır.
+
+| Ölçüm (3 kişi + 2 araç, sabit sahne) | Öncesi | Sonrası (3 koşu) |
+|---|---|---|
+| Aday üretilmeyen kare | 79/152 (%52) | **0/151, 0/152, 0/151** |
+| 3 s eşiğini aşan boşluk | 6 | **0** |
+| Aday kaybı (mod günlüğü) | 3 | **0, 0, 0** |
+| Durum geçişi | 8 | **3, 3, 3** |
+| SEARCH'te geçen süre | 15.0 s | **0.3 s, 0.2 s, 0.6 s** |
+| Sonuç | 3/3 deneme tükendi, "yine de iniyorum" | tek denemede iniş |
+
+Kullanıcının "uzunca süre bekliyor" dediği şey buydu: CPU değil, tavan değil,
+kendi bellek katmanımız.
+
+## 19.5 Hız kestirimindeki sistematik düşüklük (açık madde #9)
+
+Saat açıklaması elendi: harita damgaları duvar saatini 1.012 oranıyla takip
+ediyor, yani ölçek hatası yok. Kalan iki aday tek tek denendi.
+
+| Senaryo | Gerçek | Kestirim | Oran |
+|---|---|---|---|
+| Tek engel, eski eşleme | 1.17 / 3.05 m/s | 1.09 / 2.16 | %93 / %71 |
+| Tek engel, tahminli eşleme | 1.19 / 2.98 m/s | 1.16 / 2.08 | **%97** / %70 |
+| Çoklu (3+2), eski eşleme | 1.10 / 2.92 m/s | 0.75 / 1.88 | %68 / %64 |
+| Çoklu, tahminli eşleme | 1.12 / 2.85 m/s | 0.90 / 1.63 | **%80** / %57 |
+
+(Her hücrede önce insan, sonra araç.) Eşleme artık izin son görüldüğü yere
+değil, uyduğu doğrunun **o an olması gereken** yerine bakıyor; insan tarafında
+kazanç net (%68 → %80), araç tarafında fark koşu gürültüsünün içinde kalıyor —
+aracın asıl sorunu eşleme değil, karelerin %30-40'ında hiç izlenememesi ve
+2 m'lik konum hatası.
+
+Dönüş anını kırpma denendi ve **reddedildi**: ham ardışık adım yönüne bakan
+sürüm sonucu %32'ye düşürdü, çünkü leke merkezi kareler arasında insanın
+kendisinden daha çok oynuyor. Gürültü eşiğine bağlanmış sürüm (1.5 m'lik iki
+bacak) %83 / %61 verdi, yani koşu farkı kadar. Parametre kodda duruyor,
+varsayılanı 0 (kapalı), gerekçesi yapılandırma dosyasında yazılı.
+
+## 19.6 Yol boyunca öğrenilenler
+
+- Ölçüm betiği `pkill -f tracker_node` çalıştırıyor; komut satırında bu adı
+  geçiren **çağıran kabuk da öldü**. Parametre adları artık betiğin içinde.
+- Skorlayıcının "115 kare" saydığı şey izleyicinin hızı değil, `obstacle_driver`
+  truth yayınının hızıydı (5 hareketliyle 1.0 Hz'e düşüyor). İzleyici 2.85 Hz'de
+  sağlamdı. Boru hattı kusuru sanılan şey ölçüm çözünürlüğüydü.
+- Durum enum'u dosyadan okunmadan tahmin edildi ve tamamlanmış bir COMMIT,
+  "120 s boyunca ABORT'ta takılı" diye raporlandı.
+- İki koşu arka arkaya başlatılınca PX4 önceki koşunun portlarını bırakmamıştı;
+  temizlik ile başlangıç arası bekleme 2 s'den 10 s'ye çıkarıldı.
+
+## 19.7 Açık
+
+| # | Konu |
+|---|---|
+| 22 | Bellek bırakıldığı karelerde site 4-7 kez 4 m'den fazla sıçrıyor. İniş tek denemede tamamlandığı için kabul edildi, ama bellek "sert dışlama" yerine skora eklenen bir ceza olsaydı sıçrama da olmazdı. |
+| 23 | Araç, karelerin %30-40'ında hiç izlenmiyor (konum hatası ~2 m). Sınır lekeleri ve iki aracın tek lekede birleşmesi şüpheli; ölçülmedi. |
