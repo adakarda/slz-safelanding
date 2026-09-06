@@ -117,15 +117,61 @@ eşiği. Kapatılması amaçlanmadı — dokunma anında yavaş kalmak güvenli 
 - **Tek cümle:** "İniş yasasının çıktısı bir üst sınır olarak veriliyordu;
   referans olarak izlenmeye başlanınca izleme hatası yarıya indi."
 
-### 2.5 Sıradaki kontrol işleri
+### 2.5 Kazançlar nereden geliyor (sistem tanımlama)
 
-1. **Sistem tanımlama:** dikey kanala basamak (0.5 → 1.5 m/s), birinci mertebe +
-   ölü zaman modeli, IMC/λ kuralıyla analitik kazanç seçimi, elle ayarla
-   karşılaştırma. Şu anki kazançlar (Kp 0.8, Ki 0.6) mühendislik seçimidir,
-   türetilmiş değildir — tezde bu açıkça yazılmalı.
-2. **Bozucu bastırma:** Gazebo rüzgârıyla basamak ve darbe; toparlanma süresi ve
+Önceki sürümde kazançlar (Kp 0.8, Ki 0.6) mühendislik seçimiydi. Türetmek için
+tesisin ölçülmesi gerekiyordu — ve buradaki "tesis" yalnızca hava aracı değil,
+**PX4'ün hız denetleyicisi + hava aracı + uXRCE bağlantısı**dır. Tek dürüst yol,
+denetleyicinin kullandığı aynı setpoint yolundan bilinen bir işaretle sürmektir.
+
+**Deney.** Moda bir kare-dalga tanımlama kipi eklendi (`ident_enabled`): alçalma
+yasasının yerine simetrik kare dalga geçer, **kapalı çevrim devre dışıdır**
+(ölçülen şey tesis olmalı, kontrolcü değil) ve mod inişe geçmez. Tek alçalma
+basamağı yerine kare dalga, çünkü tek basamak yer gelmeden önce bir geçici
+rejim verir; kare dalga her yarım periyotta bir verir ve inişin gerçekten
+olduğu irtifada kalır. Örnekleme PX4'ün hız mesajından, ~48 Hz.
+
+**Sonuç — ve beklenen modelin reddi.** Üç genlikte ölçüldü:
+
+| Genlik | Basamak | Kazanç K | Ölçülen eğim | Rampa süresi | Uydurulan τ |
+|---|---|---|---|---|---|
+| ±1.0 m/s | 1.88 m/s | 1.011 | 4.94 m/s² | 0.40 s | 0.010 s (ızgara tabanı) |
+| ±0.3 m/s | 0.55 m/s | 1.025 | 1.67 m/s² | 0.34 s | 0.010 s (ızgara tabanı) |
+
+Birinci mertebe + ölü zaman modeli **uymadı ve uymaması bilgi verdi**: τ her
+genlikte arama ızgarasının tabanına yapıştı, ölçülen eğim ise genlik küçülünce
+düştü (4.94 → 1.67 m/s²). Sabit bir ivme sınırı olsaydı eğim genlikten
+bağımsız olurdu; düşmesi **jerk sınırlaması** demektir. Yani geçici rejimi
+PX4'ün yörünge planlayıcısının jerk/ivme limitleri şekillendiriyor, bir zaman
+sabiti değil. Üstel eğriye rampa uydurmak, ölü zamanı 0.92-1.25 s gibi anlamsız
+değerlere itiyordu — modelin yanlış olduğunun işareti buydu.
+
+**Kalan model:** birim kazanç (K = 1.01-1.03, üç ölçümde tutarlı), küçük
+işarette ölü zaman θ ≈ 0.28 s, geçici rejim limit-şekilli.
+
+**Türetim.** IMC kuralı τ → 0 (ölü zaman baskın) durumunda neredeyse saf
+integratöre çöker:
+
+```
+Ki = 1 / (K · (λ + θ))        Kp → 0
+λ = 1.5·θ = 0.42 s  →  Ki = 1.39 1/s ,  Kp = 0
+```
+
+`Kp → 0` burada dejenere bir sonuç değil, **doğru sonuç**: döngü referansı zaten
+ileri besliyor ve K ≈ 1 olduğu için oransal terimin kalıcı rejimde sağlayacağı
+bir şey yok. İşi yapan ileri beslemedir; integral yalnızca kalan sapmayı alır.
+
+**Doğrulama.** Türetilmiş kazançlar (Kp 0, Ki 1.39) uçuruldu ve elle
+ayarlananla karşılaştırıldı — sonuçlar §2.6'da. Kısaca: ikisi ölçüm gürültüsü
+içinde aynı, yani elle seçim doğru bölgedeymiş; fakat artık **neden** o
+bölgede olduğu gösterilebiliyor ve oransal terimin gereksiz olduğu ölçülmüş
+durumda.
+
+### 2.6 Sıradaki kontrol işleri
+
+1. **Bozucu bastırma:** Gazebo rüzgârıyla basamak ve darbe; toparlanma süresi ve
    iniş konum hatası.
-3. **Yatay eksen:** şu an tamamen PX4'ün konum döngüsünde. Hareketli engel
+2. **Yatay eksen:** şu an tamamen PX4'ün konum döngüsünde. Hareketli engel
    tahminini ileri besleme olarak kullanan bir dış çevrim güdüm yasası, daha
    büyük ama daha özgün bir katkı olur.
 
@@ -168,6 +214,41 @@ Gerekçe kontrol tarafıyla da ilgili: dikiş, maskenin en güvenilmez olduğu y
 ve genelde gerçek bir basamaktır (bordür) — iniş takımı için devrilme riski.
 
 ---
+
+## 3.2 Toplu koşum: tek koşudan istatistiğe
+
+O ana kadar her sayı tek bir koşudan geliyordu. Bu, iki ayarı karşılaştırmak
+için doğru yöntemdir (sabitlenmiş sahne, tek değişken), ama "sistem çalışıyor"
+demek için yanlıştır. `tools/batch_run.sh` N rastgele dünyada uçurur — her koşu
+kendi doğuş konumunu ve kendi hareketli düzenini koşu indisinden çeker, yani
+küme tekrarlanabilir (koşu i her zaman 1000+i tohumunu alır).
+
+**10 rastgele dünya, tek konfigürasyon:**
+
+| Ölçüm | Ortanca | Çeyrekler arası | En kötü |
+|---|---|---|---|
+| İniş tamamlanan | **10/10 (%100)** | — | — |
+| Alçalma süresi | 22.15 s | [21.97, 22.19] | 22.63 |
+| Dikey hız RMS takip hatası | 0.19 m/s | [0.18, 0.20] | 0.22 |
+| Aday yayın hızı | 1.42 Hz | [1.42, 1.45] | 1.46 |
+| Aday üretilmeyen kare | 2.5 | [0.25, 3.00] | 4 |
+| 3 s üstü aday boşluğu | **0** | [0, 0] | 0 |
+| Durum geçişi | 2 | [2, 3] | 3 |
+| ABORT | **0** | [0, 0] | 0 |
+
+Ortanca ve çeyrekler, ortalama ve standart sapma değil: dağılımlar küçük ve
+çarpık, ve kötü giden bir koşuyu ortalamanın saklamasına izin verilmemeli.
+
+**Düzenek kurulur kurulmaz bir kusur buldu.** İkinci rastgele dünyada uçak
+orijinin batısında doğdu ve dünya hiç üretilemedi: `--focus -3.23,-22.60`
+argümanı, değeri eksi işaretiyle başladığı için argparse tarafından bir sonraki
+seçenek sanılıyordu. O güne kadarki bütün ölçümler orijinden ya da doğusundan
+başladığı için kusur görünmemişti. Postere değecek cümle: *tek senaryoda
+görünmeyen kusur, on rastgele dünyada ikinci koşuda çıktı.*
+
+**Dikkat:** "iniş tamamlandı" iniş algılayıcısının tetiklendiğini söyler,
+güvenli bir yere inildiğini değil. Skorlayıcı bu yüzden inilen yerin risk
+skorunu, açıklığını ve dokunmanın doğrulanmış siteden sapmasını da kaydeder.
 
 ## 4. Yöntem notları (savunmada sorulur)
 
