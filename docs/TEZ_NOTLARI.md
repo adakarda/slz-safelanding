@@ -93,7 +93,8 @@ u_sat   = clamp(u , 0 , v_max)
   terk edilmiş bir denemeden taşınan integral, komutu tam da yere yakın anda
   sıçratır.
 
-**Sonuç (aynı senaryo, tavan üç kolda da 1.5 m/s):**
+**Sonuç (aynı senaryo, tavan üç kolda da 1.5 m/s, birer uçuş — tekrarlı
+ölçüm §2.6'da):**
 
 | Kol | Ortalama hata | Mutlak ortalama | RMS | 10 m üstü | 5-10 m |
 |---|---|---|---|---|---|
@@ -112,10 +113,14 @@ eşiği. Kapatılması amaçlanmadı — dokunma anında yavaş kalmak güvenli 
 
 - **Tek şekil:** irtifa-hata çubuk grafiği, açık vs kapalı çevrim (yukarıdaki
   tablonun son iki sütunu).
-- **Üç sayı:** RMS 0.413 → 0.207 m/s; 10 m üstü hata −0.51 → −0.09 m/s;
-  erişilemez komut aralığı %25 → %0.
+- **Üç sayı** (üçer uçuşun ortancası, §2.6): RMS takip hatası **0.323 → 0.197
+  m/s**; en kötü uçuş **1.83 → 0.21 m/s**; doğrulanmış siteden dokunma sapması
+  **3.40 m → 0.27 m**.
 - **Tek cümle:** "İniş yasasının çıktısı bir üst sınır olarak veriliyordu;
-  referans olarak izlenmeye başlanınca izleme hatası yarıya indi."
+  referans olarak izlenmeye başlanınca hem hata yarıya indi hem de en kötü
+  uçuş en iyisine yaklaştı."
+- **İkinci şekil (varsa):** üç kolun RMS dağılımı — açık çevrimin kuyruğu
+  tek bakışta görünür."
 
 ### 2.5 Kazançlar nereden geliyor (sistem tanımlama)
 
@@ -167,7 +172,40 @@ içinde aynı, yani elle seçim doğru bölgedeymiş; fakat artık **neden** o
 bölgede olduğu gösterilebiliyor ve oransal terimin gereksiz olduğu ölçülmüş
 durumda.
 
-### 2.6 Sıradaki kontrol işleri
+### 2.6 Doğrulama: üç kol, üçer uçuş
+
+Tek koşu yetmedi ve bunu ölçerek öğrendik: açık çevrim kolu aynı sabit
+senaryoda bir uçuşta RMS 0.413, başkasında 0.235 verdi, çünkü açık çevrimdeki
+eksiklik `goto` planlayıcısının o uçuşta kurduğu profile bağlı. Bu yüzden her
+kol üç kez uçuruldu.
+
+| Kol | RMS takip hatası, ortanca [en iyi, en kötü] | Ortalama hata |
+|---|---|---|
+| Açık çevrim (yasa çıktısı = üst sınır) | **0.323** [0.322, **1.829**] | −0.17 |
+| Elle ayarlı PI (Kp 0.8, Ki 0.6) | **0.201** [0.190, 0.206] | −0.09 |
+| Türetilmiş (Kp 0, Ki 1.39) | **0.197** [0.186, 0.214] | −0.08 |
+
+İki okuma çıkıyor ve ikisi de tezlik:
+
+**1. Türetilmiş kazanç elle ayarlananla aynı.** 0.197 ile 0.201 arasındaki fark
+ölçüm gürültüsünün içinde. Yani elle seçim doğru bölgedeymiş — ama artık
+neden orada olduğu gösterilebiliyor ve **oransal terimin gereksiz olduğu**
+ölçülmüş durumda (türetilmiş kolda Kp = 0).
+
+**2. Açık çevrimin asıl sorunu ortalaması değil, kuyruğu.** Üç uçuşun ikisi
+0.32 civarında, biri **1.83**. O uçuşta alçalma 22 s yerine **39 s** sürdü ve
+uçak doğrulanmış siteden **3.40 m** uzağa dokundu; 0-2 m bandında komut
+0.36 m/s iken gerçekleşen −0.02 m/s, yani araç inmeyi bırakıp asılı kaldı.
+Sebep yapısal: `goto` bir konum setpoint'ine planladığı için hedef irtifaya
+yaklaşırken dikey hızı kendiliğinden sıfırlıyor; yasa hâlâ "alçal" diyor ama
+söylediği şey bir sınır olduğu için kimse onu takip etmiyor. Kapalı çevrimde
+aynı senaryoda dokunma sapması 0.02-0.27 m.
+
+Poster cümlesi: *"Açık çevrimde ortalama iyi görünüyordu; üç uçuşun biri
+inmeyi bırakıp asılı kaldı. Kapalı çevrimde en kötü uçuş bile en iyisine
+yakın."*
+
+### 2.7 Sıradaki kontrol işleri
 
 1. **Bozucu bastırma:** Gazebo rüzgârıyla basamak ve darbe; toparlanma süresi ve
    iniş konum hatası.

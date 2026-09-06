@@ -85,8 +85,14 @@ class Scorer(Node):
             self.seen_commit = True
             if self.pos is not None:
                 self.touchdown_pos = self.pos  # last one wins
+        # The site is carried in the row rather than looked up at report
+        # time: it moves during the flight, and an error measured against the
+        # final site would flatter every run that ended up following it.
+        site = self.last_site if self.last_site is not None else (None, None)
+        pos = self.pos if self.pos is not None else (None, None)
         self.rows.append((now, s, float(msg.altitude_agl),
-                          float(msg.commanded_descent_mps), self.vz))
+                          float(msg.commanded_descent_mps), self.vz,
+                          site[0], site[1], pos[0], pos[1]))
 
     def on_cand(self, msg):
         now = time.time()
@@ -145,6 +151,17 @@ class Scorer(Node):
                   f'{out["site_clearance_m"]:.1f} m, alan '
                   f'{out["site_area_m2"]:.0f} m2, dokunma sapmasi '
                   f'{out.get("touchdown_err_m", float("nan")):.2f} m')
+
+        held = [r for r in self.rows
+                if r[1] in (VALIDATE, COMMIT) and r[5] is not None
+                and r[7] is not None]
+        if held:
+            d = np.array([float(np.hypot(r[7] - r[5], r[8] - r[6]))
+                          for r in held])
+            out['horiz_err_mean'] = round(float(d.mean()), 2)
+            out['horiz_err_max'] = round(float(d.max()), 2)
+            print(f'yatay tutus   : siteye ortalama {d.mean():.2f} m, '
+                  f'en fazla {d.max():.2f} m sapma ({len(d)} ornek)')
 
         rows = [r for r in self.rows if r[1] in (VALIDATE, COMMIT) and r[3] > 0.0]
         if rows:
