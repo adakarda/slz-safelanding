@@ -294,7 +294,7 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
       } break;
 
       case State::Validate: {
-        if (altitude_m <= _landing_altitude_m) {
+        if (altitude_m <= _landing_altitude_m && !_ident_enabled) {
           transition(State::Commit,
                      "at " + toStr(altitude_m) + " m, committing to touchdown");
           break;
@@ -318,6 +318,32 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
         const Eigen::Vector3f cand = candidateNed();
         target_ned = {cand.x(), cand.y(), -_landing_altitude_m};
         max_vertical_speed = descentSpeed(altitude_m);
+        if (_ident_enabled) {
+          // Open loop on purpose: what is being measured is the plant, so the
+          // rate controller must not be in the path shaping it.
+          _ident_clock_s += dt_s;
+          const float half = 0.5f * _ident_period_s;
+          const bool high = std::fmod(_ident_clock_s, _ident_period_s) < half;
+          float v_cmd = high ? _ident_high_mps : _ident_low_mps;
+          // Guard rails. The square wave is symmetric, but a slow drift over
+          // a long test would otherwise walk the aircraft into the ground or
+          // out of the map's useful altitude band.
+          if (altitude_m < 8.f && v_cmd > 0.f) {
+            v_cmd = _ident_low_mps;
+          } else if (altitude_m > 25.f && v_cmd < 0.f) {
+            v_cmd = _ident_high_mps;
+          }
+          px4_ros2::TrajectorySetpoint ident;
+          ident.withPositionX(cand.x()).withPositionY(cand.y()).withVelocityZ(v_cmd);
+          _trajectory_setpoint->update(ident);
+          _last_rate_cmd_mps = v_cmd;
+          _last_measured_mps = _local_position->velocityNed().z();
+          _last_commanded_mps = v_cmd;
+          _reason = "SYSTEM ID: square wave " + toStr(v_cmd) + " m/s, alt " +
+                    toStr(altitude_m) + " m";
+          publishState(altitude_m);
+          return;
+        }
         if (_descent_closed_loop) {
           // The descent law's output is a reference to be tracked, not a
           // ceiling to be planned under. Horizontal stays position
@@ -470,6 +496,12 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
     _descent_kaw = declare("descent_kaw", 1.0);
     _rate_controller.configure(_descent_kp, _descent_ki, _descent_kd,
                                _descent_d_tau, _descent_kaw);
+    // System identification. Off in every normal run: it replaces the descent
+    // law with a square wave and never lands.
+    _ident_enabled = _node.declare_parameter<bool>("ident_enabled", false);
+    _ident_period_s = declare("ident_period_s", 8.0);
+    _ident_low_mps = declare("ident_low_mps", -1.0);
+    _ident_high_mps = declare("ident_high_mps", 1.0);
 
     _candidate_topic = _node.declare_parameter<std::string>("candidate_topic", "/eland/candidate");
     _state_topic = _node.declare_parameter<std::string>("state_topic", "/eland/state");
@@ -725,6 +757,11 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
   float _descent_max_mps{2.f};
   float _descent_altitude_gain{0.35f};
   bool _descent_closed_loop{false};
+  bool _ident_enabled{false};
+  float _ident_period_s{8.f};
+  float _ident_low_mps{-1.f};
+  float _ident_high_mps{1.f};
+  float _ident_clock_s{0.f};
   float _descent_kp{0.8f};
   float _descent_ki{0.6f};
   float _descent_kd{0.f};
