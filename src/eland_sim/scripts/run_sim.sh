@@ -266,7 +266,12 @@ fi
 # next run, with no separate step to forget.
 # The mob routes are drawn through a disc around the spawn, so the traffic
 # is where the aircraft is rather than somewhere it will never look.
-GEN_ARGS="--focus ${POSE%%,*},$(echo "$POSE" | cut -d, -f2)"
+# `--focus=` and not `--focus `: a spawn west or south of the origin
+# makes the value start with a minus sign, and argparse reads that as
+# the next option rather than as this one's argument. Found by the
+# batch runner on its second random world -- every measurement until
+# then had started at the origin or east of it.
+GEN_ARGS="--focus=${POSE%%,*},$(echo "$POSE" | cut -d, -f2)"
 if [ -n "$PARAMS_ARG" ]; then
 	# Appended, not assigned: overwriting here silently dropped the focus and
 	# scattered the traffic across the whole world again.
