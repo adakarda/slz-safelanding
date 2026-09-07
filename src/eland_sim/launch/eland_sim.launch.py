@@ -131,6 +131,15 @@ def generate_launch_description() -> LaunchDescription:
         remappings=[(labels_topic, '/camera/segmentation')],
         output='screen',
     )
+    # The RGB stream exists only so a proximity estimate can be made from
+    # image motion; nothing in the landing chain subscribes to it yet.
+    flow_bridge = Node(
+        package='ros_gz_image', executable='image_bridge',
+        name='flow_camera_bridge',
+        arguments=['/flow_cam'],
+        remappings=[('/flow_cam', '/camera/flow')],
+        output='screen',
+    )
     colored_bridge = Node(
         package='ros_gz_image', executable='image_bridge',
         name='segmentation_colored_bridge',
@@ -226,5 +235,5 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription(
-        args + [labels_bridge, colored_bridge] + pipeline_nodes
+        args + [labels_bridge, flow_bridge, colored_bridge] + pipeline_nodes
         + [obstacle_driver, hud, hud_view, station, mode_node, rviz_tf, rviz])

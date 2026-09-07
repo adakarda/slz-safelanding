@@ -78,6 +78,37 @@
         <update_rate>5</update_rate>
         <visualize>true</visualize>
       </sensor>
+      <!-- A small RGB camera, for camera-only proximity control.
+           The label mask cannot supply it: measured on a landing, the mask
+           holds 1561 boundary pixels above 15 m, 61 between 5 and 10, and
+           exactly 0 below 5 -- a good landing site is uniform by definition,
+           so the better the site the less scale information its labels carry.
+           Texture survives where labels do not, which is what optical flow
+           needs.
+
+           160x120 at 10 Hz on purpose: this feeds a divergence estimate, not
+           a display, and on llvmpipe every extra rendered pixel comes out of
+           the real-time factor. -->
+      <sensor name="flow_camera" type="camera">
+        <gz_frame_id>camera_link</gz_frame_id>
+        <pose>0 0 0 0 0 0</pose>
+        <topic>flow_cam</topic>
+        <camera>
+          <horizontal_fov>1.74</horizontal_fov>
+          <image>
+            <width>160</width>
+            <height>120</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>3000</far>
+          </clip>
+        </camera>
+        <always_on>1</always_on>
+        <update_rate>10</update_rate>
+        <visualize>false</visualize>
+      </sensor>
       <gravity>true</gravity>
       <velocity_decay />
     </link>
