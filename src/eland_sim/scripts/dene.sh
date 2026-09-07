@@ -30,6 +30,9 @@ dene.sh [mod]
             Tek kosunun soyleyemedigi sey: basari orani ve dagilim.
   ruzgar    yanal kuvvet bozucusu altinda tek inis. FORCE (N, varsayilan 10),
             PROFIL (step|gust|ramp), YON (derece, varsayilan 45).
+            GORSEL=1 ile pencere acilir: kalkis yapilir, ruzgar verilir ve
+            kontrol sende kalir -- inisi HUD'da `m` ile sen tetiklersin.
+            Cikmak icin Ctrl+C.
   tanim     sistem tanimlama: kare dalga surer, tesisi tanimlar ve IMC ile
             kazanc turetir. GENLIK (varsayilan 0.3 m/s).
   sekil     poster sekillerini uretir (sim gerekmez), OUT klasorune yazar.
@@ -187,6 +190,40 @@ toplu)
 		"obstacle_driver.vehicle_count=${ARAC:-2}"
 	;;
 ruzgar)
+	if [ -n "${GORSEL:-}" ]; then
+		# Window open and no --auto: the mode is not selected for you, so the
+		# aircraft hovers under the force until you ask it to land. That is
+		# the interesting part to watch -- how far it leans, and whether the
+		# HUD still has a site by the time you press `m`.
+		"$WS_DIR/src/eland_sim/scripts/run_sim.sh" --fixed --takeoff 20 \
+			--params "$PARAMS" >/tmp/eland_dene.log 2>&1 &
+		RUN=$!
+		trap 'kill -INT "$RUN" 2>/dev/null; sleep 3; pkill -f "gz sim" 2>/dev/null; pkill -x px4 2>/dev/null; pkill -f MicroXRCEAgent 2>/dev/null' INT TERM
+		echo "[dene] pencere aciliyor, kalkis bekleniyor (~50 s)..."
+		sleep 50
+		export PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH:-}"
+		echo "[dene] ruzgar veriliyor. Bakilacaklar:"
+		echo "        - Gazebo'da ucagin yatisi (10 N ~ 27 derece, 15 N ~ 37)"
+		echo "        - HUD'da hala aday var mi, yesil daire duruyor mu"
+		echo "        - inisi denemek icin HUD penceresinde 'm'"
+		echo "        - Ctrl+C hepsini kapatir"
+		# Live tilt and drift alongside the force log: the window shows the
+		# lean, this says how many degrees it is.
+		python3 "$WS_DIR/tools/tilt_watch.py" 1.0 &
+		TILT=$!
+		trap 'kill -INT "$TILT" 2>/dev/null; kill -INT "$RUN" 2>/dev/null; sleep 3; pkill -f "gz sim" 2>/dev/null; pkill -x px4 2>/dev/null; pkill -f MicroXRCEAgent 2>/dev/null' INT TERM
+		python3 "$WS_DIR/tools/wind_inject.py" --force "${FORCE:-10}" \
+			--profile "${PROFIL:-step}" --dir "${YON:-45}" \
+			--duration "${SURE:-600}"
+		kill -INT "${TILT:-0}" 2>/dev/null
+		kill -INT "$RUN" 2>/dev/null
+		sleep 3
+		pkill -f "gz sim" 2>/dev/null
+		pkill -x px4 2>/dev/null
+		pkill -f MicroXRCEAgent 2>/dev/null
+		echo "[dene] bitti."
+		exit 0
+	fi
 	"$WS_DIR/src/eland_sim/scripts/run_sim.sh" --fixed --headless --no-hud \
 		--auto --params "$PARAMS" >/tmp/eland_dene.log 2>&1 &
 	RUN=$!
