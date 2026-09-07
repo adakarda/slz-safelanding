@@ -337,7 +337,10 @@ hud_node:
     r_hazard: 3.0
     descent_size_gain: 0.20
     descent_min_mps: 0.3
-    descent_max_mps: 2.0
+    # Display only, but it has to match emergency_landing_mode's value or the
+    # HUD reports a ceiling the controller never uses. It said 2.00 while the
+    # mode had already been lowered to 1.5.
+    descent_max_mps: 1.5
     map_size_px: 520
     panel_width_px: 330
     rate_hz: 5.0
