@@ -26,20 +26,33 @@ dene.sh [mod]
             sayilari sona yazilir (aday hizi, durum gecisi, aday kaybi).
   olcum     pencere yok; 90 s izleme skoru (gercek vs kestirilen hiz,
             izlenmeyen karelerin sebebi).
+  toplu     N rastgele dunyada ucur, CSV + ozet yaz (varsayilan N=5).
+            Tek kosunun soyleyemedigi sey: basari orani ve dagilim.
+  ruzgar    yanal kuvvet bozucusu altinda tek inis. FORCE (N, varsayilan 10),
+            PROFIL (step|gust|ramp), YON (derece, varsayilan 45).
+  tanim     sistem tanimlama: kare dalga surer, tesisi tanimlar ve IMC ile
+            kazanc turetir. GENLIK (varsayilan 0.3 m/s).
+  sekil     poster sekillerini uretir (sim gerekmez), OUT klasorune yazar.
 
-Ortam degiskeni: KISI (varsayilan 3), ARAC (varsayilan 2).
+Ortam degiskeni: KISI (varsayilan 3), ARAC (varsayilan 2), N, FORCE, PROFIL,
+YON, GENLIK, OUT.
 EOF
 }
 
 case "$MODE" in
 -h | --help | help) usage; exit 0 ;;
-hud | otomatik | olcum) ;;
+hud | otomatik | olcum | toplu | ruzgar | tanim | sekil) ;;
 *) echo "bilinmeyen mod '$MODE'"; usage; exit 1 ;;
 esac
 
 cd "$WS_DIR" || exit 1
 # shellcheck disable=SC1091
 source /opt/ros/jazzy/setup.bash
+
+if [ "$MODE" = "sekil" ]; then
+	python3 "$WS_DIR/tools/plot_control.py" "${OUT:-/tmp/eland_sekil}"
+	exit $?
+fi
 
 echo "[dene] derleniyor..."
 colcon build --packages-select eland_msgs eland_common eland_sim eland_mapping \
@@ -165,6 +178,55 @@ PY
 	pkill -x px4 2>/dev/null
 	pkill -f MicroXRCEAgent 2>/dev/null
 	echo "[dene] bitti. Tam gunluk: /tmp/eland_logs/pipeline.log"
+	;;
+toplu)
+	# batch_run.sh does its own cleanup and parameter file per flight, so it
+	# is handed the scenario knobs rather than the params file built above.
+	exec "$WS_DIR/tools/batch_run.sh" "${N:-5}" "${OUT:-/tmp/eland_batch.csv}" \
+		"obstacle_driver.person_count=${KISI:-3}" \
+		"obstacle_driver.vehicle_count=${ARAC:-2}"
+	;;
+ruzgar)
+	"$WS_DIR/src/eland_sim/scripts/run_sim.sh" --fixed --headless --no-hud \
+		--auto --params "$PARAMS" >/tmp/eland_dene.log 2>&1 &
+	RUN=$!
+	echo "[dene] kalkis bekleniyor (~30 s), sonra bozucu veriliyor..."
+	sleep 30
+	export PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH:-}"
+	python3 "$WS_DIR/tools/wind_inject.py" --force "${FORCE:-10}" \
+		--profile "${PROFIL:-step}" --dir "${YON:-45}" --duration 120 &
+	WIND=$!
+	timeout 160 python3 "$WS_DIR/tools/run_scorer.py" 120
+	kill -INT "$WIND" 2>/dev/null
+	kill -INT "$RUN" 2>/dev/null
+	sleep 5
+	pkill -f "gz sim" 2>/dev/null
+	pkill -x px4 2>/dev/null
+	pkill -f MicroXRCEAgent 2>/dev/null
+	echo "[dene] bitti."
+	;;
+tanim)
+	# The square wave replaces the descent law, so this flight never lands.
+	python3 "$WS_DIR/tools/make_params.py" "$PARAMS" \
+		obstacle_driver.randomize_mobs=false \
+		"obstacle_driver.person_count=${KISI:-3}" \
+		"obstacle_driver.vehicle_count=${ARAC:-2}" \
+		"emergency_landing_mode.ident_enabled=true" \
+		"emergency_landing_mode.ident_low_mps=-${GENLIK:-0.3}" \
+		"emergency_landing_mode.ident_high_mps=${GENLIK:-0.3}" >/dev/null
+	"$WS_DIR/src/eland_sim/scripts/run_sim.sh" --fixed --headless --no-hud \
+		--auto --takeoff 20 --params "$PARAMS" >/tmp/eland_dene.log 2>&1 &
+	RUN=$!
+	echo "[dene] kare dalga icin bekleniyor (~45 s)..."
+	sleep 45
+	export PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH:-}"
+	timeout 180 python3 "$WS_DIR/tools/fit_fopdt.py" 100
+	kill -INT "$RUN" 2>/dev/null
+	sleep 5
+	pkill -f "gz sim" 2>/dev/null
+	pkill -x px4 2>/dev/null
+	pkill -f MicroXRCEAgent 2>/dev/null
+	echo "[dene] bitti."
 	;;
 olcum)
 	SCORER="$WS_DIR/tools/measure_tracking.py"

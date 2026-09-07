@@ -98,8 +98,12 @@ def main():
     ang = math.radians(a.dir)
     t0 = time.time()
     last = None
-    print(f'ruzgar: {a.profile}, {a.force:.1f} N ({a.force / 0.06:.0f} '
-          f'm/s civari), yon {a.dir:.0f} derece, {a.duration:.0f} s')
+    # F ~ 0.06 v^2, so the equivalent wind is the square root of F/0.06.
+    # Printed without it this read "10 N (167 m/s)", which is a number nobody
+    # would have caught in a table.
+    print(f'ruzgar: {a.profile}, {a.force:.1f} N '
+          f'({math.sqrt(a.force / 0.06):.0f} m/s civari), '
+          f'yon {a.dir:.0f} derece, {a.duration:.0f} s')
     try:
         while time.time() - t0 < a.duration:
             t = time.time() - t0
