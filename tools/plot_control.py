@@ -21,6 +21,11 @@ BANDS = ['10+ m', '5-10 m', '2-5 m', '0-2 m']
 OPEN = [-0.51, -0.06, -0.37, -0.15]
 CLOSED = [-0.09, -0.01, 0.01, -0.14]
 
+# Figure 3: map coverage against tilt, holding station (docs 2.9).
+TILT = ['0-5', '5-10', '10-20', '20-30']
+UNK_INSTANT = [0.11, 0.16, 0.25, 0.37]
+UNK_FUSED = [0.06, 0.04, 0.03, 0.02]
+
 # Figure 2: RMS spread over three flights per arm (docs 2.6).
 ARMS = ['Acik cevrim', 'Elle ayarli PI', 'Turetilmis\n(Kp 0, Ki 1.39)']
 RMS = [[0.322, 0.323, 1.829], [0.190, 0.201, 0.206], [0.186, 0.197, 0.214]]
@@ -70,15 +75,34 @@ def spread_figure(path):
     plt.close(fig)
 
 
+def tilt_figure(path):
+    x = np.arange(len(TILT))
+    w = 0.38
+    fig, ax = plt.subplots(figsize=(5.6, 3.4), dpi=200)
+    ax.bar(x - w / 2, UNK_INSTANT, w, label='Anlik harita', color='#c44e52')
+    ax.bar(x + w / 2, UNK_FUSED, w, label='Fuzyonlu harita', color='#4c72b0')
+    ax.set_xticks(x, TILT)
+    ax.set_xlabel('Egim [derece]')
+    ax.set_ylabel('Bilinmeyen hucre orani')
+    ax.set_title('Yatis arttikca anlik gorus bozuluyor', fontsize=10)
+    ax.legend(frameon=False, fontsize=8)
+    ax.spines[['top', 'right']].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else '/tmp'
     os.makedirs(out, exist_ok=True)
     a = os.path.join(out, 'kontrol_bant.png')
     b = os.path.join(out, 'kontrol_dagilim.png')
+    c = os.path.join(out, 'algi_egim.png')
     band_figure(a)
     spread_figure(b)
-    print(f'yazildi: {a}')
-    print(f'yazildi: {b}')
+    tilt_figure(c)
+    for f in (a, b, c):
+        print(f'yazildi: {f}')
 
 
 if __name__ == '__main__':

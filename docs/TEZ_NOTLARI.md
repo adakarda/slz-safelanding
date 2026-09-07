@@ -295,7 +295,46 @@ Ders, sayının kendisinden daha taşınabilir: **sınır bölgesinde tek koşu,
 bile yanlış verebilir.** İlk 15 N uçuşuna bakıp "dayanıyor" demek, üç uçuşluk
 kanıtın tam tersi olurdu.
 
-### 2.9 Sıradaki kontrol işleri
+### 2.9 Algı neden çöküyor: ölçülen mekanizma
+
+"Algı çöküyor" bir gözlemdi, açıklama değildi. İki aday vardı ve farklı
+çözümler gerektiriyorlardı: **eğim** (yanal kuvvet sürekli bir yatış gerektirir,
+yatan bir araçta aşağı bakan kamera başka yere bakar) ve **sürüklenme**
+(füzyonlu harita bir hücrenin sınıfı oturana kadar birkaç kare kanıt ister,
+sürüklenen araç her karede yeni zemin tarar).
+
+Adım bozucusu bu soruyu cevaplayamaz: 15 N'lık koşuda araç takla attı (eğim
+154°, hız 83 m/s) ve sonrasındaki her örnek bir çarpışmayı tarif ediyor. Rampa
+ise konumu koruyarak eğimi 0'dan ~40°'ye yürütüyor — böylece eğim **tek başına**
+bağımsız değişken oluyor.
+
+**Sonuç (uçak 20 m'de asılı, hız ≤ 2.6 m/s):**
+
+| Eğim | Anlık haritada bilinmeyen | Füzyonlu haritada bilinmeyen |
+|---|---|---|
+| 0-5° | 0.11 | 0.06 |
+| 5-10° | 0.16 | 0.04 |
+| 10-20° | 0.25 | 0.03 |
+| 20-30° | **0.37** | **0.02** |
+
+Anlık haritada güvenli sınıf oranı 0.77'den 0.57'ye düşüyor. Yani eğim
+gerçekten anlık görüşü bozuyor — ama füzyonlu harita neredeyse hiç
+etkilenmiyor, çünkü araç yerinde durdukça daha önce görülmüş zemin bellekte
+kalıyor.
+
+**Birleşik açıklama.** Tek başına eğim iniş için yeterli değil; tek başına
+sürüklenme de değil. 15 N'da ikisi birlikte oluyor: 15 N için gereken yatış
+`atan(15/19.6) = 37°` — anlık kapsamın üçte birinden fazlasını götüren bir
+açı — ve araç aynı anda hareket ettiği için füzyonun geri düşeceği eski kanıt
+da yok. Uygun hücre kümesi bu yüzden boşalıyor.
+
+Bu, gelecek iş için somut bir yön de veriyor ve tezde öyle yazılmalı:
+**çözüm kontrol tarafında değil.** Ya kamera yatıştan bağımsızlaştırılmalı
+(gimbal; PX4'ün kendi `x500_gimbal` modeli var), ya da karar katmanı harita
+tazeliğini bir girdi olarak kullanmalı — "burayı 8 saniyedir görmedim" ile
+"burayı şimdi görüyorum" aynı güvenle kullanılmamalı.
+
+### 2.10 Sıradaki kontrol işleri
 
 1. **Bozucu bastırma:** Gazebo rüzgârıyla basamak ve darbe; toparlanma süresi ve
    iniş konum hatası.

@@ -1505,5 +1505,5 @@ mühendislik günlüğü tarafı.
 
 | # | Konu |
 |---|---|
-| 26 | 15-20 N bozucu altında harita neden aday üretemiyor, ölçülmedi. Eğim izdüşümde hesaba katılıyor, yani sebep başka: hızlı sürüklenme sırasında füzyonun yeterli kanıt biriktirememesi şüpheli. |
+| 26 | ~~15-20 N bozucu altında harita neden aday üretemiyor.~~ Ölçüldü, `docs/TEZ_NOTLARI.md` §2.9: eğim anlık kapsamı bozuyor (20-30°'de bilinmeyen oranı 0.11 → 0.37), füzyon bunu yalnızca araç yerinde durduğu sürece gizliyor. İkisi birlikte olunca küme boşalıyor. |
 | 27 | Rüzgâr ölçümleri tek yönden (45°) alındı; yön bağımlılığı denenmedi. |
