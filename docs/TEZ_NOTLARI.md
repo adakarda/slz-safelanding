@@ -205,7 +205,97 @@ Poster cümlesi: *"Açık çevrimde ortalama iyi görünüyordu; üç uçuşun b
 inmeyi bırakıp asılı kaldı. Kapalı çevrimde en kötü uçuş bile en iyisine
 yakın."*
 
-### 2.7 Sıradaki kontrol işleri
+### 2.7 Bozucu bastırma: yöntem ve iki ölçüm tuzağı
+
+**Bozucu nasıl veriliyor.** Gazebo'nun `WindEffects` sistemi, kuvvet uyguladığı
+her linkte `<enable_wind>` ister; bizim hava aracı PX4'ün x500'ünü `merge` ile
+içeriyor ve orada o bayrak yok. Onu eklemek, projenin kasten çatallamadığı tek
+yere yerel bir yama koymak olurdu. PX4'ün SITL sunucusu ise zaten
+`gz-sim-apply-link-wrench-system` yüklüyor, dolayısıyla gövdeye doğrudan
+**yanal kuvvet** verilebiliyor (`tools/wind_inject.py`; adım, hamle, rampa
+profilleri).
+
+Tezde açıkça yazılması gereken sınır: bu bir **kuvvet bozucusudur**,
+aerodinamik rüzgâr modeli değil. Eşdeğeri, küçük bir multikopter için sürükleme
+kabaca `F ≈ 0.5·ρ·Cd·A·v² ≈ 0.06·v²` N alınarak verilebilir — 10 N ≈ 13 m/s.
+Model, dönme momenti üretmez ve hız bileşenine bağlı değildir; yani gerçek
+rüzgârın uçağı çevirme etkisi bu deneyde yoktur.
+
+**Tuzak 1 — kuvvet hiç uygulanmamıştı.** İlk dört "rüzgârlı" koşu kaydedildi ve
+sonuçları anlamsızdı: 4 N'da yatay sapma, rüzgârsız koşudan *küçük* çıkıyordu.
+Sebep, PX4'ün modele kendi örnek indisini eklemesi: model
+`x500_seg_cam_down_0`, benim gönderdiğim ise `x500_seg_cam_down`. Var olmayan
+bir linke wrench yayınlamak **hata vermez**, `gz topic` sıfır döner ve hiçbir
+şey olmaz. Havada asılıyken 10 N uygulayıp konumu ölçen bir kontrol koşusu
+bunu ortaya çıkardı: 0.02 m. Araç adı artık çalışma anında topic listesinden
+bulunuyor.
+
+Genel ders, poster için de geçerli: **bir bozucu deneyinde ilk doğrulanması
+gereken şey, bozucunun gerçekten uygulandığıdır.** Düzeltmeden sonra aynı
+ölçüm 10 N altında 0.55 m kayma verdi.
+
+**Tuzak 2 — yatay hata metriği site hareketini sapma sanıyordu.** Uçağın
+*o an yayınlanan* siteye uzaklığı ölçülüyordu; site sıçradığında uçak hiçbir
+yere kaymadan aniden "uzak" görünüyor. Ortalama, tek bir sıçramayı kalıcı bir
+kayma gibi gösteriyordu (rüzgârsız koşu 0.96 m ortalama, rüzgârlı koşu 0.08 m —
+tek fark sıçrama sayısıydı). Metrik ortanca + p90 + en büyük olarak
+değiştirildi ve `site_jumps` ile birlikte okunuyor.
+
+### 2.8 Bozucu bastırma: sonuçlar
+
+**Kalıcı rejimde yetki sınırı.** Kuvvet 80 s boyunca 0'dan 20 N'a doğrusal
+artırılırken uçak havada tutuldu ve konum sapması ölçüldü. Basamak basamak
+denemek yerine rampa: her nokta bir uçuşa mal olmuyor ve sınır kaba bir ızgaraya
+düşmüyor.
+
+| Kuvvet | 2 | 6 | 10 | 12 | 16 | 20 N |
+|---|---|---|---|---|---|---|
+| Sapma | 0.03 | 0.21 | 0.10 | **1.68** | 0.28 | 0.04 m |
+
+Uçak **20 N'a kadar konumunu koruyor**; sapma yalnızca kuvvet değişirken
+geçici olarak büyüyor (en fazla 1.68 m) ve sonra sıfıra dönüyor — konum
+denetleyicisinin integral etkisi. Teorik sınırla tutarlı: m = 2.0 kg ve
+`MPC_TILTMAX_AIR` = 45° ile karşılanabilecek azami yanal kuvvet
+`m·g·tan45° = 19.6 N`; 10 N için gereken eğim `atan(10/19.6) = 27°`.
+
+**İniş sonucu, adım bozucusu altında.** Kalıcı yetki ile iniş başarısı aynı
+şey değil:
+
+| Bozucu | İniş | Dikey RMS | Siteye ortanca sapma | Dokunma sapması |
+|---|---|---|---|---|
+| Yok | ✓ | 0.186 m/s | 0.04 m | 0.06 m |
+| 10 N adım (~13 m/s) | **4/4** | 0.19-0.22 | 0.12-0.48 m | 0.48-2.15 m |
+| 15 N adım | **1/4** | — | 18-38 m | 39-590 m |
+| 20 N adım (~18 m/s) | ✗ | — | 458 m | — |
+
+10 N'da dikey takip rüzgârsız koşudan ayırt edilemiyor (0.19-0.22'ye karşı
+0.186 m/s) ve dört uçuşun dördünde de hiç geçersiz aday üretilmedi. Bozulan tek
+şey dokunma hassasiyeti: 0.06 m yerine 0.48-2.15 m. Yani 10 N'da sistem
+"çalışıyor ama daha az isabetli"; 15 N'da ise çalışmıyor. Geçiş keskin.
+
+**Kritik bulgu: kontrolcü değil, algı çöküyor.** 15 N'da başarısız olan uçuşta
+157 adayın **156'sı geçersizdi** — dedektör "no cells in C_safe" ve "nothing
+eligible" diyordu, yani harita hiç uygun hücre üretemedi. Mod arama zaman
+aşımına düşüp kör inişe geçti ve kuvvet itmeye devam ettiği için araç 625 m
+uzağa sürüklendi. Dikey döngü bu sırada çalışmaya devam ediyordu; kaybedilen
+şey iniş yerinin kendisiydi.
+
+Yani zarfın sınırını belirleyen **aracın kontrol yetkisi değil, algı
+zincirinin bozucu altında aday üretebilmesi**. Tez için doğru cümle bu:
+*bozucu bastırma bir kontrol problemi olarak çözülmüş görünse de, sistemin
+kırılma noktası algı tarafındadır.*
+
+**Yöntem uyarısı ve tekrarlar.** 15 N'da ilk uçuş sorunsuz indi; bu tek sonuca
+güvenmeyip üç tekrar daha alındı ve **üçü de başarısız** oldu (biri "indi"
+raporladı ama doğrulanmış siteden 317 m uzakta, üstelik hız kayıtları fiziğin
+patladığını gösteriyor). Toplam: 15 N'da 4 denemede 1 başarı. Başarısız
+uçuşlarda 125-128 kare aday üretilemedi.
+
+Ders, sayının kendisinden daha taşınabilir: **sınır bölgesinde tek koşu, işareti
+bile yanlış verebilir.** İlk 15 N uçuşuna bakıp "dayanıyor" demek, üç uçuşluk
+kanıtın tam tersi olurdu.
+
+### 2.9 Sıradaki kontrol işleri
 
 1. **Bozucu bastırma:** Gazebo rüzgârıyla basamak ve darbe; toparlanma süresi ve
    iniş konum hatası.

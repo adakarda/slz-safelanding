@@ -1475,3 +1475,35 @@ değil.
 Tek gerçek-veri kalıntısı **piksellerin sınıfı**: maske şu an Gazebo'nun etiket
 kamerasından geliyor. Yani konum ve hız zaten tahmin; sınıf henüz değil. Bu da
 madde 7'nin (segmentasyon modeli) konusu ve isteğin gereği ellenmedi.
+
+# 22. Kontrol tarafı: kapalı çevrim, kazanç türetimi, bozucu (2026-09-06/07)
+
+Ayrıntılı sayılar ve poster malzemesi `docs/TEZ_NOTLARI.md`'de; burada yalnızca
+mühendislik günlüğü tarafı.
+
+- **Dikey eksen artık kapalı çevrim.** Yasanın çıktısı PX4'e üst sınır olarak
+  veriliyordu (`GotoControl.cpp:203` istenen sınırı `MPC_Z_V_AUTO_DN` ile
+  kırpıyor ve kendi profilini planlıyor), yani izlenen bir referans yoktu.
+  Referans olarak sürülünce RMS takip hatası 0.323 → 0.197 m/s.
+- **Kazançlar ölçümden türetildi.** Kare dalga tanımlama kipi eklendi; birinci
+  mertebe model **uymadı** ve uymaması bilgi verdi (geçici rejim jerk/ivme
+  sınırlı). Kalan model birim kazanç + 0.28 s ölü zaman; ölü zaman baskın IMC
+  ile Ki = 1.39, Kp = 0. Elle ayarlıyla aynı sonucu veriyor.
+- **Toplu koşum düzeneği** (`tools/batch_run.sh`): 10 rastgele dünyada 10/10
+  iniş. Düzenek kurulur kurulmaz negatif doğuş konumunda dünya üretilememesi
+  hatasını buldu.
+- **Bozucu enjektörü** (`tools/wind_inject.py`): `ApplyLinkWrench` üzerinden
+  yanal kuvvet. İlk dört koşu boşa gitti — PX4 modele örnek indisi ekliyor
+  (`x500_seg_cam_down_0`) ve var olmayan bir linke wrench yayınlamak hata
+  vermiyor. Model adı artık çalışma anında bulunuyor.
+- **Sonuç:** araç rampa ile 20 N'a kadar konumunu koruyor, ama 15 N'lık adım
+  bozucuda iniş 4 denemede 1 kez başarılı. Kırılan şey kontrol değil algı:
+  başarısız uçuşlarda 125-157 kare boyunca hiç aday üretilemiyor, mod arama
+  zaman aşımıyla kör inişe geçiyor.
+
+## 22.1 Açık
+
+| # | Konu |
+|---|---|
+| 26 | 15-20 N bozucu altında harita neden aday üretemiyor, ölçülmedi. Eğim izdüşümde hesaba katılıyor, yani sebep başka: hızlı sürüklenme sırasında füzyonun yeterli kanıt biriktirememesi şüpheli. |
+| 27 | Rüzgâr ölçümleri tek yönden (45°) alındı; yön bağımlılığı denenmedi. |

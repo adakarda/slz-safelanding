@@ -24,6 +24,7 @@ Usage: wind_inject.py [--force N] [--dir DEG] [--profile step|gust|ramp]
                       [--model NAME] [--link NAME]
 """
 import argparse
+import re
 import subprocess
 import sys
 import time
@@ -39,6 +40,22 @@ def publish(topic, msg):
     return subprocess.run(['gz', 'topic', '-t', topic, '-m',
                            'gz.msgs.EntityWrench', '-p', msg],
                           capture_output=True, text=True).returncode == 0
+
+
+def discover_model(world, link):
+    """Find the vehicle's model name from the topics the world is publishing.
+
+    Not a constant, because PX4 appends its instance index: the model is
+    `x500_seg_cam_down_0`, and a wrench addressed to `x500_seg_cam_down`
+    publishes successfully, returns zero, and does nothing at all. Four "wind"
+    runs were recorded that way before a hover test showed the aircraft moving
+    0.02 m under 10 N.
+    """
+    r = subprocess.run(['gz', 'topic', '-l'], capture_output=True, text=True)
+    pat = re.compile(rf'^/world/{re.escape(world)}/model/([^/]+)/link/'
+                     rf'{re.escape(link)}/', re.M)
+    names = [m for m in pat.findall(r.stdout) if 'x500' in m]
+    return names[0] if names else ''
 
 
 def wrench_msg(model, link, fx, fy):
@@ -65,9 +82,17 @@ def main():
     ap.add_argument('--on', type=float, default=4.0)
     ap.add_argument('--off', type=float, default=4.0)
     ap.add_argument('--world', default='eland_test')
-    ap.add_argument('--model', default='x500_seg_cam_down')
+    ap.add_argument('--model', default='',
+                    help='default: discovered from the running world')
     ap.add_argument('--link', default='base_link')
     a = ap.parse_args()
+
+    if not a.model:
+        a.model = discover_model(a.world, a.link)
+        if not a.model:
+            print('model bulunamadi: simulasyon calisiyor mu?', file=sys.stderr)
+            return 1
+        print(f'model: {a.model}')
 
     topic = TOPIC.format(world=a.world)
     ang = math.radians(a.dir)

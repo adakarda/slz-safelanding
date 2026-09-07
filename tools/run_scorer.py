@@ -158,10 +158,19 @@ class Scorer(Node):
         if held:
             d = np.array([float(np.hypot(r[7] - r[5], r[8] - r[6]))
                           for r in held])
-            out['horiz_err_mean'] = round(float(d.mean()), 2)
+            # Median and p90, not the mean: this is the distance to the site
+            # *currently published*, so every time the site jumps the aircraft
+            # is momentarily far from it without having drifted anywhere. The
+            # mean turns one jump into a permanent-looking offset -- measured,
+            # a no-wind run scored 0.96 m mean against 0.08 m for a windy one
+            # purely because the first had jumps. `site_jumps` is the number
+            # to read alongside these.
+            out['horiz_err_med'] = round(float(np.median(d)), 2)
+            out['horiz_err_p90'] = round(float(np.percentile(d, 90)), 2)
             out['horiz_err_max'] = round(float(d.max()), 2)
-            print(f'yatay tutus   : siteye ortalama {d.mean():.2f} m, '
-                  f'en fazla {d.max():.2f} m sapma ({len(d)} ornek)')
+            print(f'yatay tutus   : siteye ortanca {np.median(d):.2f} m, '
+                  f'p90 {np.percentile(d, 90):.2f} m, en fazla {d.max():.2f} m '
+                  f'({len(d)} ornek)')
 
         rows = [r for r in self.rows if r[1] in (VALIDATE, COMMIT) and r[3] > 0.0]
         if rows:
