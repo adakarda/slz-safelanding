@@ -9,6 +9,9 @@ Başlangıç noktası: `v1.1-hud-baseline` (`2b741df`) — HUD + kontrol istasyo
 
 ---
 
+> **Projeyi devralıyorsan `docs/DEVIR.md` ile başla** — kurulum,
+> mimari, ölçümler, tuzaklar ve sıradaki iş orada tek dosyada.
+
 ## 1. Dinamik engeller + yörünge-farkında karar (`efaf559`)
 
 Statik dünyaya yürüyen bir insan ve giden bir araç eklendi; ikisinin de
