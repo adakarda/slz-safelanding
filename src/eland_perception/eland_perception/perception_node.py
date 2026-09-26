@@ -40,6 +40,9 @@ class PerceptionNode(Node):
         self.min_period_s = 1.0 / self.max_rate_hz if self.max_rate_hz > 0.0 else 0.0
         self.bridge = CvBridge()
         self.last_pub_time = None
+        # When the next frame is due, in seconds of this node's clock. A
+        # schedule rather than "time since the last publish": see throttled().
+        self.next_due_s = None
         self.frame_count = 0
         self.gt_frames_seen = 0
         self.warned_no_gt = False
@@ -93,12 +96,36 @@ class PerceptionNode(Node):
             self.gt_watchdog.cancel()
 
     def throttled(self) -> bool:
-        """True if the last publish was more recent than 1/max_rate_hz."""
-        now = self.get_clock().now()
-        if self.last_pub_time is None:
+        """True if this frame would push the average rate above max_rate_hz.
+
+        The first version dropped a frame whenever the previous publish was
+        less than 1/max_rate_hz ago, and that halves any camera running at the
+        limit: frames arrived every 195 ms against a 200 ms limit, so every
+        other one was 5 ms early and thrown away. Measured, camera 5.14 Hz in,
+        mask 3.03 Hz out -- 40% of frames lost before anything saw them, and
+        the HUD and the map ran on what was left.
+
+        A schedule does not alias. Each accepted frame moves the next due time
+        on by exactly one period, so the long-run rate is capped at
+        max_rate_hz while a frame that is merely early by jitter still gets
+        in. A quarter of a period of tolerance covers that jitter.
+        """
+        if self.min_period_s <= 0.0 or self.next_due_s is None:
             return False
-        elapsed = (now - self.last_pub_time).nanoseconds * 1e-9
-        return elapsed < self.min_period_s
+        now = self.get_clock().now().nanoseconds * 1e-9
+        return now < self.next_due_s - 0.25 * self.min_period_s
+
+    def _advance_schedule(self) -> None:
+        """Book the slot this frame used."""
+        if self.min_period_s <= 0.0:
+            return
+        now = self.get_clock().now().nanoseconds * 1e-9
+        if self.next_due_s is None or now - self.next_due_s > self.min_period_s:
+            # First frame, or after a gap: restart the schedule from now
+            # rather than letting a backlog of "owed" slots through at once.
+            self.next_due_s = now + self.min_period_s
+        else:
+            self.next_due_s += self.min_period_s
 
     # ------------------------------------------------------------------
     def on_image(self, msg: Image) -> None:
@@ -123,6 +150,7 @@ class PerceptionNode(Node):
         self.mask_pub.publish(out)
 
         self.last_pub_time = self.get_clock().now()
+        self._advance_schedule()
         self.frame_count += 1
         self.get_logger().debug(
             f'mask #{self.frame_count} {mask.shape[1]}x{mask.shape[0]} '

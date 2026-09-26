@@ -343,7 +343,11 @@ hud_node:
     descent_max_mps: 1.5
     map_size_px: 520
     panel_width_px: 330
-    rate_hz: 5.0
+    # 10 Hz. This line used to say 5.0 and silently overrode the node's own
+    # default: after the render was made cheap enough for 10 Hz, the HUD was
+    # measured still running at 5.0 Hz because of it. At 5 Hz the render
+    # timer alone held a map ~160 ms before showing it.
+    rate_hz: 10.0
     map_topic: "/eland/ground_map"
     candidate_topic: "/eland/candidate"
     state_topic: "/eland/state"

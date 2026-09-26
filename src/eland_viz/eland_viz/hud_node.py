@@ -26,6 +26,7 @@ zero would suggest a tuning knob that is not there.
 """
 
 import math
+import time
 
 import cv2
 import numpy as np
@@ -71,7 +72,11 @@ class HudNode(Node):
 
         self.declare_parameter('map_size_px', 520)
         self.declare_parameter('panel_width_px', 330)
-        self.declare_parameter('rate_hz', 5.0)
+        # 10 Hz, not 5. At 5 Hz the render timer alone added up to 200 ms
+        # (100 on average) between a map arriving and the HUD showing it, and
+        # the aircraft marker moved in visible steps. Affordable now that a
+        # frame costs a few milliseconds rather than ~42.
+        self.declare_parameter('rate_hz', 10.0)
         self.declare_parameter('r_ideal', 8.0)
         self.declare_parameter('r_hazard', 3.0)
         self.declare_parameter('descent_size_gain', 0.20)
@@ -105,6 +110,17 @@ class HudNode(Node):
             self.palette[cid] = (rgb[2], rgb[1], rgb[0])  # cv2 is BGR
 
         self.grid = None
+        # The map layer depends only on the grid and the block map, which
+        # change a few times a second; everything drawn on top of it changes
+        # every frame. Rebuilt only when one of the two inputs changes.
+        self._layer = None
+        self._layer_dirty = True
+        # Self-report: frame times, render cost, and how old the map content
+        # was when it was drawn, so latency is measured rather than guessed.
+        self._map_rx = None
+        self._frame_t = []
+        self._render_ms = []
+        self._age_ms = []
         self.map_info = None
         self.block = None
         self.obstacles = None
@@ -138,6 +154,7 @@ class HudNode(Node):
 
         rate = float(self.get_parameter('rate_hz').value)
         self.create_timer(1.0 / max(rate, 0.1), self.render)
+        self.create_timer(10.0, self.report)
         self.get_logger().info(
             f'hud_node up -> {self.get_parameter("hud_topic").value} '
             f'@ {rate:.0f} Hz. View with: '
@@ -153,12 +170,15 @@ class HudNode(Node):
             np.asarray(msg.data, dtype=np.int16).reshape(h, w),
             0, classes.NUM_CLASSES - 1).astype(np.uint8)
         self.map_info = msg.info
+        self._layer_dirty = True
+        self._map_rx = time.monotonic()
 
     def on_block(self, msg: OccupancyGrid) -> None:
         w, h = msg.info.width, msg.info.height
         if w == 0 or h == 0:
             return
         self.block = np.asarray(msg.data, dtype=np.int16).reshape(h, w)
+        self._layer_dirty = True
 
     def on_obstacles(self, msg: DynamicObstacleArray) -> None:
         self.obstacles = msg
@@ -196,6 +216,9 @@ class HudNode(Node):
         if self.grid is None or self.map_info is None:
             return
 
+        t0 = time.monotonic()
+        if self._map_rx is not None:
+            self._age_ms.append((t0 - self._map_rx) * 1000.0)
         panel = self.draw_map()
         text = self.draw_panel(panel.shape[0])
         hud = np.hstack([panel, text])
@@ -204,52 +227,82 @@ class HudNode(Node):
         out.header.stamp = self.get_clock().now().to_msg()
         out.header.frame_id = 'map'
         self.hud_pub.publish(out)
+        now = time.monotonic()
+        self._render_ms.append((now - t0) * 1000.0)
+        self._frame_t.append(now)
+
+    def report(self) -> None:
+        """Every 10 s: frame rate, render cost, age of the map on screen.
+
+        Age is measured from the moment the map reached this node, so it
+        covers the render timer's wait and the render itself; the camera to
+        map part is logged separately by mapping_node.
+        """
+        if len(self._frame_t) > 2:
+            span = self._frame_t[-1] - self._frame_t[0]
+            hz = (len(self._frame_t) - 1) / span if span > 0 else 0.0
+            r = np.percentile(self._render_ms, [50, 95])
+            a = (np.percentile(self._age_ms, [50, 95])
+                 if self._age_ms else [float('nan')] * 2)
+            self.get_logger().info(
+                f'HUD {hz:.1f} Hz, render ms (p50/p95) {r[0]:.1f}/{r[1]:.1f}, '
+                f'map age at render ms (p50/p95) {a[0]:.0f}/{a[1]:.0f}')
+        self._frame_t, self._render_ms, self._age_ms = [], [], []
 
     # ------------------------------------------------------------------
-    def draw_map(self) -> np.ndarray:
-        img = self.palette[np.flipud(self.grid)]
-        img = cv2.resize(img, (self.map_px, self.map_px),
-                         interpolation=cv2.INTER_NEAREST)
+    def _map_layer(self) -> np.ndarray:
+        """Terrain, the trajectory filter's bands and the metre grid.
 
-        # What the trajectory filter thinks of each patch of ground, tinted
-        # under the markers so they stay readable. Three claims, drawn as
-        # three different things on purpose -- only one of them is a refusal:
-        #
-        #   corridor (100)   red, outlined. The obstacle is predicted to be
-        #                    here; this is the one hard exclusion.
-        #   shadow (70)      faint blue, no outline. The approach to a site
-        #                    here passes over a corridor: a cost, not a bar.
-        #   memory (1..69)   faint amber, no outline, and the shade is the
-        #                    recency the score actually pays for.
-        #
-        # Drawing all three in the same red -- which is what this did while
-        # the block map still had two values -- makes two thirds of the map
-        # look unlandable when it is merely expensive.
+        Built at the grid's own resolution and resized once. The first
+        version blended at display size -- float64 over boolean-indexed
+        pixels, three times per frame -- and that was 93% of a ~42 ms frame.
+        Blending cell by cell gives the same picture, because the block map
+        was already resized with nearest-neighbour and so changed only at
+        cell edges anyway.
+
+        What the trajectory filter thinks of each patch of ground, tinted
+        under the markers so they stay readable. Three claims, drawn as three
+        different things on purpose -- only one of them is a refusal:
+
+          corridor (100)   red, outlined. The obstacle is predicted to be
+                           here; this is the one hard exclusion.
+          shadow (70)      faint amber, no outline. The approach to a site
+                           here passes over a corridor: a cost, not a bar.
+          memory (1..69)   faint blue, no outline; the recency the score pays.
+
+        Drawing all three in the same red -- which is what this did while the
+        block map still had two values -- makes two thirds of the map look
+        unlandable when it is merely expensive.
+        """
+        img = self.palette[np.flipud(self.grid)].copy()
+        k = self.map_px / float(self.grid.shape[1])
+        outlines = []
         if self.block is not None and self.block.shape == self.grid.shape:
-            block = cv2.resize(np.flipud(self.block).astype(np.uint8),
-                               (self.map_px, self.map_px),
-                               interpolation=cv2.INTER_NEAREST)
+            block = np.flipud(self.block)
             bands = (((block > 0) & (block < 70), (60, 150, 240), 0.16, False),
                      (block == 70, (200, 160, 60), 0.16, False),
                      (block == 100, (70, 70, 240), 0.32, True))
             for mask, colour, alpha, outline in bands:
                 if not mask.any():
                     continue
-                tint = np.zeros_like(img)
+                tint = np.empty_like(img)
                 tint[:] = colour
-                img[mask] = ((1.0 - alpha) * img[mask]
-                             + alpha * tint[mask]).astype(np.uint8)
-                if not outline:
-                    continue
-                # An outline as well as a tint, for the exclusion only.
-                # Tinted grass just looks like different grass; the edge is
-                # what makes it read as a border the aircraft may not cross,
-                # which is precisely the claim the other two bands do not
-                # make.
-                contours, _ = cv2.findContours(mask.astype(np.uint8),
-                                               cv2.RETR_EXTERNAL,
-                                               cv2.CHAIN_APPROX_SIMPLE)
-                cv2.drawContours(img, contours, -1, colour, 1, cv2.LINE_AA)
+                mixed = cv2.addWeighted(img, 1.0 - alpha, tint, alpha, 0.0)
+                img[mask] = mixed[mask]
+                if outline:
+                    # Found on the small mask, drawn scaled: the outline stays
+                    # one display pixel wide. It is what makes the corridor
+                    # read as a border the aircraft may not cross, which is
+                    # precisely the claim the other two bands do not make.
+                    contours, _ = cv2.findContours(mask.astype(np.uint8),
+                                                   cv2.RETR_EXTERNAL,
+                                                   cv2.CHAIN_APPROX_SIMPLE)
+                    outlines.append(([np.round((c + 0.5) * k).astype(np.int32)
+                                      for c in contours], colour))
+        img = cv2.resize(img, (self.map_px, self.map_px),
+                         interpolation=cv2.INTER_NEAREST)
+        for contours, colour in outlines:
+            cv2.drawContours(img, contours, -1, colour, 1, cv2.LINE_AA)
 
         # Metre grid, every 10 m, so distances on the HUD are readable without
         # measuring against the panel numbers.
@@ -258,6 +311,13 @@ class HudNode(Node):
             for p in range(step, self.map_px, step):
                 cv2.line(img, (p, 0), (p, self.map_px), (70, 70, 70), 1)
                 cv2.line(img, (0, p), (self.map_px, p), (70, 70, 70), 1)
+        return img
+
+    def draw_map(self) -> np.ndarray:
+        if self._layer is None or self._layer_dirty:
+            self._layer = self._map_layer()
+            self._layer_dirty = False
+        img = self._layer.copy()
 
         vehicle = None
         if self.pos_enu is not None:
