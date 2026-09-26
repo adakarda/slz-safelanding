@@ -139,10 +139,17 @@ class DetectorNode(Node):
         # line puts it. The corridor is the union of discs sampled along that
         # same line, so along-track error is already inside it; widening every
         # disc by it would double-count. What the disc radius has to cover is
-        # error ACROSS the path, which comes from heading noise in the fit --
-        # traced at roughly 0.2 m/s of spurious lateral velocity.
+        # error ACROSS the path, which comes from heading noise in the fit.
+        #
+        # That was first estimated at ~0.2 m/s and set to 0.25. Measured
+        # directly on 2026-09-26 (measure_tracking.py splits the error into
+        # along- and cross-track), the p90 cross-track error hardly grows at
+        # all: people 1.73 -> 2.04 m and vehicles 2.88 -> 4.25 m over the 10 s
+        # horizon, i.e. 0.03 and 0.10-0.14 m/s. At 0.25 the far end of every
+        # corridor was two to three metres wider than any error it had to
+        # cover, and the corridor alone excluded half the map.
         self.declare_parameter('pred_sigma_base_m', 1.5)
-        self.declare_parameter('pred_sigma_cross_rate_mps', 0.25)
+        self.declare_parameter('pred_sigma_cross_rate_mps', 0.10)
         # Also refuse sites whose straight-line approach crosses the corridor.
         # Conservative on purpose: it ignores whether the aircraft would
         # actually be there at the same time. Space-time reasoning would need

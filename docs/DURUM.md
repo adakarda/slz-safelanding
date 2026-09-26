@@ -1641,3 +1641,121 @@ Aday hızının 1.42 → 1.67 Hz'e çıkması beklenen yan etki: harita 5 Hz'e
 | 24 | Araç harita içinde gerçeğin ~%70-80'i (eski "%52" ölçüm hatasıydı). ~10 puanı dönüş yapaylığı; kalanın kaynağı bulunmadı, pencere uzunluğu değil. Harita kenarında (<4 m) %20-45 — asıl kayıp orada. |
 | 28 | `detector_node`'daki aynı hız sınırlayıcı kusuru (harita 5 Hz, sınır 2 Hz) bilerek düzeltilmedi, §19.2. |
 | 29 | Kol başına iki uçuş, 10-20 puanlık dağılımı ayırt etmeye yetmiyor. Pencere uzunluğu için kesin karar daha çok tekrar ister. |
+
+# 24. Saat, kapanış hijyeni, HUD 10 Hz, koridor genişliği (2026-09-26 akşam)
+
+## 24.1 "Manuel kontrolü alınca failsafe" — kod değil, WSL saati
+
+Şikâyet: arm istenince `nav_state` 23 → 4 ve failsafe, "kumanda bağlantısı
+kopuk sayılıyor". İstasyonun kendi raporu: manuel akış 33 Hz yerine
+**0.4-0.8 Hz, en uzun boşluk ~5000 ms**; aynı anda HUD 0.3 Hz.
+
+ROS'suz düz bir Python döngüsü sebebi gösterdi: `time.time()` her ~5.5 s'de
+**+5.1 s ileri, −5.5 s geri** zıplıyor, `time.monotonic()` düzgün. `dmesg`'de
+172 kez "Time jumped backwards". `systemd-timesyncd` (NTP ofseti −5.57 s)
+saati geri alıyor, Hyper-V TimeSync (`hv_utils.timesync_implicit=1`) Windows
+saatine geri çekiyor. rclpy zamanlayıcıları sistem saatine bağlı: saat geri
+atınca ~5 s duruyorlar → akışta 0.5 s'yi (`COM_RC_LOSS_T`) aşan boşluk →
+`manual_control_signal_lost` → `NAV_RCL_ACT=1` Hold.
+
+Çözüm kullanıcıda (sistem ayarı): `sudo systemctl disable --now
+systemd-timesyncd` ve Windows saatini eşitlemek. Sonrası: akış **33.1 Hz, en
+uzun boşluk 42 ms**, HUD 10 Hz.
+
+Skorlayıcılar (`run_scorer.py`, `measure_tracking.py`) artık süreleri
+`time.monotonic()` ile ölçüyor. **§23.4'teki 18.74 s alçalma şüpheli:** aynı
+dünyalarda bugün kamera 5 Hz'de de 10 Hz'de de 21.1 s ölçüldü (v2.8: 22.15 s).
+O koşunun saat zıplaması altında alınıp alınmadığı kanıtlanamıyor (başka bir
+açılış), ama 18.74 s bugün tekrar üretilemiyor.
+
+## 24.2 Kapanış hijyeni: arta kalan süreçlerin iki kaynağı
+
+1. **`gz sim` sunucusu SIGTERM'de takılabiliyor.** Biri iki saatlik, biri %32
+   CPU yiyen iki yetim sunucu bulundu; TERM'e 5 s cevap vermediler, yalnız
+   KILL ile öldüler. `run_sim.sh` artık `stop_gz`: TERM, 3 s bekle, KILL.
+   `dene.sh` ve `batch_run.sh` de aynı yedeği kullanıyor.
+2. **`kill -INT "$RUN"` hiçbir şey yapmıyordu.** İş kontrolü olmayan bash,
+   `cmd &` ile başlattığını SIGINT yok sayılmış olarak başlatır; girişte yok
+   sayılan sinyal `trap` ile yakalanamaz. `run_sim.sh`'in temizliği hiç
+   koşmuyor, ROS düğümleri bir sonraki koşuya sızıyordu — ölçüldü: iki zincir
+   üst üste, kamera 19 Hz, harita 37 Hz. `batch_run.sh`'in kendi `pkill`
+   temizliği bunu örtüyordu; `dene.sh`'in ölçüm kipleri örtmüyordu. Artık
+   `kill -TERM` (`dene.sh`'te 10 yer, `batch_run.sh`'te 1).
+3. `batch_run.sh`: komut satırında düğüm parametresi olunca
+   (`detector_node.x=…`) temizlikteki `pkill -f detector_no` betiğin
+   **kendisini** öldürüyordu. Artık kendi PID'ini atlıyor.
+
+## 24.3 HUD: gecikme boru hattında değil, kamerada
+
+Sim saati `/clock` köprüsüyle alındı, gecikme yakalama damgasından ölçüldü:
+
+| | Kamera 5 Hz | Kamera 10 Hz + olay tetikli HUD |
+|---|---|---|
+| Yakalama → köprü | 5 ms | 8 ms |
+| → maske | 16 ms | 16-20 ms |
+| → füzyonlu harita | **24 ms** | 24-26 ms |
+| Harita hızı | 5.0 Hz | **9.6 Hz** |
+| Ekrandaki haritanın yaşı (ortanca / p95) | 97 / 201 ms | **0 / 111 ms** |
+| gz sunucusu CPU (penceresiz) | ~%70 | ~%100 |
+| Gerçek zaman oranı | 1.00 | 1.00 |
+
+Zincirin kendisi 24 ms. Gözün gördüğü "ağırlık" iki şeydi: kameranın 200 ms'lik
+periyodu (harita 200 ms'lik basamaklarla ilerliyordu) ve HUD zamanlayıcısının
+yeni haritayı ekrana koymadan önce 0-100 ms beklemesi. İki düzeltme: kamera
+`model.sdf`'de 10 Hz (algının `max_rate_hz` sınırı da 10), HUD haritayı
+geldiği anda çiziyor ve zamanlayıcısını sıfırlıyor.
+
+Gazebo penceresi açıkken gerçek zaman oranı ölçülmedi. Düşerse ilk adım
+`model.sdf`'de 5'e dönmek.
+
+Yan etki kontrolü (izleyici koduna dokunulmadı; penceresi saniyeyle tanımlı).
+Araç hız kestirimi, harita içi, gerçeğin yüzdesi: 5 Hz'de %61, %86; 10 Hz'de
+%99, %83, %74. Koşudan koşuya dağılım içinde, ölçülebilir fark yok. İnişte de
+yok: aynı üç dünyada 5 Hz ve 10 Hz alçalma ortanca 21.08 / 21.08 s, RMS 0.19 /
+0.20 m/s. Aday hızı 1.67 → 1.80 Hz (harita daha sık geldiği için
+`detector_node` sınırlayıcısı daha sık kare geçiriyor, #28).
+
+## 24.4 Koridor: genişlik ölçülen dik hataya göre
+
+Koridor diski `r = r_hazard + (base + cross_rate·t)·(2 − güven)`.
+`measure_tracking.py` artık tahmin hatasını **yol boyunca** ve **yola dik**
+diye ayırıyor. Disk zinciri tahmin çizgisi üzerinde örneklendiği için boyuna
+hatayı zincir karşılıyor; disk yarıçapının karşılaması gereken yalnız dik
+hata.
+
+Dik hata p90, m, ufuk 0 → 10 s:
+
+| | İnsan | Araç |
+|---|---|---|
+| Kamera 5 Hz | 1.73 → 2.04 | 2.88 → 4.25 |
+| Kamera 10 Hz (üç koşu) | 1.62-1.83 → 1.97-2.15 | 2.96-3.38 → 4.58-5.04 |
+
+Büyüme insanda ~0.03 m/s, araçta ~0.10-0.16 m/s. Varsayılan 0.25'ti, yani
+ölçülmüş değil tahmin edilmişti. `pred_sigma_cross_rate_mps` 0.25 → **0.10**.
+
+| | 0.25 | 0.10 |
+|---|---|---|
+| 20 m'de havada, koridorun harita payı (ortalama / ortanca) | %62.2 / %60.8 | **%50.7 / %49.2** |
+| İniş, aynı 5 rastgele dünya | 5/5 | 5/5 |
+| Uçuş boyunca koridor payı, ortanca | %15.1 | %14.7 |
+| 5 m altında en yakın hareketli engel, ortanca (en az) | 8.9 (6.7) m | 10.7 (6.2) m |
+| ABORT / 3 s üstü aday boşluğu | 0 / 0 | 0 / 0 |
+
+Uçuş boyunca ortalanmış pay pek değişmiyor: alçalırken kamera alanı daralıyor
+ve engeller kadrajdan çıkıyor, koridor zaten küçülüyor. Fark operatörün
+baktığı yerde, arama irtifasında.
+
+Dürüst not: insanlarda yeni genişlik ölçülen p90'ı karşılıyor, **araçlarda
+uzak uçta p90'ın ~1-1.5 m altında kalıyor**. Güven çarpanı (2 − güven) bunu
+kısmen örtüyor, ama bu örtüşme ayrıca ölçülmedi. Daha fazla daraltmak ölçüyle
+desteklenmiyor; kalan kaldıraçlar politika: `r_hazard` (3 m) ve güven çarpanı.
+Boyuna hata +10 s'de p90 20-30 m — bu disk yarıçapının değil zincir
+uzunluğunun, yani hız kestiriminin işi; dokunulmadı.
+
+## 24.5 Açık
+
+| # | Konu |
+|---|---|
+| 30 | Gazebo penceresi açıkken 10 Hz kameranın gerçek zaman oranı ölçülmedi (kullanıcıda). |
+| 31 | Araç koridoru uzak uçta ölçülen p90 dik hatanın ~1-1.5 m altında; güven çarpanının bunu ne kadar örttüğü ölçülmedi. |
+| 32 | §23.4'teki 18.74 s alçalma bugün tekrar üretilemedi (21.1 s); saat zıplamasından şüpheleniliyor, kanıt yok. |

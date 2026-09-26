@@ -1,8 +1,14 @@
 # Yapılacaklar — İster ↔ Yapılan Karşılaştırması
 
-Değerlendirme tarihi: 2026-09-26 · Kod: `main` @ `v4.0-tracker-window`
+Değerlendirme tarihi: 2026-09-26 · Kod: `main` @ `v4.3-koridor-olcum`
 
-> **Son güncelleme (v3.8-v4.0):** rastgele doğuş haritanın her yerinde, HUD 4.75 → 9.57 Hz / harita yaşı 160 → 99 ms, izleyici penceresi saniyede. "%52" araç hızı bir ölçüm hatasıymış (gerçeği ~%73). Ayrıntı `DURUM.md` §23.
+> **Son güncelleme (v4.1-v4.3, akşam):** manuel kontroldeki failsafe WSL saat
+> zıplamasıymış (kullanıcı `systemd-timesyncd`'yi kapattı). Yetim `gz sim` ve
+> sızan düğümlerin iki kaynağı kapandı. Kamera 10 Hz, HUD'daki harita yaşı
+> 97 → 0 ms. Koridor ölçülen dik hataya göre daraltıldı (havada %62 → %51).
+> Ayrıntı `DURUM.md` §24.
+>
+> **Önceki güncelleme (v3.8-v4.0):** rastgele doğuş haritanın her yerinde, HUD 4.75 → 9.57 Hz / harita yaşı 160 → 99 ms, izleyici penceresi saniyede. "%52" araç hızı bir ölçüm hatasıymış (gerçeği ~%73). Ayrıntı `DURUM.md` §23.
 
 Bu dosya projenin **baştan sona ne istendiğini** ve **ne yapıldığını** tek
 yerde karşılaştırır, sonunda yapılacaklar listesi verir. Kaynak isterler
@@ -84,7 +90,7 @@ neyi karşılaması gerektiği, projenin kendisinde yazılı değil.
 | 1 | Rastgele doğuş + seed + sabit mod geri açılabilir | ✅ | `v1.5-random-spawn` |
 | 2 | Daha fazla sınıf/engel + maske hızı ölçümü | ✅ | `v1.6-more-classes`, §15 |
 | 3 | Teleop kök nedeni | ✅ | §16 — **önceki teşhis yanlış çıktı** (ölçen düğümün kendi executor'ı), `COM_RC_LOSS_T` geri alındı |
-| 3 | **GUI'li koşuda doğrulama** | ❌ | Otomasyonda X sunucusu yok; **senin yapman gereken** |
+| 3 | **GUI'li koşuda doğrulama** | 🟡 | Kullanıcı `dene.sh hud` ile uçtu; kumanda kopması WSL saatinden çıktı (§24.1). Saat düzeltildikten sonra manuel uçuş **tekrar denenmeli** |
 | 3 | Operatör kaçış yolu | ✅ | `9` tuşu → `/eland/mode_enable` → mod kapanır, PX4 Return'e döner |
 | 3b | Anlık (momentary) çubuk + HUD gerçek değeri göstersin | ✅ | `v1.8-momentary-sticks` |
 | 4 | Sınırlı sayıda rastgele mob | ✅ | `v1.9-multi-mob`, `max_mobs: 6` |
@@ -181,6 +187,10 @@ güncellenmedi. Güncel hâli:
 | 25 | Aday koşu başına 3-4 kez >4 m sıçrıyor | ❌ |
 | 26 | 15-20 N'da algı neden çöküyor | ✅ kapandı — ölçüldü |
 | 27 | Rüzgâr tek yönden | ❌ |
+| 28 | `detector_node` sınırlayıcısı | ❌ bilerek; harita artık 10 Hz, aday 1.67 → 1.80 Hz |
+| 30 | 10 Hz kamera, GUI açıkken gerçek zaman oranı | ❌ senin koşunda bak |
+| 31 | Araç koridoru uzak uçta p90 dik hatanın ~1-1.5 m altında | ❌ ölçülmeli |
+| 32 | §23.4'teki 18.74 s alçalma tekrar üretilemedi (21.1 s) | not — saat şüphesi |
 
 ---
 
@@ -259,7 +269,11 @@ recall ölç.
 
 ### 5.4 Doğrulama — senin yapman gerekenler
 
-- [ ] **P0** `dene.sh hud` ile GUI'li koşu (#15) — otomasyonda hiç görülmedi.
+- [ ] **P0** `dene.sh hud` ile GUI'li koşu (#15) — yapıldı, kumanda sorunu
+  saatten çıktı; saat düzeldikten sonra **manuel uçuşu tekrar dene** ve
+  terminalde "manuel akis" satırında en uzun boşluğun ~50 ms olduğuna bak.
+- [ ] **P1** GUI açıkken HUD'u izle (#30): `HUD … Hz` ~10-12 ve
+  "real-time factor" ~1.0 kalmalı; kalmazsa `seg_cam/model.sdf`'de 10 → 5.
 - [ ] **P1** `GORSEL=1 FORCE=10 dene.sh ruzgar` — yatışı gözle doğrula.
 - [ ] **P2** QGC Daily ile mod listesinde gözle doğrulama (#1).
 

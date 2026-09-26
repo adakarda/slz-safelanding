@@ -158,8 +158,11 @@ detector_node:
     # error is almost all along it, and the corridor is a union of discs
     # sampled along that same line, so along-track error is already covered.
     # Adding it to every disc would count it twice and reject half the map.
+    # cross_rate measured (p90 cross-track error growth over the horizon):
+    # people 0.03 m/s, vehicles 0.10-0.14 m/s. It was 0.25, an estimate, and
+    # the corridor covered ~50% of the map with a few people walking past.
     pred_sigma_base_m: 1.5
-    pred_sigma_cross_rate_mps: 0.25
+    pred_sigma_cross_rate_mps: 0.10
     # Reject sites whose straight-line approach crosses the corridor too, not
     # just sites inside it. Conservative: it does not ask whether the aircraft
     # would be there at the same moment.

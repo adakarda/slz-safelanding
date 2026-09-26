@@ -417,6 +417,26 @@ görünmeyen kusur, on rastgele dünyada ikinci koşuda çıktı.*
 güvenli bir yere inildiğini değil. Skorlayıcı bu yüzden inilen yerin risk
 skorunu, açıklığını ve dokunmanın doğrulanmış siteden sapmasını da kaydeder.
 
+## 3.3 Koridor genişliği ölçülen hatadan
+
+Tahmin hatası iki bileşene ayrıldı: tahmin çizgisi **boyunca** ve ona **dik**.
+Koridor bu çizgi üzerinde örneklenmiş disklerin birleşimi olduğu için boyuna
+hatayı disk zinciri karşılar; disk yarıçapının karşılaması gereken yalnız dik
+hatadır.
+
+| p90, ufuk 0 → 10 s | Dik hata | Boyuna hata |
+|---|---|---|
+| İnsan | 1.7 → 2.0 m | 1.9 → ~20 m |
+| Araç | 2.9 → 4.3-5.0 m | 2.4 → ~25 m |
+
+Dik hata ufukla neredeyse büyümüyor (0.03-0.16 m/s); varsayılan büyüme
+0.25 m/s idi. Ölçülen değere (0.10) çekilince arama irtifasında koridorun
+haritadaki payı **%62 → %51**, beş dünyada iniş 5/5, 5 m altında hareketli
+engele en yakın mesafe ortanca 10.7 m (en az 6.2 m, eşik 3 m).
+
+Poster cümlesi: *"Güvenlik payını hatanın büyüklüğüne değil, doğru
+bileşenine göre boyutlandır."*
+
 ## 4. Yöntem notları (savunmada sorulur)
 
 - **Tekrarlanabilirlik:** sabit tohum, sabit hareketli düzeni. Rastgele düzenden

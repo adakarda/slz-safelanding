@@ -22,7 +22,9 @@ FIELDS = [('descent_s', 's', 'alcalma suresi'),
           ('aborts', '', 'ABORT'),
           ('site_risk', '', 'inilen yerin risk skoru'),
           ('site_clearance_m', 'm', 'inilen yerin acikligi'),
-          ('touchdown_err_m', 'm', 'dokunmanin siteden sapmasi')]
+          ('touchdown_err_m', 'm', 'dokunmanin siteden sapmasi'),
+          ('corridor_pct', '%', 'koridorun kapladigi harita'),
+          ('moving_min_low_m', 'm', '5 m altinda en yakin hareketli engel')]
 
 
 def main():

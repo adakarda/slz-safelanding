@@ -50,7 +50,7 @@ cleanup() {
 	sleep 8
 }
 
-echo "run,spawn_seed,mob_seed,$(echo 'landed,candidate_hz,candidate_msgs,invalid_frames,gaps_over_3s,site_jumps,transitions,aborts,descent_s,err_mean,err_abs_mean,err_rms,site_risk,site_clearance_m,site_area_m2,touchdown_err_m')" > "$OUT"
+echo "run,spawn_seed,mob_seed,$(echo 'landed,candidate_hz,candidate_msgs,invalid_frames,gaps_over_3s,site_jumps,transitions,aborts,descent_s,err_mean,err_abs_mean,err_rms,site_risk,site_clearance_m,site_area_m2,touchdown_err_m,corridor_pct,moving_min_low_m')" > "$OUT"
 
 for i in $(seq 1 "$N"); do
 	SEED=$((1000 + i))
@@ -78,7 +78,7 @@ run, seed, path, out = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 keys = ('landed candidate_hz candidate_msgs invalid_frames gaps_over_3s '
         'site_jumps transitions aborts descent_s err_mean err_abs_mean '
         'err_rms site_risk site_clearance_m site_area_m2 '
-        'touchdown_err_m').split()
+        'touchdown_err_m corridor_pct moving_min_low_m').split()
 got = {}
 with open(path, errors='ignore') as f:
     for line in f:

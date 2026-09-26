@@ -75,16 +75,25 @@ class Scorer(Node):
         # edge of the mapped ground? Every tracked frame, filed by how far the
         # truth was from that edge.
         self.speed_by_margin = defaultdict(list)
+        # The corridor is a chain of discs along the predicted line, so error
+        # ALONG that line is covered by the chain and only error ACROSS it has
+        # to be covered by the disc radius. Split, so the radius can be sized
+        # from the component it actually has to absorb.
+        self.pos_cross = defaultdict(list)
+        self.pos_along = defaultdict(list)
+        self.pred_cross = defaultdict(list)
+        self.pred_along = defaultdict(list)
+        self.conf_moving = defaultdict(list)
         self.create_subscription(OccupancyGrid, '/eland/ground_map_instant',
                                  self.on_instant, SENSOR_QOS)
         self.create_subscription(PoseArray, '/eland/obstacle_truth', self.on_truth, 10)
         self.create_subscription(DynamicObstacleArray, '/eland/dynamic_obstacles',
                                  self.on_obs, 10)
-        self.t0 = time.time()
+        self.t0 = time.monotonic()
         self.create_timer(1.0, self.maybe_finish)
 
     def on_instant(self, msg):
-        self.instant_times.append(time.time())
+        self.instant_times.append(time.monotonic())
         i = msg.info
         self.map_info = (i.origin.position.x, i.origin.position.y,
                          i.width * i.resolution, i.height * i.resolution)
@@ -103,7 +112,7 @@ class Scorer(Node):
         return min(x - ox, ox + w - x, y - oy, oy + h - y)
 
     def on_mask(self, msg):
-        self.mask_times.append(time.time())
+        self.mask_times.append(time.monotonic())
         self.mask_frames += 1
         buf = np.frombuffer(msg.data, dtype=np.uint8)
         if msg.encoding in ('rgb8', 'bgr8'):
@@ -118,7 +127,7 @@ class Scorer(Node):
         # Sim-time stamp of these poses, kept for the speed computation.
         self.truth_stamps.append(msg.header.stamp.sec
                                  + msg.header.stamp.nanosec * 1e-9)
-        t = time.time()
+        t = time.monotonic()
         pts = [(p.position.x, p.position.y) for p in msg.poses]
         self.truth_hist.append((t, pts))
         if len(self.truth_hist) > 4000:
@@ -142,7 +151,7 @@ class Scorer(Node):
             self.track_seen[int(o.class_id)] += 1
             if o.speed >= 0.5:
                 self.track_moving[int(o.class_id)] += 1
-        t = time.time()
+        t = time.monotonic()
         truth = self.truth_at(t)
         if truth is None:
             return
@@ -180,18 +189,26 @@ class Scorer(Node):
             if margin is not None:
                 self.speed_by_margin[idx].append((margin, near.speed))
             self.pos_err[idx].append(d)
+            ux = uy = None
+            if near.speed >= 0.5:
+                ux, uy = near.velocity.x / near.speed, near.velocity.y / near.speed
+                ex, ey = near.position.x - tx, near.position.y - ty
+                self.pos_along[idx].append(abs(ex * ux + ey * uy))
+                self.pos_cross[idx].append(abs(ex * uy - ey * ux))
+                self.conf_moving[idx].append(float(near.confidence))
             self.speed_est[idx].append(near.speed)
             confident = near.confidence >= 0.5
             if confident:
                 self.speed_conf[idx].append(near.speed)
                 self.pos_err_conf[idx].append(d)
             for p, dt in zip(near.predicted, near.predicted_times):
-                self.pending.append((t + dt, idx, round(dt, 1), p.x, p.y, confident))
+                self.pending.append((t + dt, idx, round(dt, 1), p.x, p.y,
+                                     confident, ux, uy))
 
     def resolve(self, now):
         still = []
         for entry in self.pending:
-            target_t, idx, dt, px, py, confident = entry
+            target_t, idx, dt, px, py, confident, ux, uy = entry
             if target_t > now:
                 still.append(entry)
                 continue
@@ -201,12 +218,16 @@ class Scorer(Node):
             tx, ty = truth[idx]
             err = math.hypot(px - tx, py - ty)
             self.pred_err[(idx, dt)].append(err)
+            if ux is not None:
+                ex, ey = px - tx, py - ty
+                self.pred_along[(idx, dt)].append(abs(ex * ux + ey * uy))
+                self.pred_cross[(idx, dt)].append(abs(ex * uy - ey * ux))
             if confident:
                 self.pred_err_conf[(idx, dt)].append(err)
         self.pending = still
 
     def maybe_finish(self):
-        if time.time() - self.t0 < self.duration:
+        if time.monotonic() - self.t0 < self.duration:
             return
         def rate(times):
             if len(times) < 2:
@@ -295,6 +316,23 @@ class Scorer(Node):
                     f'max {max(conf):5.2f} m') if conf else '  |  no confident samples'
             print(f'{NAMES[idx]:16s} +{dt:.1f}s: n={len(errs):4d} '
                   f'mean {sum(errs)/len(errs):5.2f} m  max {max(errs):5.2f} m{ctxt}')
+        def pct(v, q):
+            return float(np.percentile(v, q)) if v else float('nan')
+        print('--- hata bilesenleri, hareketli izler (p50 / p90, m) ---')
+        for idx, name in NAMES.items():
+            pc, pa = self.pos_cross[idx], self.pos_along[idx]
+            if not pc:
+                continue
+            cf = self.conf_moving[idx]
+            print(f'{name:16s} konum  dik {pct(pc, 50):.2f}/{pct(pc, 90):.2f}  '
+                  f'boyuna {pct(pa, 50):.2f}/{pct(pa, 90):.2f}  (n={len(pc)}), '
+                  f'guven p10/p50/p90 {pct(cf, 10):.2f}/{pct(cf, 50):.2f}/'
+                  f'{pct(cf, 90):.2f}')
+        for (idx, dt), cross in sorted(self.pred_cross.items()):
+            along = self.pred_along[(idx, dt)]
+            print(f'{NAMES[idx]:16s} +{dt:.1f}s dik {pct(cross, 50):5.2f}/'
+                  f'{pct(cross, 90):5.2f}  boyuna {pct(along, 50):5.2f}/'
+                  f'{pct(along, 90):5.2f}  (n={len(cross)})')
         for idx, name in NAMES.items():
             out = self.miss_outside[idx]
             nb = self.miss_no_blob[idx]

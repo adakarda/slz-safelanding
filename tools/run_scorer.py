@@ -11,13 +11,21 @@ runner can collect them without parsing prose.
 Finishes on its own when the aircraft touches down (COMMIT, then the state
 channel goes quiet), so a batch of runs costs what the flights cost rather
 than a fixed window each.
+
+Every duration is taken on time.monotonic(), not time.time(). On 2026-09-26
+the WSL wall clock was found jumping +5 s / -5.5 s every few seconds (NTP and
+Hyper-V fighting over it), and a wall-clock stopwatch reads such a run as
+seconds longer or shorter than it was.
 """
+import os
 import sys
 import time
 
 import numpy as np
 import rclpy
 from eland_msgs.msg import LandingCandidate, LandingState
+from geometry_msgs.msg import PoseArray
+from nav_msgs.msg import OccupancyGrid
 from px4_msgs.msg import VehicleLocalPosition
 from rclpy.node import Node
 from rclpy.qos import (DurabilityPolicy, HistoryPolicy, QoSProfile,
@@ -35,13 +43,36 @@ VALIDATE, COMMIT = 2, 5
 JUMP_M = 4.0
 QUIET_S = 3.0      # state channel silent this long after COMMIT = landed
 BANDS = ((10.0, 99.0), (5.0, 10.0), (2.0, 5.0), (0.0, 2.0))
+LOW_ALT_M = 5.0    # below this the aircraft is committed to the ground it is over
+SENSOR_QOS = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT,
+                        durability=DurabilityPolicy.VOLATILE,
+                        history=HistoryPolicy.KEEP_LAST, depth=1)
+
+
+def spawn_xy():
+    """World position of the local-frame origin.
+
+    The estimate is local to where PX4 booted, the obstacle truth is in the
+    world frame; run_sim writes the spawn pose next to its logs. Without it
+    the clearance numbers are meaningless on any spawn but the origin.
+    """
+    path = os.path.join(os.environ.get('LOG_DIR', '/tmp/eland_logs'), 'spawn.txt')
+    try:
+        with open(path) as f:
+            for line in f:
+                if line.startswith('pose '):
+                    x, y = line.split()[1].split(',')[:2]
+                    return float(x), float(y)
+    except (OSError, ValueError):
+        pass
+    return None
 
 
 class Scorer(Node):
     def __init__(self, timeout_s):
         super().__init__('run_scorer')
         self.timeout_s = timeout_s
-        self.t0 = time.time()
+        self.t0 = time.monotonic()
         self.vz = 0.0                  # NED, down positive
         self.rows = []                 # (t, state, alt, commanded, achieved)
         self.states = []
@@ -59,6 +90,20 @@ class Scorer(Node):
         self.last_valid = None
         self.pos = None
         self.touchdown_pos = None
+        # How close moving obstacles actually came, measured against the
+        # simulator's truth rather than the tracker. This is the number that
+        # says whether a narrower corridor is still safe; the corridor's own
+        # size is the one that says whether it got narrower.
+        self.spawn = spawn_xy()
+        self.truth = None
+        self.state_now = None
+        self.alt_now = None
+        self.low_min = float('inf')
+        self.corridor_frac = []
+        self.create_subscription(PoseArray, '/eland/obstacle_truth',
+                                 self.on_truth, 10)
+        self.create_subscription(OccupancyGrid, '/eland/trajectory_block',
+                                 self.on_block, SENSOR_QOS)
         self.create_subscription(VehicleLocalPosition,
                                  '/fmu/out/vehicle_local_position_v1',
                                  self.on_pos, PX4_QOS)
@@ -74,11 +119,30 @@ class Scorer(Node):
         # ENU-ish for comparison with the candidate: the candidate is published
         # in map frame (x east, y north), the estimate is NED.
         self.pos = (float(msg.y), float(msg.x))
+        if (self.spawn is None or self.truth is None
+                or self.state_now not in (VALIDATE, COMMIT)
+                or self.alt_now is None or self.alt_now >= LOW_ALT_M
+                or time.monotonic() - self.truth[0] > 0.5):
+            return
+        wx, wy = self.spawn[0] + self.pos[0], self.spawn[1] + self.pos[1]
+        for ox, oy in self.truth[1]:
+            self.low_min = min(self.low_min, float(np.hypot(ox - wx, oy - wy)))
+
+    def on_truth(self, msg):
+        self.truth = (time.monotonic(),
+                      [(p.position.x, p.position.y) for p in msg.poses])
+
+    def on_block(self, msg):
+        if msg.info.width and msg.info.height:
+            self.corridor_frac.append(
+                float((np.asarray(msg.data, dtype=np.int16) == 100).mean()))
 
     def on_state(self, msg):
-        now = time.time()
+        now = time.monotonic()
         self.state_t = now
         s = int(msg.state)
+        self.state_now = s
+        self.alt_now = float(msg.altitude_agl)
         if not self.states or self.states[-1] != s:
             self.states.append(s)
         if s == COMMIT:
@@ -95,7 +159,7 @@ class Scorer(Node):
                           site[0], site[1], pos[0], pos[1]))
 
     def on_cand(self, msg):
-        now = time.time()
+        now = time.monotonic()
         self.cand_t.append(now)
         if not msg.valid:
             self.invalid += 1
@@ -116,8 +180,8 @@ class Scorer(Node):
     # -- finishing -----------------------------------------------------
     def tick(self):
         landed = (self.seen_commit and self.state_t is not None
-                  and time.time() - self.state_t > QUIET_S)
-        if landed or time.time() - self.t0 > self.timeout_s:
+                  and time.monotonic() - self.state_t > QUIET_S)
+        if landed or time.monotonic() - self.t0 > self.timeout_s:
             self.report(landed)
             raise SystemExit(0)
 
@@ -197,6 +261,15 @@ class Scorer(Node):
                       f'({int(m.sum())} ornek)')
         else:
             out['descent_s'] = 0.0
+
+        if self.corridor_frac:
+            out['corridor_pct'] = round(100.0 * float(np.mean(self.corridor_frac)), 2)
+        if np.isfinite(self.low_min):
+            out['moving_min_low_m'] = round(self.low_min, 2)
+        if 'corridor_pct' in out or 'moving_min_low_m' in out:
+            print(f'hareketli     : koridor haritanin %{out.get("corridor_pct", float("nan")):.1f}, '
+                  f'{LOW_ALT_M:.0f} m altinda en yakin hareketli engel '
+                  f'{out.get("moving_min_low_m", float("nan")):.1f} m')
 
         print('--- makine okunur ---')
         for k, v in out.items():
