@@ -11,7 +11,11 @@ perception_node:
     use_gt_segmentation: true
     model_path: ""
     input_size: [512, 512]
-    max_rate_hz: 5.0
+    # Matches the camera (seg_cam model.sdf, 10 Hz). This is a budget for the
+    # real model rather than a need of the GT path: a network that cannot
+    # keep 10 Hz on the target should get its measured rate here, and the
+    # tracker's window is in seconds so it does not care which.
+    max_rate_hz: 10.0
     image_topic: "/camera/image"
     segmentation_topic: "/camera/segmentation"
     mask_topic: "/eland/semantic_mask"

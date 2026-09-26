@@ -16,10 +16,17 @@
      more than the landing pipeline needs and enough to drag the simulation
      below real time.
 
-  Hence 320x240 @ 5 Hz. The mapping node's ground footprint is driven by
-  horizontal_fov and altitude, not by pixel count, so the lower resolution
-  costs map detail but not map extent. If the real-time factor still sags,
-  drop to 160x120 @ 2 Hz before touching anything else.
+  Hence 320x240, first at 5 Hz. The mapping node's ground footprint is
+  driven by horizontal_fov and altitude, not by pixel count, so the lower
+  resolution costs map detail but not map extent.
+
+  Raised to 10 Hz on 2026-09-26. The pipeline behind the camera was never the
+  slow part: capture to fused map measured 24 ms (p50). What the HUD showed
+  was the camera's own 200 ms frame period, so the map moved in visible
+  steps. At 10 Hz the gz server costs about 100 % of one core instead of
+  70 % (headless), the real-time factor stayed at 1.00, and the HUD's map is
+  never more than one 100 ms frame old. If the real-time factor sags with the
+  Gazebo window open, go back to 5 here first, then to 160x120.
 
   horizontal_fov is kept at mono_cam's 1.74 rad (99.7 deg) so the existing
   camera_hfov_deg parameter in eland_params.yaml stays correct.
@@ -75,7 +82,7 @@
           </clip>
         </camera>
         <always_on>1</always_on>
-        <update_rate>5</update_rate>
+        <update_rate>10</update_rate>
         <visualize>true</visualize>
       </sensor>
       <gravity>true</gravity>

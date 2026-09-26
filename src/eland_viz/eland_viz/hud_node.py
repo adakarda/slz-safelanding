@@ -153,7 +153,10 @@ class HudNode(Node):
             self.on_local_position, PX4_QOS)
 
         rate = float(self.get_parameter('rate_hz').value)
-        self.create_timer(1.0 / max(rate, 0.1), self.render)
+        # The timer only fills the gaps between maps (the aircraft marker and
+        # the numbers move at PX4's rate, not the camera's). A new map is
+        # drawn the moment it arrives -- see on_map.
+        self.render_timer = self.create_timer(1.0 / max(rate, 0.1), self.render)
         self.create_timer(10.0, self.report)
         self.get_logger().info(
             f'hud_node up -> {self.get_parameter("hud_topic").value} '
@@ -172,6 +175,14 @@ class HudNode(Node):
         self.map_info = msg.info
         self._layer_dirty = True
         self._map_rx = time.monotonic()
+        # Drawn now rather than on the next timer tick. On the timer alone a
+        # map waited 0-100 ms for its first frame -- measured, median map age
+        # on screen 97 ms against 24 ms from capture to map -- so the HUD was
+        # showing the camera's past more than the pipeline's latency.
+        # Restarting the timer keeps the frame rate at rate_hz instead of
+        # adding the map's rate on top of it.
+        self.render()
+        self.render_timer.reset()
 
     def on_block(self, msg: OccupancyGrid) -> None:
         w, h = msg.info.width, msg.info.height
