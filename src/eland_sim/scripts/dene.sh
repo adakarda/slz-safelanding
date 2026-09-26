@@ -39,6 +39,13 @@ dene.sh [mod]
 
 Ortam degiskeni: KISI (varsayilan 3), ARAC (varsayilan 2), N, FORCE, PROFIL,
 YON, GENLIK, OUT.
+
+Dogus: `hud` ve `GORSEL=1 ruzgar` her acilista FARKLI bir yerde dogar ve mob
+duzeni de her seferinde yeniden cizilir; kullanilan seed ekrana yazilir.
+  SEED=N   ayni sahneyi tekrar ac
+  SABIT=1  eski sabit sahneye don
+Olcum kipleri (otomatik, olcum, tanim, penceresiz ruzgar) HEP sabit sahnede
+kalir -- farkli sahnelerden alinan sayilar birbiriyle karsilastirilamaz.
 EOF
 }
 
@@ -80,14 +87,39 @@ PARAMS="/tmp/eland_dene_params.yaml"
 # A pinned scenario: a randomly drawn mob layout is not comparable with the
 # numbers already recorded. The variant is built from the installed defaults
 # because the world generator reads this same file and needs every key in it.
-python3 "$WS_DIR/tools/make_params.py" "$PARAMS" 	obstacle_driver.randomize_mobs=false 	"obstacle_driver.person_count=${KISI:-3}" 	"obstacle_driver.vehicle_count=${ARAC:-2}" >/dev/null || exit 1
+# Interactive runs are for looking at the system, so each one starts somewhere
+# new: a different spawn pose and a freshly drawn mob layout. Measurement modes
+# stay on the pinned scene, because numbers taken in different worlds cannot be
+# compared -- that is what the pinned scene is for.
+INTERACTIVE=0
+case "$MODE" in
+hud) INTERACTIVE=1 ;;
+ruzgar) [ -n "${GORSEL:-}" ] && INTERACTIVE=1 ;;
+esac
+if [ "$INTERACTIVE" = 1 ] && [ -z "${SABIT:-}" ]; then
+	# One seed for both the pose and the mobs, so SEED=N brings back the whole
+	# scene. +1 because mob_seed 0 means "draw a fresh one".
+	SEED="${SEED:-$((RANDOM * 32768 + RANDOM + 1))}"
+	SPAWN_ARGS="--seed $SEED"
+	MOB_ARGS="obstacle_driver.randomize_mobs=true obstacle_driver.mob_seed=$SEED"
+	SCENE="rastgele sahne, seed $SEED (ayni sahne icin: SEED=$SEED)"
+else
+	SPAWN_ARGS="--fixed"
+	MOB_ARGS="obstacle_driver.randomize_mobs=false"
+	SCENE="sabit spawn, sabit mob duzeni"
+fi
+# shellcheck disable=SC2086  # MOB_ARGS is a list of arguments on purpose
+python3 "$WS_DIR/tools/make_params.py" "$PARAMS" $MOB_ARGS \
+	"obstacle_driver.person_count=${KISI:-3}" \
+	"obstacle_driver.vehicle_count=${ARAC:-2}" >/dev/null || exit 1
 
-echo "[dene] senaryo: sabit spawn, sabit mob duzeni, ${KISI:-3} kisi + ${ARAC:-2} arac"
+echo "[dene] senaryo: $SCENE, ${KISI:-3} kisi + ${ARAC:-2} arac"
 
 case "$MODE" in
 hud)
 	echo "[dene] pencere aciliyor. Cikmak icin Ctrl+C."
-	exec "$WS_DIR/src/eland_sim/scripts/run_sim.sh" --fixed --params "$PARAMS"
+	# shellcheck disable=SC2086
+	exec "$WS_DIR/src/eland_sim/scripts/run_sim.sh" $SPAWN_ARGS --params "$PARAMS"
 	;;
 otomatik)
 	"$WS_DIR/src/eland_sim/scripts/run_sim.sh" --fixed --headless --no-hud \
@@ -195,7 +227,8 @@ ruzgar)
 		# aircraft hovers under the force until you ask it to land. That is
 		# the interesting part to watch -- how far it leans, and whether the
 		# HUD still has a site by the time you press `m`.
-		"$WS_DIR/src/eland_sim/scripts/run_sim.sh" --fixed --takeoff 20 \
+		# shellcheck disable=SC2086
+		"$WS_DIR/src/eland_sim/scripts/run_sim.sh" $SPAWN_ARGS --takeoff 20 \
 			--params "$PARAMS" >/tmp/eland_dene.log 2>&1 &
 		RUN=$!
 		trap 'kill -INT "$RUN" 2>/dev/null; sleep 3; pkill -f "gz sim" 2>/dev/null; pkill -x px4 2>/dev/null; pkill -f MicroXRCEAgent 2>/dev/null' INT TERM

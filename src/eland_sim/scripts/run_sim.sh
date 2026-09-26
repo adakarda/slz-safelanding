@@ -39,6 +39,7 @@ SPAWN_BOUNDS=""
 # switched off, in the same world, without editing the tracked parameter file
 # between the two halves of the experiment.
 PARAMS_ARG=""
+PARAMS_FILE_PATH=""
 EXTRA_LAUNCH_ARGS=""
 PX4_PARAMS=""
 HEADLESS=""
@@ -153,6 +154,7 @@ while [ $# -gt 0 ]; do
 			exit 1
 		fi
 		PARAMS_ARG="params_file:=$2"
+		PARAMS_FILE_PATH="$2"
 		shift 2
 		;;
 	--px4-param)
@@ -244,6 +246,9 @@ if [ "$SPAWN_MODE" = "random" ]; then
 	SPAWN_ARGS=""
 	[ -n "$SPAWN_SEED" ] && SPAWN_ARGS="$SPAWN_ARGS --seed $SPAWN_SEED"
 	[ -n "$SPAWN_BOUNDS" ] && SPAWN_ARGS="$SPAWN_ARGS --bounds $SPAWN_BOUNDS"
+	# The picker avoids the fixed obstacle routes only if this run uses them,
+	# so it must read this run's parameters, not the installed defaults.
+	[ -n "$PARAMS_FILE_PATH" ] && SPAWN_ARGS="$SPAWN_ARGS --params $PARAMS_FILE_PATH"
 	# shellcheck disable=SC2086
 	SPAWN_OUT=$(python3 "$(dirname "$0")/pick_spawn.py" --world "$WS_DIR/src/eland_sim/worlds/eland_test.sdf.in" $SPAWN_ARGS 2>/dev/null)
 	if [ -n "$SPAWN_OUT" ]; then

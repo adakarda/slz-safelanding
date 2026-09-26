@@ -137,6 +137,11 @@ def obstacle_paths(params_path):
         p = doc['obstacle_driver']['ros__parameters']
     except Exception:  # noqa: BLE001 - a missing scenario is not fatal here
         return []
+    # With randomised mobs the legacy fixed routes are not driven by anyone:
+    # the mobs are drawn later, around wherever the aircraft ends up. Keeping
+    # clear of routes that do not exist cost 14% of the spawn area.
+    if p.get('randomize_mobs', False):
+        return []
     legs = []
     for a, b in (('person_start', 'person_goal'), ('vehicle_start', 'vehicle_goal')):
         if a in p and b in p:
@@ -175,7 +180,12 @@ def main():
     ap.add_argument('--params', default=PARAMS)
     ap.add_argument('--seed', type=int, default=None,
                     help='omit for a fresh random pose; the seed used is printed')
-    ap.add_argument('--bounds', default='-25,-25,25,25',
+    # The extent of the world's standing content (x -31..54, y -52..34) plus
+    # a few metres. The old [-25, 25] box left 13.5% of itself free once
+    # obstacle clearances were applied, and that 13.5% sat mostly in one
+    # strip: four seeds in a row spawned at y = -23. This box is 65% free and
+    # reaches every populated corner, including the paved yard at (45, -45).
+    ap.add_argument('--bounds', default='-35,-55,55,38',
                     help='x0,y0,x1,y1 the spawn is drawn from')
     # 6 m: an x500 is half a metre across, so this is not about fitting. It is
     # about not starting the run already inside the exclusion zone of the
