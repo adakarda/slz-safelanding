@@ -1507,3 +1507,137 @@ mühendislik günlüğü tarafı.
 |---|---|
 | 26 | ~~15-20 N bozucu altında harita neden aday üretemiyor.~~ Ölçüldü, `docs/TEZ_NOTLARI.md` §2.9: eğim anlık kapsamı bozuyor (20-30°'de bilinmeyen oranı 0.11 → 0.37), füzyon bunu yalnızca araç yerinde durduğu sürece gizliyor. İkisi birlikte olunca küme boşalıyor. |
 | 27 | Rüzgâr ölçümleri tek yönden (45°) alındı; yön bağımlılığı denenmedi. |
+
+# 23. Rastgele doğuş, HUD hızı, izleyici penceresi (2026-09-26)
+
+## 23.1 Doğuş gerçekte rastgele değildi
+
+`run_sim.sh` rastgele doğuşu destekliyordu ama pratikte hep aynı şeritten
+seçiyordu: dört farklı tohumun dördü de y ≈ −23 verdi. Sebep ölçüldü, 1 m'lik
+ızgarada:
+
+| Kutu | Serbest | Engel mesafesi yüzünden red | Eski rota yüzünden red |
+|---|---|---|---|
+| ±25 m (eski varsayılan) | **%13.5** | %72.8 | %13.6 |
+| ±55 m | %64.8 | %30.2 | %5.1 |
+
+İki düzeltme: sınırlar dünyanın içeriğine göre (`-35,-55,55,38`; içerik
+x −31…54, y −52…34), ve mob'lar rastgele çizildiğinde eski sabit rotalardan
+kaçınma kaldırıldı — o rotaları kimse sürmüyordu. Sekiz tohumla yeni dağılım:
+x −29…44, y −33…33.
+
+`dene.sh hud` ve `GORSEL=1 dene.sh ruzgar` artık her açılışta farklı sahne
+kuruyor (doğuş + mob düzeni aynı tohumdan). `SEED=N` tekrarlar, `SABIT=1`
+eski sabit sahneye döner. Ölçüm kipleri bilerek sabit sahnede kaldı.
+
+## 23.2 HUD: iki kök neden ve bir gizli ayar
+
+Ölçüm, her halka ayrı:
+
+| | Öncesi | Sonrası |
+|---|---|---|
+| Kamera | 5.14 Hz | 5.35 Hz |
+| Maske | **3.03 Hz** | **5.01 Hz** |
+| Füzyonlu harita | 3.03 Hz | 5.04 Hz |
+| HUD | 4.75 Hz | **9.57 Hz** |
+| HUD çizim süresi | ~42 ms | ~8.5 ms |
+| Ekrandaki haritanın yaşı (ortanca) | ~160 ms | **~99 ms** |
+| `hud_node` CPU | %21 | %15 |
+| DDS taşıma | 4 ms | 4 ms (sorun değildi) |
+
+**Kök neden 1 — hız sınırlayıcı kameranın yarısını atıyordu.** `perception_node`
+bir kareyi, son yayından bu yana 1/`max_rate_hz` geçmediyse atıyordu. Kamera
+5.14 Hz, sınır tam 5.0 Hz: kareler 195 ms arayla geliyor, sınır 200 ms, yani
+her ikinci kare 5 ms "erken" sayılıp çöpe gidiyordu. Yerine bir takvim geldi:
+her kabul edilen kare bir sonraki slotu tam bir periyot ileri alıyor, uzun vadede
+hız sınırı korunuyor ama titreşimle erken gelen kare içeri alınıyor.
+
+Aynı kusur `detector_node`'da da var (harita 3 Hz, sınır 2 Hz, çıkan 1.46 Hz)
+ve **bilerek düzeltilmedi**: §19.2'de karar hızını artırmanın çalkantıyı
+artırdığı ölçülmüştü.
+
+**Kök neden 2 — üç renk bandı karenin %93'ü.** Sentetik veriyle aynı işlemler
+ölçüldü: palet 1.1 ms, bantlar **30.8 ms**, ızgara 0.3 ms, yazı 1.0 ms. Bantlar
+520×520'de, boolean indeksli piksellerde float64 ile karıştırılıyordu. Aynı
+karışım haritanın kendi çözünürlüğünde (200×200) yapılıp bir kez büyütülünce
+katman 29.1 → 4.3 ms; görüntü aynı, çünkü blok haritası zaten en-yakın-komşu
+ile büyütüldüğü için yalnız hücre sınırlarında değişiyordu. Katman artık
+yalnız yeni harita geldiğinde yeniden çiziliyor; aradaki karelerde kopya
+0.03 ms.
+
+**Gizli ayar.** Kodda HUD hızı 10 Hz'e çıkarıldığı hâlde ölçüm 5.0 Hz verdi:
+`eland_params.yaml` `rate_hz: 5.0` diyerek düğümün varsayılanını eziyordu.
+
+HUD artık kendi hızını, çizim süresini ve ekrandaki haritanın yaşını 10 s'de
+bir logluyor — gecikme tahminle değil ölçümle konuşulsun diye.
+
+## 23.3 İzleyici hız kestirimi: önce ölçüm düzeneği düzeldi
+
+Açık madde #24 ("araç hızı gerçeğin ~%52'si") için önerilen sıra: önce
+dönüşlerin bir simülasyon yapaylığı olup olmadığını test et, sonra gerekirse
+izleyiciye dokun. Kullanıcı onayıyla yapıldı.
+
+**Ölçüm düzeneğinde iki kusur çıktı, ilk sonuçlar çöpe atıldı:**
+
+1. Truth mesajı pozu **sim zamanında** hesaplıyor ama **düğüm saatiyle**
+   damgalıyordu; skorlayıcı da duvar saatiyle bölüyordu. İzleyici ise sim
+   zamanıyla çalışıyor. Simülasyon yavaşladığında gerçek hız düşük okunuyor ve
+   bütün oranlar olduğundan iyi görünüyordu (araç 3.0 m/s yerine 1.95-2.18
+   okundu). Truth artık sim zamanıyla damgalanıyor.
+2. Tek yönlü rotada başa ışınlanma adımı, mesafe eşiğiyle (8 m) eleniyordu;
+   truth yavaş yayınlandığında gerçek adımlar da eleniyordu. Artık adımın ima
+   ettiği **hızla** eleniyor (>10 m/s).
+
+Bu iki düzeltmeden sonra "%52" bir ölçüm hatası çıktı; doğru ölçümle eski
+sistemde araç harita içinde **~%73**.
+
+**Deney:** tek yönlü rota kipi (`vehicle_mode: wrap`) eklendi — sona gelince
+başa ışınlanır, hiç dönmez. Varsayılan `pingpong` değişmedi. Araç, harita içi
+(kenara ≥4 m), 3.0 m/s'nin yüzdesi, kol başına iki uçuş, RTF 1.00:
+
+| Yapılandırma | pingpong | wrap (dönüş yok) |
+|---|---|---|
+| 3 Hz, 8 örnek (≈2.6 s) — eski sistem | 74, 71 | — |
+| 5 Hz, 8 örnek (≈1.6 s) | 64, 72 | 77, 80 |
+| 5 Hz, 2.6 s (süre) | 62, 74 | 57, 62 |
+| **5 Hz, 1.6 s (süre) — yeni** | 74, 54 | 80, 67 |
+
+Okunuşu:
+
+- **Dönüşler ~10 puan açıklıyor** (insanda da benzer: %78 → %90). Gerçek trafik
+  anında 180° dönmez; bu bir test yapaylığı. Dönüşe özel mantık eklenmedi —
+  iki kez denendi (§19.5), ikisi de işe yaramadı.
+- **İzleyicinin zaman sabiti kamera hızına bağlıydı.** Pencere 8 örnekti:
+  3 Hz'de 2.6 s, algı düzeltilince 5 Hz'de 1.6 s. Artık saniyeyle tanımlı
+  (`history_s`), güven terimi de örnek sayısına değil kapsanan süreye bağlı.
+- **2.6 s, "eski pencereyi koru" diye bariz seçimdi ve tek yönlü rotada daha
+  kötü çıktı.** 1.6 s seçildi. Koşudan koşuya dağılım 10-20 puan; kol başına
+  iki uçuşla ayırt edilebilen tek fark 2.6 s'nin kötülüğü.
+
+## 23.4 Gerileme kontrolü — hepsi birlikte
+
+Algı 5 Hz, HUD 10 Hz, 1.6 s pencere ve yeni doğuş sınırları hiç birlikte
+uçmamıştı. `tools/batch_run.sh 6`, rastgele dünyalar:
+
+| | Önceki (`v2.8`, 10 dünya) | Şimdi (6 dünya) |
+|---|---|---|
+| İniş | 10/10 | **6/6** |
+| Alçalma süresi, ortanca | 22.15 s | 18.74 s |
+| Dikey RMS | 0.19 m/s | 0.19 m/s |
+| Aday üretilmeyen kare, ortanca | 2.5 | 0 |
+| 3 s üstü boşluk / ABORT | 0 / 0 | 0 / 0 |
+| Aday yayın hızı | 1.42 Hz | 1.67 Hz |
+| Dokunmanın siteden sapması, ortanca | — | 0.04 m |
+
+Not: doğuş sınırları değiştiği için aynı tohumlar artık farklı konumlar
+üretiyor — iki küme dağılım olarak karşılaştırılabilir, dünya dünya değil.
+Aday hızının 1.42 → 1.67 Hz'e çıkması beklenen yan etki: harita 5 Hz'e
+çıkınca `detector_node`'un kendi sınırlayıcısı daha sık kare geçiriyor (#28).
+
+## 23.4 Açık
+
+| # | Konu |
+|---|---|
+| 24 | Araç harita içinde gerçeğin ~%70-80'i (eski "%52" ölçüm hatasıydı). ~10 puanı dönüş yapaylığı; kalanın kaynağı bulunmadı, pencere uzunluğu değil. Harita kenarında (<4 m) %20-45 — asıl kayıp orada. |
+| 28 | `detector_node`'daki aynı hız sınırlayıcı kusuru (harita 5 Hz, sınır 2 Hz) bilerek düzeltilmedi, §19.2. |
+| 29 | Kol başına iki uçuş, 10-20 puanlık dağılımı ayırt etmeye yetmiyor. Pencere uzunluğu için kesin karar daha çok tekrar ister. |

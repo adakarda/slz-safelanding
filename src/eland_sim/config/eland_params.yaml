@@ -231,7 +231,12 @@ tracker_node:
     # centroid moves further between frames than the person does.
     reversal_leg_m: 0.0
     association_radius_m: 4.0
-    history_len: 8
+    # Fit window in SECONDS. It was 8 samples, which tied the tracker's time
+    # constant to the camera rate: 2.6 s at 3 Hz, 1.6 s at 5 Hz. 1.6 s by
+    # measurement -- 2.6 s was tried and was worse on one-way routes (see
+    # tracker_node). history_len is now only a cap on samples kept.
+    history_s: 1.6
+    history_len: 32
     # Tracks coast for this long after the obstacle was last seen, with
     # confidence decaying to zero across the window. An obstacle that leaves
     # the 40 m map is still on the road it was on: forgetting it in 2 s let

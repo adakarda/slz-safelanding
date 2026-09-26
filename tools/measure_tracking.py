@@ -43,6 +43,7 @@ class Scorer(Node):
         super().__init__('tracking_scorer')
         self.duration = duration
         self.truth_hist = []          # (t, [(x, y), (x, y)])
+        self.truth_stamps = []        # sim time of each truth_hist entry
         self.pending = []             # (target_t, idx, dt, px, py)
         self.pos_err = defaultdict(list)
         self.pred_err = defaultdict(list)
@@ -114,11 +115,15 @@ class Scorer(Node):
             self.mask_class_px[int(cid)].append(int((buf == cid).sum()))
 
     def on_truth(self, msg):
+        # Sim-time stamp of these poses, kept for the speed computation.
+        self.truth_stamps.append(msg.header.stamp.sec
+                                 + msg.header.stamp.nanosec * 1e-9)
         t = time.time()
         pts = [(p.position.x, p.position.y) for p in msg.poses]
         self.truth_hist.append((t, pts))
         if len(self.truth_hist) > 4000:
             del self.truth_hist[:1000]
+            del self.truth_stamps[:1000]
         self.resolve(t)
 
     def truth_at(self, t):
@@ -217,17 +222,28 @@ class Scorer(Node):
         if len(self.truth_hist) > 2:
             span = self.truth_hist[-1][0] - self.truth_hist[0][0]
             for idx, name in NAMES.items():
-                dist = 0.0
-                prev = None
-                for _t, pts in self.truth_hist:
-                    if idx < len(pts):
-                        if prev is not None:
-                            dist += math.hypot(pts[idx][0] - prev[0],
-                                               pts[idx][1] - prev[1])
-                        prev = pts[idx]
-                if span > 0:
-                    print(f'{name} moved at {dist / span:.2f} m/s in wall clock '
-                          f'over {span:.0f} s of recording')
+                # Speed in SIM time, from the truth's own stamps -- the same
+                # time base the tracker fits against. Steps whose implied
+                # speed is impossible are the 'wrap' mode's jump back to the
+                # start of the route, not motion.
+                dist, dur = 0.0, 0.0
+                for k in range(1, min(len(self.truth_hist),
+                                      len(self.truth_stamps))):
+                    a, b = self.truth_hist[k - 1][1], self.truth_hist[k][1]
+                    if idx >= len(a) or idx >= len(b):
+                        continue
+                    dt = self.truth_stamps[k] - self.truth_stamps[k - 1]
+                    if dt <= 0.0:
+                        continue
+                    step = math.hypot(b[idx][0] - a[idx][0],
+                                      b[idx][1] - a[idx][1])
+                    if step / dt > 10.0:
+                        continue
+                    dist += step
+                    dur += dt
+                if dur > 0:
+                    print(f'{name} moved at {dist / dur:.2f} m/s in SIM time '
+                          f'over {dur:.0f} s of truth')
 
         hz, worst = rate(self.mask_times)
         ihz, iworst = rate(self.instant_times)

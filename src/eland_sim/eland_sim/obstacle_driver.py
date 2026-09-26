@@ -283,6 +283,17 @@ class ObstacleDriver(Node):
                 frac, yaw = phase, mover['yaw_out']
             else:
                 frac, yaw = 2.0 - phase, mover['yaw_out'] + math.pi
+        elif self._mode == 'wrap':
+            # One direction only: at the end of the route the obstacle is
+            # moved back to the start and carries on the same way. For
+            # telling a tracker weakness apart from a test artefact: the
+            # vehicle's fitted speed came out at ~52% of the truth, and the
+            # suspect is the instant 180-degree turn at each end of a
+            # ping-pong route, which real traffic does not do. The jump is
+            # far longer than the tracker's association gate, so it reads as
+            # one track ending and a new one starting, not as motion.
+            frac = (t % leg) / leg
+            yaw = mover['yaw_out']
         else:
             frac = min(t / leg, 1.0)
             yaw = mover['yaw_out']
@@ -358,7 +369,14 @@ class ObstacleDriver(Node):
         plotted afterwards is not worth a new dependency in eland_msgs.
         """
         msg = PoseArray()
-        msg.header.stamp = self.get_clock().now().to_msg()
+        # Stamped with the sim time the poses were computed at, not this
+        # node's clock. The tracker fits speed against sim-time map stamps; a
+        # truth stamped in wall time reads slow whenever the simulation runs
+        # below real time, and every accuracy figure built on it flatters the
+        # tracker by the same factor.
+        sec = int(self._sim_time)
+        msg.header.stamp.sec = sec
+        msg.header.stamp.nanosec = int((self._sim_time - sec) * 1e9)
         msg.header.frame_id = 'map'
         for mover, (x, y, yaw) in zip(self._movers, poses):
             pose = RosPose()

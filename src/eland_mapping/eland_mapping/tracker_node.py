@@ -67,12 +67,21 @@ class Track:
         self.born = t
         self.last_seen = t
 
-    def add(self, t, x, y, history_len):
+    def add(self, t, x, y, history_len, history_s=0.0):
         self.times.append(t)
         self.xs.append(x)
         self.ys.append(y)
         self.last_seen = t
-        if len(self.times) > history_len:
+        # Time first: keep what falls inside the window, but never fewer than
+        # two samples, which is the least a velocity can be fitted from.
+        if history_s > 0.0:
+            while len(self.times) > 2 and t - self.times[0] > history_s:
+                del self.times[0]
+                del self.xs[0]
+                del self.ys[0]
+        # The sample cap stays as a guard against a camera much faster than
+        # anything here, not as the thing that sets the window.
+        while len(self.times) > history_len:
             del self.times[0]
             del self.xs[0]
             del self.ys[0]
@@ -189,7 +198,24 @@ class TrackerNode(Node):
         # frame; 4 m leaves room for centroid jitter without letting two
         # obstacles swap identities across a 20 m map.
         self.declare_parameter('association_radius_m', 4.0)
-        self.declare_parameter('history_len', 8)
+        # The fit window, in seconds. It used to be 8 samples, which made the
+        # tracker's time constant a function of the camera rate: 2.6 s at the
+        # 3 Hz the pipeline ran at, 1.6 s once a perception limiter that had
+        # been dropping every other frame was fixed.
+        #
+        # 1.6 s, chosen by measurement (vehicle speed inside the map, % of the
+        # configured 3.0 m/s, two flights per cell, one-way routes):
+        #   8 samples at 5 Hz (= 1.6 s)   77, 80
+        #   2.6 s                         57, 62   <- the obvious "keep the old
+        #                                             window" choice, and worse
+        #   1.6 s                         80, 67
+        # Run-to-run spread is 10-20 points, so the only difference that
+        # holds is that 2.6 s is worse. Stated in seconds so the next change
+        # to the camera rate cannot move it again.
+        self.declare_parameter('history_s', 1.6)
+        # Upper bound on samples kept, as a guard only; history_s sets the
+        # window.
+        self.declare_parameter('history_len', 32)
         # A track outlives its last observation, and that is the point. An
         # obstacle that drives off the edge of a 40 m map has not stopped
         # existing; it is still on the road it was on. Measured consequence of
@@ -216,6 +242,7 @@ class TrackerNode(Node):
         self.reversal_leg_m = float(
             self.get_parameter('reversal_leg_m').value)
         self.history_len = int(gp('history_len').value)
+        self.history_s = float(gp('history_s').value)
         self.timeout_s = float(gp('track_timeout_s').value)
         self.min_obs = int(gp('min_observations_for_velocity').value)
         self.max_speed = float(gp('max_speed_mps').value)
@@ -297,7 +324,7 @@ class TrackerNode(Node):
                 if d < best_d:
                     best, best_d = det, d
             if best is not None:
-                track.add(t, best[1], best[2], self.history_len)
+                track.add(t, best[1], best[2], self.history_len, self.history_s)
                 track.trim_at_reversal(self.reversal_leg_m)
                 unmatched.remove(best)
 
@@ -339,7 +366,17 @@ class TrackerNode(Node):
                     vx = vy = 0.0
                     conf = 0.0
                 else:
-                    count_term = min(1.0, (n - 1) / max(1, self.history_len - 1))
+                    # How much of the window the track covers, in time. It
+                    # was (n - 1) / (history_len - 1), which at a faster
+                    # camera would have called a full-length track young and
+                    # widened its corridor for no reason. 0.85 of the window
+                    # counts as full, because samples land on frame times and
+                    # the span of a full window is a frame short of it.
+                    span = track.times[-1] - track.times[0] if n > 1 else 0.0
+                    if self.history_s > 0.0:
+                        count_term = min(1.0, span / (0.85 * self.history_s))
+                    else:
+                        count_term = min(1.0, (n - 1) / max(1, self.history_len - 1))
                     # 0.5 m of residual halves the confidence: that is about
                     # one person-width of centroid wander, past which the fit
                     # is describing mask flicker rather than motion.
