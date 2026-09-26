@@ -70,8 +70,15 @@ colcon build --packages-select eland_msgs eland_common eland_sim eland_mapping \
 # shellcheck disable=SC1091
 source install/setup.bash
 
+# Background runs below are stopped with TERM, never INT. With no job control
+# bash starts every `cmd &` with SIGINT ignored, and a signal ignored on entry
+# cannot be trapped: `kill -INT "$RUN"` did nothing at all, run_sim's cleanup
+# never ran, and its ROS nodes kept running into the next run -- measured, a
+# second pipeline on top of the new one (camera 19 Hz, map 37 Hz).
 echo "[dene] onceki kosudan kalanlar temizleniyor..."
 pkill -f "gz sim" 2>/dev/null
+# The gz server can hang in its own SIGTERM handler; see run_sim.sh.
+(sleep 3; pkill -KILL -f "gz sim" 2>/dev/null) &
 pkill -x px4 2>/dev/null
 pkill -f MicroXRCEAgent 2>/dev/null
 pkill -f "ros2 launch" 2>/dev/null
@@ -207,7 +214,7 @@ PY
 	grep -c "candidate lost" /tmp/eland_logs/pipeline.log
 	echo "--- karar karesi (ms, p50/p95) ---"
 	grep -o "decision ms (p50/p95):.*" /tmp/eland_logs/pipeline.log | tail -1
-	kill -INT "$RUN" 2>/dev/null
+	kill -TERM "$RUN" 2>/dev/null
 	sleep 5
 	pkill -f "gz sim" 2>/dev/null
 	pkill -x px4 2>/dev/null
@@ -231,7 +238,7 @@ ruzgar)
 		"$WS_DIR/src/eland_sim/scripts/run_sim.sh" $SPAWN_ARGS --takeoff 20 \
 			--params "$PARAMS" >/tmp/eland_dene.log 2>&1 &
 		RUN=$!
-		trap 'kill -INT "$RUN" 2>/dev/null; sleep 3; pkill -f "gz sim" 2>/dev/null; pkill -x px4 2>/dev/null; pkill -f MicroXRCEAgent 2>/dev/null' INT TERM
+		trap 'kill -TERM "$RUN" 2>/dev/null; sleep 3; pkill -f "gz sim" 2>/dev/null; pkill -x px4 2>/dev/null; pkill -f MicroXRCEAgent 2>/dev/null' INT TERM
 		echo "[dene] pencere aciliyor, kalkis bekleniyor (~50 s)..."
 		sleep 50
 		export PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH:-}"
@@ -244,12 +251,12 @@ ruzgar)
 		# lean, this says how many degrees it is.
 		python3 "$WS_DIR/tools/tilt_watch.py" 1.0 &
 		TILT=$!
-		trap 'kill -INT "$TILT" 2>/dev/null; kill -INT "$RUN" 2>/dev/null; sleep 3; pkill -f "gz sim" 2>/dev/null; pkill -x px4 2>/dev/null; pkill -f MicroXRCEAgent 2>/dev/null' INT TERM
+		trap 'kill -TERM "$TILT" 2>/dev/null; kill -TERM "$RUN" 2>/dev/null; sleep 3; pkill -f "gz sim" 2>/dev/null; pkill -x px4 2>/dev/null; pkill -f MicroXRCEAgent 2>/dev/null' INT TERM
 		python3 "$WS_DIR/tools/wind_inject.py" --force "${FORCE:-10}" \
 			--profile "${PROFIL:-step}" --dir "${YON:-45}" \
 			--duration "${SURE:-600}"
-		kill -INT "${TILT:-0}" 2>/dev/null
-		kill -INT "$RUN" 2>/dev/null
+		kill -TERM "${TILT:-0}" 2>/dev/null
+		kill -TERM "$RUN" 2>/dev/null
 		sleep 3
 		pkill -f "gz sim" 2>/dev/null
 		pkill -x px4 2>/dev/null
@@ -267,8 +274,8 @@ ruzgar)
 		--profile "${PROFIL:-step}" --dir "${YON:-45}" --duration 120 &
 	WIND=$!
 	timeout 160 python3 "$WS_DIR/tools/run_scorer.py" 120
-	kill -INT "$WIND" 2>/dev/null
-	kill -INT "$RUN" 2>/dev/null
+	kill -TERM "$WIND" 2>/dev/null
+	kill -TERM "$RUN" 2>/dev/null
 	sleep 5
 	pkill -f "gz sim" 2>/dev/null
 	pkill -x px4 2>/dev/null
@@ -291,7 +298,7 @@ tanim)
 	sleep 45
 	export PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH:-}"
 	timeout 180 python3 "$WS_DIR/tools/fit_fopdt.py" 100
-	kill -INT "$RUN" 2>/dev/null
+	kill -TERM "$RUN" 2>/dev/null
 	sleep 5
 	pkill -f "gz sim" 2>/dev/null
 	pkill -x px4 2>/dev/null
@@ -307,7 +314,7 @@ olcum)
 	sleep 105
 	export PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH:-}"
 	VEHICLES="${ARAC:-2}" timeout 130 python3 "$SCORER" 90
-	kill -INT "$RUN" 2>/dev/null
+	kill -TERM "$RUN" 2>/dev/null
 	sleep 5
 	pkill -f "gz sim" 2>/dev/null
 	pkill -x px4 2>/dev/null

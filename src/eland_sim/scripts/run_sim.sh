@@ -200,6 +200,20 @@ while [ $# -gt 0 ]; do
 done
 
 # ---------------------------------------------------------------- teardown
+# The gz server does not reliably die on SIGTERM: it catches the signal, starts
+# a graceful shutdown and can hang in it for good. Found two of them still
+# running (one at 32 % CPU, one two hours old) after runs that had all been
+# closed normally, each still simulating the world it was started with. So:
+# ask, wait a moment, then insist.
+stop_gz() {
+	pkill -x ruby 2>/dev/null # the gz server and GUI are ruby wrappers
+	for _ in 1 2 3 4 5 6; do
+		pgrep -x ruby >/dev/null || return 0
+		sleep 0.5
+	done
+	pkill -KILL -x ruby 2>/dev/null
+}
+
 cleanup() {
 	echo
 	echo "[run_sim] kapatiliyor..."
@@ -216,7 +230,7 @@ cleanup() {
 	[ -n "${LAUNCH_PID:-}" ] && kill "$LAUNCH_PID" 2>/dev/null
 	pkill -x MicroXRCEAgent 2>/dev/null
 	pkill -x px4 2>/dev/null
-	pkill -x ruby 2>/dev/null # the gz server and GUI are ruby wrappers
+	stop_gz
 	sleep 1
 	echo "[run_sim] bitti. Loglar: $LOG_DIR"
 }
@@ -293,7 +307,7 @@ printf 'pose %s\nseed %s\nmode %s\n' "$POSE" "${SPAWN_SEED:--}" "$SPAWN_MODE" \
 	>"$LOG_DIR/spawn.txt"
 # Anything left over from a previous run steals the ports and the topics.
 pkill -x px4 2>/dev/null
-pkill -x ruby 2>/dev/null
+stop_gz
 pkill -x MicroXRCEAgent 2>/dev/null
 sleep 1
 

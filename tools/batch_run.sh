@@ -33,9 +33,17 @@ cleanup() {
 	pkill -x px4 2>/dev/null
 	pkill -f MicroXRCEAgent 2>/dev/null
 	pkill -f "ros2 launch" 2>/dev/null
+	# The gz server can hang in its own SIGTERM handler; see run_sim.sh.
+	sleep 2
+	pkill -KILL -f "gz sim" 2>/dev/null
+	# Never this script itself: an A/B over a node parameter puts that node's
+	# name on this script's own command line (detector_node.foo=1), and a
+	# plain `pkill -f detector_no` then ends the batch before its first run.
 	for n in obstacle_driv tracker_no detector_no mapping_no perception_no \
 		emergency_landing hud_no control_stat image_bridg run_scor; do
-		pkill -f "$n" 2>/dev/null
+		for pid in $(pgrep -f "$n"); do
+			[ "$pid" = "$$" ] || kill "$pid" 2>/dev/null
+		done
 	done
 	# PX4 keeps its ports for a moment after it dies; starting the next run
 	# too early gives no simulation at all and a row of zeros.
@@ -59,7 +67,9 @@ for i in $(seq 1 "$N"); do
 	sleep 32
 	timeout 200 python3 "$WS_DIR/tools/run_scorer.py" 150 \
 		>"/tmp/eland_batch_score_$i.txt" 2>&1
-	kill -INT "$RUN" 2>/dev/null
+	# TERM, not INT: a background job of a non-interactive script starts with
+	# SIGINT ignored and cannot trap it, so INT never reached run_sim's cleanup.
+	kill -TERM "$RUN" 2>/dev/null
 
 	python3 - "$i" "$SEED" "/tmp/eland_batch_score_$i.txt" "$OUT" <<'PY'
 import sys
