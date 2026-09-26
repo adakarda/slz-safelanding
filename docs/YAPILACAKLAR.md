@@ -1,6 +1,8 @@
 # Yapılacaklar — İster ↔ Yapılan Karşılaştırması
 
-Değerlendirme tarihi: 2026-09-26 · Kod: `main` @ `v3.6-arastirma-notu`
+Değerlendirme tarihi: 2026-09-26 · Kod: `main` @ `v4.0-tracker-window`
+
+> **Son güncelleme (v3.8-v4.0):** rastgele doğuş haritanın her yerinde, HUD 4.75 → 9.57 Hz / harita yaşı 160 → 99 ms, izleyici penceresi saniyede. "%52" araç hızı bir ölçüm hatasıymış (gerçeği ~%73). Ayrıntı `DURUM.md` §23.
 
 Bu dosya projenin **baştan sona ne istendiğini** ve **ne yapıldığını** tek
 yerde karşılaştırır, sonunda yapılacaklar listesi verir. Kaynak isterler
@@ -175,7 +177,7 @@ güncellenmedi. Güncel hâli:
 | 21 | `TRAIN_WEIGHTS` boru hattında kullanılmıyor | not |
 | 22 | Bellekte site sıçraması | ✅ kapandı |
 | 23 | Araç izlenmiyor | ✅ kapandı — kusur değilmiş |
-| 24 | **Araç hız kestirimi ~%52** | ❌ **senin onayını bekliyor** |
+| 24 | Araç hız kestirimi | 🟡 "%52" ölçüm hatasıydı; doğru ölçümle ~%70-80. ~10 puanı dönüş yapaylığı, kenarda %20-45. §23.3 |
 | 25 | Aday koşu başına 3-4 kez >4 m sıçrıyor | ❌ |
 | 26 | 15-20 N'da algı neden çöküyor | ✅ kapandı — ölçüldü |
 | 27 | Rüzgâr tek yönden | ❌ |
@@ -184,13 +186,12 @@ güncellenmedi. Güncel hâli:
 
 ## 4. Karar bekleyenler (işi senin kararın durduruyor)
 
-- [ ] **Kapsama-tabanlı PID hangi formda?** (Hat 2'nin kalbi)
+- [ ] **Kapsama-tabanlı PID** — kullanıcı kendisi tasarlayıp getirecek, implementasyon sonra (Hat 2'nin kalbi)
   1. ρ setpoint PID — basit, doyumda kör
   2. **τ / ıraksama kontrolü** (`ρ̇/ρ = 2D`) — literatürün ana hattı, doyumda
      ters yöne iter, doyum tespiti şart
   3. Sabit hedef ρ* = 0.95 — doyumda güvenli yöne hata yapar *(önerilen başlangıç)*
-- [ ] **Araç hız kestirimi** (#24): süreye göre ve hıza göre kısalan LSQ
-  penceresini denememe izin veriyor musun?
+- [x] ~~Araç hız kestirimi (#24)~~ — onay verildi, yapıldı: pencere saniyede (`v4.0`)
 - [ ] **Ağırlık-risk sapması** (C-6): gerekçeli sapmayı onaylıyor musun?
 - [ ] **Tez iddiası**: sim, karar mantığının doğrulaması mı (SafeLand
   yaklaşımı), yoksa tahmin üzerinden uçtan uca mı? (§2-F çelişkisi)
@@ -249,7 +250,8 @@ recall ölç.
   çıkınca ne olacağı.
 - [ ] **P1** Brief'in son-metre maddesi: düşük irtifada **bilinçli yeniden
   doğrulama** adımı.
-- [ ] **P2** #24 — araç hız kestirimi (onayla).
+- [ ] **P2** #24 — kalan açık: harita kenarında hız kestirimi (%20-45).
+- [ ] **P2** #28 — `detector_node` sınırlayıcısı aynı örnekleme kusurunu taşıyor (bilerek bırakıldı).
 - [ ] **P2** #7 — IPM ~0.3 m doğu sapması.
 - [ ] **P2** #10 — 10 s ufuk (koridorun asıl değeri 2-4 s'de).
 - [ ] **P2** #18 — mob rotaları düz çizgi.
