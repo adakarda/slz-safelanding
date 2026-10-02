@@ -8,8 +8,8 @@ Bu dosya o asistana projeyi, mevcut durumu, ölçülmüş gerçekleri ve kısıt
 tek seferde anlatmak için yazıldı. Dosyanın tamamını sohbete yapıştırıp en
 alttaki açılış mesajıyla başlamak yeterli.
 
-Buradaki her sayı simülasyonda **ölçülmüştür**; tahmin olan yerler "tahmin"
-ya da "ölçülmedi" diye işaretli.
+Buradaki sayılar simülasyonda **ölçülmüştür**. Geometriden hesaplananlar
+(§6) ve tahminler ayrıca işaretli.
 
 ---
 
@@ -176,7 +176,8 @@ Bölge kadraja tam sığdığı sürece (alanı `A`):
 Yani **kapsamanın logaritmik türevi doğrudan ıraksamadır**; irtifa bilgisi
 gerekmez. Bu ilişki henüz simülasyonda doğrulanmadı (yapılacaklar listesinde).
 
-Bölge ne zamana kadar kadraja sığar (aracın tam altında, kare bölge, kenar `s`):
+Bölge ne zamana kadar kadraja sığar (aracın tam altında, kare bölge; yukarıdaki
+geometriden **hesaplandı**, ölçülmedi):
 
 | Bölge | Sığdığı irtifa | O irtifada ρ |
 |---|---|---|
