@@ -196,7 +196,8 @@ güncellenmedi. Güncel hâli:
 
 ## 4. Karar bekleyenler (işi senin kararın durduruyor)
 
-- [ ] **Kapsama-tabanlı PID** — kullanıcı kendisi tasarlayıp getirecek, implementasyon sonra (Hat 2'nin kalbi)
+- [ ] **Kapsama-tabanlı PID** — kullanıcı kendisi tasarlayıp getirecek, implementasyon sonra (Hat 2'nin kalbi).
+  Tasarım için sohbet asistanına verilecek brif hazır: `docs/KONTROLCU_TASARIM_BRIEF.md`
   1. ρ setpoint PID — basit, doyumda kör
   2. **τ / ıraksama kontrolü** (`ρ̇/ρ = 2D`) — literatürün ana hattı, doyumda
      ters yöne iter, doyum tespiti şart
