@@ -1,0 +1,3 @@
+# Yeniden ucurulacaklar: ilk denemede sim/mod sorunu (VERI_TOPLAMA.md, "Yeniden ucurulacaklar").
+POLITIKA="sabit --hiz 0.4" tools/veri/kosu.sh 1 k1_v0.4 veri_w4
+POLITIKA="kahin --d 0.35" tools/veri/kosu.sh 1 k2_d0.35 veri_w4

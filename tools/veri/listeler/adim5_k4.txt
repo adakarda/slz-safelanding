@@ -1,4 +1,4 @@
-# Oncelik 5 -- K4 coklu-sinus + basamak, 40 m, W3. Tek tohum coklu-sinus once.
+# Oncelik 5 -- K4 coklu-sinus + basamak, 40 m, W3. Tek tohumda basamak turu once, cift tohumda coklu-sinus once (politika.py, tohum % 2).
 BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 1" tools/veri/kosu.sh 1 k4 veri_w3
 BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 2" tools/veri/kosu.sh 2 k4 veri_w3
 BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 3" tools/veri/kosu.sh 3 k4 veri_w3

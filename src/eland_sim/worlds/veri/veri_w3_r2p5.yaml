@@ -33,7 +33,8 @@ baslangic:
 ruzgar:
   hiz_mps: 2.5
   yon_deg: 45.0
-  olcek: 1.0
+  olcek: 0.075
+  olcek_sdf: 0.2739
 hareketli_kisi: 0
 negatif_ornek: false
 mob_layout_file: /home/arda/ros2_ws/src/eland_sim/worlds/veri/veri_w3_r2p5.mobs.yaml

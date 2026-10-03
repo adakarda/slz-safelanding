@@ -244,13 +244,23 @@ def people(rng, n, center, params, name_prefix='veri_kisi'):
     return mobs, blocks
 
 
+def sdf_olcek(olcek):
+    """The value to write for an effective WindEffects scale. gz-sim 8 turns a
+    constant <force_approximation_scaling_factor> v into
+    AdditivelySeparableScalarField3d(k=v/3, p=q=r=v), evaluated as
+    k*(p+q+r) = v**2 (WindEffects.cc MakeConstantScalingFactor; gz-math
+    AdditivelySeparableScalarField3.hh). 1.0 hides it; 0.075 gave 0.0056."""
+    return math.sqrt(olcek)
+
+
 def wind_block(v, yon_deg, olcek):
     if v <= 0:
         return '', ''
     vx = v * math.cos(math.radians(yon_deg))
     vy = v * math.sin(math.radians(yon_deg))
     plugins = PX4_PLUGINS + f"""    <plugin filename="gz-sim-wind-effects-system" name="gz::sim::systems::WindEffects">
-      <force_approximation_scaling_factor>{olcek}</force_approximation_scaling_factor>
+      <!-- effective scale {olcek:g}: gz squares this value -->
+      <force_approximation_scaling_factor>{sdf_olcek(olcek):.4f}</force_approximation_scaling_factor>
     </plugin>
 """
     return plugins, f"""    <wind>
@@ -279,7 +289,10 @@ def write_world(name, desc, isl, extra_models, start, outdir, mobs=None,
         'dunya_id': name, 'gz_world': name, 'aciklama': desc,
         'zemin_z': 0.0, 'zemin_sinifi': 2, 'hedef': 'ada',
         'yuzeyler': yuzeyler, 'baslangic': start,
-        'ruzgar': {'hiz_mps': ruzgar[0], 'yon_deg': ruzgar[1], 'olcek': ruzgar[2]},
+        # olcek: effective force scale (F = m * olcek * (v_wind - v_link));
+        # olcek_sdf: what the SDF says, gz squares it
+        'ruzgar': {'hiz_mps': ruzgar[0], 'yon_deg': ruzgar[1], 'olcek': ruzgar[2],
+                   'olcek_sdf': round(sdf_olcek(ruzgar[2]), 4)},
         'hareketli_kisi': len(mobs or []),
         # Too narrow for the detector's 2 m class-seam rule on its 0.2 m grid
         # (needs >= ~4.4 m): no candidate, the mode times out and descends
@@ -381,8 +394,13 @@ def main():
     p.add_argument('--sayi', type=int, default=30)
     p.add_argument('--ruzgar', type=float, default=0.0, help='m/s, 0 = yok')
     p.add_argument('--ruzgar-yon', type=float, default=45.0, help='derece, ENU, x eksenden')
-    p.add_argument('--ruzgar-olcek', type=float, default=1.0,
-                   help='WindEffects force_approximation_scaling_factor')
+    # Calibrated 2026-10-04 on W4 (same seed, windless twin): at 1.0 a 2.5 m/s
+    # wind leaned the x500 15.2 deg (~5.5 N, like ~8 m/s of real wind). With
+    # WindEffects off, PX4's motor model alone gives 1.7 deg (0.59 N rotor drag,
+    # what its rotorDragCoefficient predicts), so WindEffects only adds the body
+    # drag: 0.06 v^2 = 0.375 N at 2.5 m/s (_tahmin), and 1.0 gives 4.9 N.
+    p.add_argument('--ruzgar-olcek', type=float, default=0.075,
+                   help='effective WindEffects force scale (written as its square root, see sdf_olcek)')
     p.add_argument('--cikti', default=None)
     a = p.parse_args()
     ruzgar = (a.ruzgar, a.ruzgar_yon, a.ruzgar_olcek)

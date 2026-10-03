@@ -33,7 +33,8 @@
     <plugin filename="libOpticalFlowSystem.so" name="custom::OpticalFlowSystem"/>
     <plugin filename="libGstCameraSystem.so" name="custom::GstCameraSystem"/>
     <plugin filename="gz-sim-wind-effects-system" name="gz::sim::systems::WindEffects">
-      <force_approximation_scaling_factor>1.0</force_approximation_scaling_factor>
+      <!-- effective scale 0.075: gz squares this value -->
+      <force_approximation_scaling_factor>0.2739</force_approximation_scaling_factor>
     </plugin>
 
     <model name="ground_plane">

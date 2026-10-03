@@ -57,7 +57,7 @@ artik_temizle() { # $1 marker ("" = any episode's), $2 file to list them in
 	pids=$(grep -lzs "$desen" /proc/[0-9]*/environ | cut -d/ -f3)
 	[ -z "$pids" ] && return 0
 	# shellcheck disable=SC2086  # a list on purpose
-	ps -o pid=,comm= -p $pids >>"${2:-/dev/null}" 2>/dev/null
+	ps -o pid=,comm=,args= -p $pids 2>/dev/null | cut -c1-200 >>"${2:-/dev/null}"
 	# shellcheck disable=SC2086
 	kill -TERM $pids 2>/dev/null
 	sleep 3
@@ -134,6 +134,7 @@ if ! grep -q "kopru kuruldu" "$LOG"; then
 	kill -TERM "$RUN" 2>/dev/null
 	wait "$RUN" 2>/dev/null
 	cp "$LOG" "$OUT/run_sim.log" 2>/dev/null
+	cp /tmp/eland_logs/px4.log "$OUT/px4.log" 2>/dev/null
 	artik_temizle "$ISARET" "$OUT/artik_surecler.txt"
 	exit 1
 fi
@@ -181,7 +182,7 @@ done
 	echo "baslangic_irtifasi_m: $ALT"
 	echo "baslangic_ofset_m: ${OFSET:-null}"
 	echo "dogus: '$(grep pose /tmp/eland_logs/spawn.txt 2>/dev/null | cut -d' ' -f2)'"
-	python3 -c "import yaml; d = yaml.safe_load(open('$DUNYA_YAML')); print('negatif_ornek:', str(bool(d.get('negatif_ornek', False))).lower()); r = d.get('ruzgar') or {}; print('ruzgar_mps:', r.get('hiz_mps', 0.0))"
+	python3 -c "import yaml; d = yaml.safe_load(open('$DUNYA_YAML')); print('negatif_ornek:', str(bool(d.get('negatif_ornek', False))).lower()); r = d.get('ruzgar') or {}; print('ruzgar_mps:', r.get('hiz_mps', 0.0)); print('ruzgar_olcek:', r.get('olcek') if r.get('hiz_mps') else 'null')"
 	echo "politika: '${POLITIKA:-}'"
 	if [ -n "${POLITIKA:-}" ]; then
 		case "$POLITIKA" in
