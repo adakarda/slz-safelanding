@@ -150,8 +150,8 @@ kamera yerde ~199×149 m görüyor (**_hesap**), harita ise 40 m.
 
 ## Aşama 1 — kayıt düğümü
 
-**Durum: yazıldı, birim testi ve pasif test geçti; uçan bir inişte henüz
-denenmedi** (sim kullanımdaydı).
+**Durum: tamam, uçan inişte doğrulandı** (`v4.6-veri-kaydedici`). Açık
+alanda Kol 0, tohum 1001-1003, üç iniş; sonuçlar aşağıda.
 
 Dosyalar (yeni, mevcut koda dokunmuyor): `tools/veri/kaydedici.py`,
 `tools/veri/ozellik.py`, `tools/veri/dunya.py`, `tools/veri/kosu.sh`,
@@ -184,7 +184,45 @@ Dosyalar (yeni, mevcut koda dokunmuyor): `tools/veri/kaydedici.py`,
   sınır); merkez suda → ρ = 0; çim + asfalt tek bölge. Ayak izi katsayısı
   4.216 (**_hesap**).
 
-Eksik: uçan bir bölümde doğrulama; birleşik `.mat` ve `tum_ozet.csv` (Aşama 6).
+### Uçan doğrulama — açık alan, Kol 0, 3 iniş (ölçülen)
+
+`tools/veri/dogrula.py`; tablo ve grafikler `~/eland_veri/dogrulama/kol0_acik_alan/`.
+
+| | t1001 | t1002 | t1003 |
+|---|---|---|---|
+| Başarılı | ✓ | ✓ | ✓ |
+| Spesifikasyon sütunları, alçalmada dolu | %100 | %100 | %100 |
+| EKF − gerçek yükseklik, bias / RMS | +0.03 / 0.14 m | +0.04 / 0.13 m | +0.01 / 0.14 m |
+| vz_ekf − vz_gercek RMS | 0.036 | 0.028 | 0.052 m/s |
+| Takip RMS (vz − v_ref, VALIDATE) | 0.12 | 0.15 | 0.22 m/s |
+| Maske yaşı p50 / p90 | 19 / 36 ms | 19 / 31 ms | 20 / 39 ms |
+| ρ ortancası / kadraja sığma (VALIDATE) | 0.999 / %0 | 1.000 / %0 | 0.998 / %0 |
+| **Gerçek temas hızı** | 0.29 m/s | 0.31 m/s | 0.30 m/s |
+| **PX4 `ground_contact` gecikmesi** | 4.19 s | 4.01 s | 3.11 s |
+| **PX4 `landed` gecikmesi** | 4.88 s | 4.69 s | 3.80 s |
+| COMMIT anında EKF / gerçek yükseklik | 1.95 / 2.03 m | 1.97 / 2.01 m | 1.97 / 2.07 m |
+| Konum mesajı en uzun boşluk | 107 ms | 39 ms | 343 ms |
+| Bölüm boyutu | 1.3 MB | 0.9 MB | 1.1 MB |
+
+**Yeni bulgu — PX4'ün iniş bayrakları gerçek temastan 3-5 s geç.** Gazebo'da
+araç t = 18.7 s'de yere değiyor (yükseklik 0, hız 0.3 → 0 m/s). PX4
+`ground_contact`'ı 3.1-4.2 s, `landed`'ı 3.8-4.9 s sonra veriyor. Arada mod
+aracı yerde 0.3 m/s komutla aşağı itmeyi sürdürüyor; itki ancak o zaman
+düşüyor ve algılayıcı tetikleniyor. Sonuç: şimdiye kadar raporlanan
+"mod → landed" süreleri (ör. 21.7 s) yerde geçen ~4-5 s'yi içeriyor. Yere
+değme anı ve temas hızı yalnızca Gazebo'dan alınmalı; bu kayıtlarda öyle.
+
+Diğer gözlemler:
+- `v_cmd` mod iniş sonrası tamamlanınca kesiliyor; durum COMMIT'te kaldığı
+  için alçalma satırlarının %12-15'inde boş.
+- Açık alanda ρ zaten 0.93-1.0'da ve kadraja hiç sığmıyor; sınıf sınırı
+  pikselleri 1.3 m civarında sıfıra iniyor. Önceki ölçümlerle tutarlı.
+- **Sınır:** açık alan dünyasının yüzey yükseklikleri henüz tanımlanmadı
+  (yol ve yamalar 0.02 m kalınlıkta kutu, binalar 9 m). Kaydedici zemini
+  z = 0 alıyor; yamalar üzerinde ±0.02 m, bir binanın üstünden geçerken 9 m
+  hata olur. Aşama 2'de dünya dosyasından üretilecek.
+
+Eksik: birleşik `.mat` ve `tum_ozet.csv` (Aşama 6).
 
 ---
 
@@ -255,7 +293,7 @@ harita da bozulmuş maskeyi görür; şartnamenin "maske hattından sonra" dedi�
 | Aşama 5 (~9 bozucu ayarı × ~26) | ~230 | ~5.5 sa |
 | **Toplam** | **~885** | **~21 sa** |
 
-Disk: bölüm başına 2-3 MB, toplam ~2-3 GB.
+Disk: bölüm başına ~1 MB (ölçülen, 3 iniş), toplam ~1 GB.
 
 **Ham veri yolu:** `~/eland_veri/<kol>/<dunya>/<ep_id>/` (Windows'tan
 `\\wsl.localhost\ubuntu\home\arda\eland_veri`). Pasif test çıktısı:

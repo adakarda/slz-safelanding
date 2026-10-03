@@ -36,14 +36,14 @@ Kaydedici: `tools/veri/kaydedici.py`. Her iniş (ep) bir klasör:
 | vz_ekf | m/s | `vehicle_local_position.vz` | aşağı + |
 | vx, vy | m/s | `vehicle_local_position` | NED kuzey / doğu |
 | roll, pitch, yaw | rad | `vehicle_attitude.q` | FRD→NED, ZYX Euler |
-| v_cmd | m/s | `/fmu/in/trajectory_setpoint.velocity[2]` | modun PX4'e verdiği dikey hız komutu, aşağı +. Yalnız VALIDATE/COMMIT'te ve 200 ms'den tazeyse dolu |
+| v_cmd | m/s | `/fmu/in/trajectory_setpoint.velocity[2]` | modun PX4'e verdiği dikey hız komutu, aşağı +. Yalnız VALIDATE/COMMIT'te ve 200 ms'den tazeyse dolu; mod iniş sonrası tamamlanınca boş |
 | v_ref | m/s | `/eland/state.commanded_descent_mps` | alçalma yasasının referansı; durum ≤ 10 Hz yayınlanır |
 | aktif_girdi | — | `/eland/state.area_law_active` | 1 alan oranı yasası, 0 irtifa yedeği |
 | I_hesap | m/s | `v_cmd − v_ref − Kp·(v_ref − vz_ekf)` | **geri çatım**; yalnız VALIDATE'te ve çıkış doymamışken. Kp koşuldan |
 | h_gercek_zemin | m | Gazebo model z − altındaki yüzeyin yüksekliği − dinlenme ofseti | yerdeyken 0 |
 | h_gercek_hedef | m | Gazebo model z − hedef yüzeyin yüksekliği − dinlenme ofseti | açık alanda = h_gercek_zemin |
 | vz_gercek_hesap | m/s | Gazebo z'nin türevi (`np.gradient`) | aşağı +; simülatör hız yayınlamıyor |
-| landed, ground_contact | 0/1 | `/fmu/out/vehicle_land_detected` | PX4 iniş algılayıcısı |
+| landed, ground_contact | 0/1 | `/fmu/out/vehicle_land_detected` | PX4 iniş algılayıcısı; gerçek temastan 3-5 s geç (ölçülen), temas anı için kullanmayın |
 | yatay_hata_m | m | EKF konumu ile o an yayınlanan son geçerli aday arası yatay mesafe | COMMIT'te mod hedefi dondurur; aday yayını sürer |
 | yatay_hata_hedef_gercek_m | m | Gazebo konumu ile hedef yüzey merkezi | yalnız dünya yaml'ında hedef varsa |
 
