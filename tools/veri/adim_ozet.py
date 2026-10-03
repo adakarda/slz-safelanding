@@ -47,15 +47,20 @@ def main():
     a = p.parse_args()
     groups = defaultdict(list)
     for line in open(a.gunluk):
-        if '|' not in line:
+        if '|' not in line or line.startswith('#'):
             continue
         head, cmd = line.split('|', 1)
         secs = int(head.split()[2])
-        rc = int(head.split('rc=')[1].split()[0])
+        rc = head.split('rc=')[1].split()[0]
+        rc = int(rc) if rc.lstrip('-').isdigit() else 0  # '?' in rebuilt lines
         kol, dunya, ep = ep_dir_of(cmd.strip(), a.kok)
         oz = {}
         if os.path.exists(os.path.join(ep, 'ep_ozet.json')):
             oz = json.load(open(os.path.join(ep, 'ep_ozet.json')))
+        neg = False
+        if os.path.exists(os.path.join(ep, 'kosul.yaml')):
+            neg = 'negatif_ornek: true' in open(os.path.join(ep, 'kosul.yaml')).read()
+        oz['_negatif'] = neg
         groups[(kol, dunya)].append((ep, secs, rc, oz))
 
     print('| kol | dünya | bölüm | başarılı | başarısız | süre, ortanca (duvar) | temas hızı, ortanca (m/s) |')
@@ -76,7 +81,7 @@ def main():
             why = []
             if rc:
                 why.append(f'cikis kodu {rc}')
-            if not oz:
+            if 'ep_id' not in oz:
                 why.append('ozet yok')
             else:
                 if oz.get('kor_inis'):
@@ -89,10 +94,12 @@ def main():
                     why.append(f"ABORT x{oz['abort_sayisi']}")
                 if oz.get('hold_sayisi'):
                     why.append(f"HOLD x{oz['hold_sayisi']}")
+            if oz.get('_negatif'):
+                why.append('NEGATIF ORNEK: basarisizlik beklenen')
             fails.append((os.path.basename(ep), ', '.join(why) or 'bilinmiyor'))
         if dunya.startswith('veri_w5'):
             for ep, secs, rc, oz in rows:
-                if not oz or oz.get('t_temas_gercek') is None:
+                if 'ep_id' not in oz or oz.get('t_temas_gercek') is None:
                     w5.append((os.path.basename(ep), None, None, None, None))
                     continue
                 with open(os.path.join(ep, 'duzenli.csv')) as f:

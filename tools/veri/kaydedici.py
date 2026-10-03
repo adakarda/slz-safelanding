@@ -515,7 +515,7 @@ def build(node, a):
             prev = on
         return None
     t_landed = rising(1, t_mode)
-    t_gc = rising(3, t_val)
+    t_gc = rising(3, min([t for t in (t_val, t_com) if t is not None], default=None))
     oz['t_mod_devrede'] = t_mode
     oz['t_validate'] = t_val
     oz['t_commit'] = t_com
@@ -526,8 +526,11 @@ def build(node, a):
     # Touchdown from ground truth: first time after the highest point that the
     # model is within TEMAS_ESIGI_M of its resting height.
     t_temas = v_temas = None
-    if len(tg) > 5 and t_val:
-        after = tg > t_val
+    # From the first descent state: VALIDATE, or COMMIT straight from SEARCH
+    # when the mode times out and descends blind (W1, negative islands).
+    t_desc = min([t for t in (t_val, t_com) if t is not None], default=None)
+    if len(tg) > 5 and t_desc:
+        after = tg > t_desc
         below = after & (h_zemin < TEMAS_ESIGI_M)
         if below.any():
             i = int(np.argmax(below))

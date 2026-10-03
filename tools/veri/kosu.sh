@@ -44,6 +44,31 @@ if pgrep -x px4 >/dev/null || pgrep -x ruby >/dev/null; then
 	exit 2
 fi
 
+# Every process of this episode is started with this marker in its
+# environment, so the teardown finds whatever outlived run_sim.sh, even after
+# it was reparented, without touching anyone else's processes. run_sim.sh's
+# cleanup kills the pipeline by name and misses tracker_node and
+# obstacle_driver: 64 pairs of them piled up over one batch (2026-10-03) until
+# the EKF vertical velocity was off by up to 1 m/s and the mode timed out in
+# DDS discovery.
+ISARET="$EP_ID.$$.$(date +%s)"
+artik_temizle() { # $1 marker ("" = any episode's), $2 file to list them in
+	local desen="^VERI_KOSU_ISARET=${1:-.*}\$" pids
+	pids=$(grep -lzs "$desen" /proc/[0-9]*/environ | cut -d/ -f3)
+	[ -z "$pids" ] && return 0
+	# shellcheck disable=SC2086  # a list on purpose
+	ps -o pid=,comm= -p $pids >>"${2:-/dev/null}" 2>/dev/null
+	# shellcheck disable=SC2086
+	kill -TERM $pids 2>/dev/null
+	sleep 3
+	pids=$(grep -lzs "$desen" /proc/[0-9]*/environ | cut -d/ -f3)
+	# shellcheck disable=SC2086
+	[ -n "$pids" ] && kill -KILL $pids 2>/dev/null
+	return 0
+}
+# Leftovers of an earlier episode that was itself killed before its teardown.
+artik_temizle "" /tmp/veri_artik_onceki.txt
+
 # shellcheck disable=SC1091
 source /opt/ros/jazzy/setup.bash
 # shellcheck disable=SC1091
@@ -60,7 +85,7 @@ if [ "$DUNYA" = "acik_alan" ]; then
 	ALT=$(python3 -c "import random; r = random.Random($TOHUM); print(round(r.uniform(10, 20), 1))")
 else
 	DUNYA_YAML=""
-	for d in "$WS_DIR/src/eland_sim/worlds/veri" "$VERI_KOK/dunyalar"; do
+	for d in "$WS_DIR/src/eland_sim/worlds/veri" "$VERI_KOK/dunyalar" "$HOME/eland_veri/dunyalar"; do
 		[ -f "$d/$DUNYA.yaml" ] && DUNYA_YAML="$d/$DUNYA.yaml" && break
 	done
 	[ -n "$DUNYA_YAML" ] || { echo "[veri] HATA: dunya yok: $DUNYA" >&2; exit 3; }
@@ -93,8 +118,8 @@ python3 "$WS_DIR/tools/make_params.py" "$PARAMS" $DUNYA_PARAMS $MODE_PARAMS \
 mkdir -p "$OUT"
 echo "[veri] $EP_ID: kalkis $ALT m, cikti $OUT"
 # shellcheck disable=SC2086
-"$WS_DIR/src/eland_sim/scripts/run_sim.sh" $WORLD_ARGS $MODEL_ARGS --headless --no-hud \
-	--takeoff "$ALT" --auto --params "$PARAMS" >"$LOG" 2>&1 &
+VERI_KOSU_ISARET="$ISARET" "$WS_DIR/src/eland_sim/scripts/run_sim.sh" $WORLD_ARGS $MODEL_ARGS \
+	--headless --no-hud --takeoff "$ALT" --auto --params "$PARAMS" >"$LOG" 2>&1 &
 RUN=$!
 
 # Everything that listens starts as soon as the ROS-PX4 bridge is up: before
@@ -107,7 +132,9 @@ done
 if ! grep -q "kopru kuruldu" "$LOG"; then
 	echo "[veri] HATA: sim kalkmadi, bak: $LOG" >&2
 	kill -TERM "$RUN" 2>/dev/null
+	wait "$RUN" 2>/dev/null
 	cp "$LOG" "$OUT/run_sim.log" 2>/dev/null
+	artik_temizle "$ISARET" "$OUT/artik_surecler.txt"
 	exit 1
 fi
 
@@ -115,7 +142,7 @@ KP=$(python3 -c "import yaml; p = yaml.safe_load(open('$PARAMS')); print(p['emer
 BOZUK_ARG=""
 [ -n "$BOZUK_TOPIC" ] && BOZUK_ARG="--mask-bozuk-topic $BOZUK_TOPIC"
 # shellcheck disable=SC2086
-python3 "$WS_DIR/tools/veri/kaydedici.py" --cikti "$OUT" --ep-id "$EP_ID" \
+VERI_KOSU_ISARET="$ISARET" python3 "$WS_DIR/tools/veri/kaydedici.py" --cikti "$OUT" --ep-id "$EP_ID" \
 	--dunya-id "$DUNYA" --dunya-yaml "$DUNYA_YAML" --gz-world "$GZ_WORLD" \
 	--model "${MODEL}_0" --tohum "$TOHUM" --kol "$KOL" --kp "$KP" \
 	--sure "${KAYIT_SURE:-240}" $INIS_ARG $BOZUK_ARG --maske-kaydet \
@@ -124,19 +151,26 @@ REC=$!
 POL=""
 if [ -n "${POLITIKA:-}" ]; then
 	# shellcheck disable=SC2086
-	python3 "$WS_DIR/tools/veri/politika.py" $POLITIKA --dunya-yaml "$DUNYA_YAML" \
+	VERI_KOSU_ISARET="$ISARET" python3 "$WS_DIR/tools/veri/politika.py" $POLITIKA --dunya-yaml "$DUNYA_YAML" \
 		--gz-world "$GZ_WORLD" --model "${MODEL}_0" >"$OUT/politika.log" 2>&1 &
 	POL=$!
 fi
 BOZ=""
 if [ -n "${BOZUCU:-}" ]; then
 	# shellcheck disable=SC2086
-	python3 "$WS_DIR/tools/veri/bozucu.py" $BOZUCU --tohum "$TOHUM" >"$OUT/bozucu.log" 2>&1 &
+	VERI_KOSU_ISARET="$ISARET" python3 "$WS_DIR/tools/veri/bozucu.py" $BOZUCU --tohum "$TOHUM" \
+		>"$OUT/bozucu.log" 2>&1 &
 	BOZ=$!
 fi
 
-# The conditions, written while PX4 is still up so its parameters can be read.
-sleep 20
+# The conditions, written while PX4 is still up so its parameters can be read,
+# and once run_sim.sh has set the takeoff altitude: a fixed 20 s wait read the
+# previous episode's MIS_TAKEOFF_ALT when the machine was slow.
+for _ in $(seq 1 90); do
+	grep -q "modu seciliyor" "$LOG" 2>/dev/null && break
+	kill -0 "$RUN" 2>/dev/null || break
+	sleep 1
+done
 {
 	echo "ep_id: $EP_ID"
 	echo "kol: $KOL"
@@ -169,13 +203,30 @@ sleep 20
 } >"$OUT/kosul.yaml"
 cp "$PARAMS" "$OUT/params.yaml"
 
-wait "$REC"
+# bekle PID S: wait up to S seconds for PID to exit, then TERM, then KILL.
+bekle() {
+	local son=$((SECONDS + $2))
+	while kill -0 "$1" 2>/dev/null && [ "$SECONDS" -lt "$son" ]; do sleep 1; done
+	if kill -0 "$1" 2>/dev/null; then
+		echo "[veri] UYARI: PID $1 ${2} s icinde kapanmadi, sonlandiriliyor" >&2
+		kill -TERM "$1" 2>/dev/null
+		sleep 5
+		kill -KILL "$1" 2>/dev/null
+	fi
+	wait "$1" 2>/dev/null
+}
+# The recorder ends itself on touchdown or after KAYIT_SURE; one sat for
+# 13 minutes after writing its summary, so it gets a margin and no more.
+bekle "$REC" $((${KAYIT_SURE:-240} + 60))
 [ -n "$POL" ] && kill -TERM "$POL" 2>/dev/null
 [ -n "$BOZ" ] && kill -TERM "$BOZ" 2>/dev/null
 kill -TERM "$RUN" 2>/dev/null
-wait "$RUN" 2>/dev/null
+bekle "$RUN" 40
 cp "$LOG" "$OUT/run_sim.log" 2>/dev/null
 cp /tmp/eland_logs/pipeline.log "$OUT/pipeline.log" 2>/dev/null
 # Belt and braces: the gz server can hang in its SIGTERM handler.
 pkill -KILL -x ruby 2>/dev/null
+artik_temizle "$ISARET" "$OUT/artik_surecler.txt"
+[ -s "$OUT/artik_surecler.txt" ] &&
+	echo "[veri] run_sim sonrasi kalan surecler kapatildi: $(awk '{print $2}' "$OUT/artik_surecler.txt" | sort | uniq -c | tr -s ' \n' ' ')" >&2
 tail -1 "$OUT/kaydedici.log"

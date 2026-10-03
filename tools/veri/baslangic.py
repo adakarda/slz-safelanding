@@ -7,10 +7,12 @@ Altitude 10-20 m and a lateral offset 0-4 m from the target's centre, as the
 task asks -- except over W5's platform, where the offset is 6.5-8 m so the
 aircraft takes off from the ground and its EKF origin stays there (otherwise
 the 4 m difference being measured would vanish). Same (world, seed), same
-start: the episode can be repeated.
+start: the episode can be repeated. A windy twin (veri_w4_r2p5) draws from
+its windless world's id, so the pair differs in the wind alone.
 """
 import math
 import random
+import re
 import sys
 
 import yaml
@@ -23,7 +25,8 @@ def main():
     cx, cy = hedef['merkez']
     platform = any(s.get('ad') == 'platform' for s in d['yuzeyler'])
     lo, hi = (6.5, 8.0) if platform else (0.0, 4.0)
-    rng = random.Random(f"{d['dunya_id']}:{seed}")
+    temel = re.sub(r'_r[0-9p]+$', '', d['dunya_id'])  # dunya_uret.py's wind suffix
+    rng = random.Random(f'{temel}:{seed}')
     alt = round(rng.uniform(10.0, 20.0), 1)
     r = rng.uniform(lo, hi)
     a = rng.uniform(0.0, 2.0 * math.pi)
