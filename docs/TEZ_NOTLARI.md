@@ -154,6 +154,14 @@ değerlere itiyordu — modelin yanlış olduğunun işareti buydu.
 **Kalan model:** birim kazanç (K = 1.01-1.03, üç ölçümde tutarlı), küçük
 işarette ölü zaman θ ≈ 0.28 s, geçici rejim limit-şekilli.
 
+> **Düzeltme (2026-10-03).** Aynı deney veri toplama kaydedicisiyle yeniden
+> yapıldı: komut 50 Hz'lik gerçek setpoint'ten, hız Gazebo'dan, 12 uçuş,
+> 183 basamak. **K = 0.99-1.00, ölü zaman (%10 ölçütü) 0.04-0.06 s, %90
+> süresi 0.26-0.40 s, büyük basamakta ivme sınırı ~6-8.5 m/s².** Yukarıdaki
+> 0.28 s, komutu 10 Hz'lik durum kanalından okuyan ve rampa uydurulan
+> yöntemden geliyor; ölü zaman olarak kullanılmamalı. Aşağıdaki IMC türetimi
+> bu yüzden yeniden yapılmalı. Ayrıntı `docs/VERI_TOPLAMA.md`.
+
 **Türetim.** IMC kuralı τ → 0 (ölü zaman baskın) durumunda neredeyse saf
 integratöre çöker:
 

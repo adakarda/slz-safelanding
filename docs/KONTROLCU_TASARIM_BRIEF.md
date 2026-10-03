@@ -202,19 +202,35 @@ ama rüzgârda büyür.
 Tesis yalnız hava aracı değil: PX4'ün hız denetleyicisi + araç + ROS-PX4
 köprüsü. Dikey hız komutuna kare dalga verilerek ölçüldü:
 
-- Kazanç **K ≈ 1.01-1.03** (istenen hız veriliyor).
-- Ölü zaman **θ ≈ 0.28 s**.
-- Geçici rejim **jerk/ivme sınırlı**; birinci mertebe model uymuyor (ölçülen
-  eğim 1.88 m/s'lik basamakta 4.94 m/s², 0.55 m/s'lik basamakta 1.67 m/s²).
+**Güncelleme 2026-10-03 — yeniden ölçüldü (K5, açık çevrim kare dalga,
+12 uçuş, 183 basamak, Gazebo'dan gerçek hız; komut 50 Hz setpoint'ten).**
+Önceki değerler (θ ≈ 0.28 s, eğim 1.67-4.94 m/s²) komutu 10 Hz'lik durum
+kanalından okuyan ve rampa uydurulan farklı bir yöntemdendi; bunları kullan:
+
+| Basamak (m/s) | K | Ölü zaman θ (%10) | %90 süresi | En büyük ivme (m/s²) |
+|---|---|---|---|---|
+| 0.6 | 1.00 | 0.06 s | 0.26 s | 3.6 |
+| 1.2 | 0.99 | 0.04 s | 0.28 s | 6.1 |
+| 2.0 | 1.00 | 0.06 s | 0.36 s | 6.7 |
+| 2.5 | 0.99 | 0.06 s | 0.40 s | 8.4 |
+
+- Kazanç **K ≈ 1.0**.
+- Ölü zaman **θ ≈ 0.04-0.08 s** (EKF hızıyla 0.06-0.08 s; ızgara
+  çözünürlüğü 0.02 s).
+- **Küçük basamakta birinci mertebe gibi** (τ ≈ 0.1 s), **büyük basamakta
+  ivme sınırlı**: ~6-8.5 m/s². Yavaşlatma/tırmanma yönü (~6.2 m/s²),
+  hızlanma yönünden (~8.5 m/s²) yavaş.
+- Ham veri: `~/eland_veri/k5_A*/`, tablo ve şekil
+  `~/eland_veri/dogrulama/k5/`.
 - Hız üst sınırı **1.5 m/s** (PX4 `MPC_Z_V_AUTO_DN`). Yasa tavanını bunun
   üstüne çıkarmak işe yaramadı.
 - PX4'e hız **sınırı** vermek referans vermek değildir; hız komutu
   (`TrajectorySetpoint.withVelocityZ`) verilmelidir. Sınır verildiğinde bir
   uçuş inmeyi bırakıp asılı kaldı.
 
-Ölü zaman baskın IMC ile türetilen iç döngü kazancı `Kp = 0, Ki = 1.39`;
+İç döngü kazancı `Kp = 0, Ki = 1.39` eski θ = 0.28 s ile IMC'den türetilmişti;
 uçuşta elle ayarlananla (`Kp = 0.8, Ki = 0.6`) eşdeğer çıktı (RMS 0.197 ve
-0.201 m/s).
+0.201 m/s). Yeni θ ile türetim yeniden yapılmalı (henüz yapılmadı).
 
 ---
 
@@ -236,9 +252,10 @@ mesajının içinde, karar hızında (~1.8 Hz) gidiyor. Görüntü-tabanlı bir 
 için ρ'yu ayrı bir konudan 10 Hz'de yayınlamak küçük bir değişiklik; tasarım
 bunu varsayabilir.
 
-Döngüdeki toplam gecikme (tahmin): tesis 0.28 s + örnekleme beklemesi
-(10 Hz'de ortalama 0.05 s) + işleme 0.02 s ≈ **0.35 s**; ρ türevi için
-süzgeç eklenirse daha fazla.
+Döngüdeki toplam gecikme (tahmin): tesis ölü zamanı ~0.06 s + yükselme
+(~0.1 s zaman sabiti) + örnekleme beklemesi (10 Hz'de ortalama 0.05 s) +
+maske gecikmesi ~0.02 s ≈ **0.25 s mertebesi**; ρ türevi için süzgeç
+eklenirse daha fazla. (Önceki sürüm eski θ = 0.28 s ile 0.35 s diyordu.)
 
 Henüz kullanılmayan ama maskeden üretilebilecek özellikler: `ρ̇/ρ`,
 görüntü merkezinden en yakın güvenli-olmayan piksele uzaklık (piksel

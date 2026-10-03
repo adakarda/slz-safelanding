@@ -226,17 +226,95 @@ Eksik: birleşik `.mat` ve `tum_ozet.csv` (Aşama 6).
 
 ---
 
+## Kararlar (kullanıcı, 2026-10-03)
+
+| | Karar |
+|---|---|
+| K1 | Adaların çevresi **tehlike sayılmayan bir sınıf**: arazi tehlikesi (sınıf 2) |
+| K3 | **Gerçek Gazebo rüzgârı** (kuvvet eşdeğeri değil) |
+| K4 | PX4 parametreleri **bugünkü hâliyle** (`MPC_Z_V_AUTO_DN = 2.0`) kalır |
+| O3 / K5 | **Onaylandı** |
+| K2 | Açık — Aşama 4 yeniden anlatıldı |
+
+## Aşama 2 — dünyalar (üretildi, henüz uçurulmadı)
+
+`tools/veri/dunya_uret.py`, yeni dosyalar:
+- **Sabit dünyalar:** W1-W8 `src/eland_sim/worlds/veri/` altında; her birinin
+  `_r2p5` rüzgârlı eşi var (2.5 m/s, 45°).
+- **Rastgele adalar:** tohumdan, `~/eland_veri/dunyalar/` altına üretiliyor.
+  Şekil kare/L/daire, boyut 3-20 m, konum ofseti ±8 m, 0-2 hareketli kişi.
+- **Ground truth:** her dünyanın yaml'ında yüzey yükseklikleri, hedef adanın
+  alanı / merkezi / şekli, tohumdan başlangıç koşulları (irtifa 10-20 m,
+  ofset 0-4 m), rüzgâr ve kişilerin rotası.
+- **Zemin:** her yer arazi tehlikesi sınıfı, adalar çim. Hepsi `gz sdf -k`
+  ile geçerli.
+
+Geometriden çıkan sonuçlar (dedektörün kendi kurallarıyla, 0.2 m ızgara):
+- **W1 (4×4 m) aday üretmez,** sınıf çevresi tehlike olmasa bile: sınıf
+  dikişi kuralı 2 m, ızgarada merkezin dikişe uzaklığı 1.8 m. 4.4 m'den dar
+  her ada için aynı. "Site yok" örneği olarak kaldı; mod 60 s sonra kör
+  iner.
+- **W6:** L'nin kolları 6 m (4 m'lik kol aday üretmez).
+- **W8:** ortadaki 2×2 m nesne de tehlike sayılmayan sınıfta (yapı olsaydı
+  3 m mesafe + 2 m dikiş kuralı 10×10 m adada hiçbir yer bırakmazdı).
+- **W5:** platform 10×10×4 m, üstü çim. Doğuş platformun dışında, 6.5-8 m
+  ofsetle; EKF orijini yerde kalsın, 4 m fark ölçülsün diye.
+
+**Rüzgâr:** Gazebo'nun WindEffects sistemi yalnız `enable_wind` işaretli
+linkleri iter; PX4'ün x500'ünde bu yok. SDF'nin dahil-et-değiştir yöntemi bu
+alanı ekleyemiyor (ölçülen hata: "Could not find element", "missing a 'name'
+attribute"). Bu yüzden `tools/veri/ruzgar_modeli_uret.py` PX4'ün x500
+dosyalarını okuyup yalnız o satırı ekleyen bir model zinciri üretiyor:
+`x500_seg_cam_down_ruzgar`. PX4'ün dosyaları değişmedi. Rüzgârlı dünyalar
+WindEffects'i ve PX4'ün eklenti listesinin tamamını taşıyor (dünya kendi
+eklentisini tanımlayınca PX4'ün varsayılan listesi yüklenmiyor). Kuvvet
+ölçeği ilk rüzgârlı uçuşta ölçülecek.
+
+**Uçurmak için O1 gerekiyor** (dünya ve model seçimi).
+
+## K5 — tesis testi, rüzgârsız (tamam)
+
+Açık alan, mevcut tanımlama kipi (kod eklemesi yok), açık çevrim kare dalga,
+8 s periyot, kalkış 22 m. Genlik A: komut −min(A, 1.0) ile +A arasında.
+Kol başına 3 uçuş (tohum 1001-1003), toplam 12 uçuş. Yalnız
+`h_gercek_zemin > 8 m` satırları; iki yanında tam yarım periyot olan
+basamaklar. `tools/veri/tesis_analizi.py`.
+
+| Genlik | Kaynak | n basamak | K ortanca | θ (%10) | %90 süresi | En büyük ivme | Yavaşlatma / hızlanma |
+|---|---|---|---|---|---|---|---|
+| 0.3 | Gazebo | 55 | 1.000 | 0.06 s | 0.26 s | 3.6 m/s² | 3.7 / 3.0 |
+| 0.6 | Gazebo | 55 | 0.992 | 0.04 s | 0.28 s | 6.1 m/s² | 6.2 / 5.4 |
+| 1.0 | Gazebo | 54 | 0.997 | 0.06 s | 0.36 s | 6.7 m/s² | 6.2 / 7.9 |
+| 1.5 | Gazebo | 19 | 0.991 | 0.06 s | 0.40 s | 8.4 m/s² | 6.3 / 8.5 |
+| 0.3-1.5 | EKF | 183 | 1.014-1.024 | 0.06-0.08 s | 0.28-0.44 s | 3.7-7.7 m/s² | |
+
+- **Ölü zaman eski değerin beşte biri.** Eski 0.28 s, komutu 10 Hz'lik durum
+  kanalından okuyan ve rampa uydurulan yöntemdendi. Tez notlarına ve brife
+  düzeltme eklendi; IMC kazanç türetimi yeni θ ile yeniden yapılmalı.
+- **1.5 genliğinde basamak az (19):** asimetrik dalga aracı aşağı sürüklüyor,
+  8 m koruması devreye girip basamakları bozuyor.
+- **Izgara 50 Hz:** θ'nın çözünürlüğü 0.02 s.
+
+Şekil: `~/eland_veri/dogrulama/k5/tesis_basamak.png`. Rüzgârlı yarısı O1
+bekliyor.
+
+---
+
 ## Onay bekleyenler — mevcut koda eklemeler
 
 Hepsi parametreyle seçilir, varsayılan kapalı, mevcut davranış değişmez.
 
-**O1 — Aşama 2'yi uçurabilmek için (`run_sim.sh`, `batch_run.sh`).**
-`run_sim.sh`'e `--world AD`: verilirse `PX4_GZ_WORLD=AD`, `gen_world.py` atlanır
-(yeni dünyaları yeni bir üretici yazar), dünya dosyası PX4'ün dünya klasörüne
-bağlanır (`link_px4_assets.sh`'in yaptığı gibi). Verilmezse bugünküyle aynı.
-`batch_run.sh`'e isteğe bağlı `DUNYA` ortam değişkeni. ~15 satır. Gerekçe:
-şartname "mevcut batch_run.sh ile uçurulabilmeli" diyor ve dünya adı şu an
-`run_sim.sh`'te sabit.
+**O1 — Aşama 2'yi ve rüzgârı uçurabilmek için (`run_sim.sh`, `batch_run.sh`).**
+`run_sim.sh`'e iki seçenek; verilmezse bugünküyle aynı:
+- `--world AD`: `PX4_GZ_WORLD=AD`; `gen_world.py` ve rastgele doğuş atlanır,
+  doğuş dünyanın yaml'ından `--pose` ile gelir; dünya dosyası PX4'ün dünya
+  klasörüne bağlanır (`link_px4_assets.sh`'in yaptığı gibi).
+- `--model AD`: `PX4_SIM_MODEL=gz_AD` (rüzgârlı araç için); model PX4'ün
+  model klasörüne bağlanır.
+
+`batch_run.sh`'e isteğe bağlı `DUNYA` / `MODEL` ortam değişkenleri. ~20
+satır. Gerekçe: şartname "mevcut batch_run.sh ile uçurulabilmeli" diyor;
+dünya ve model adı şu an `run_sim.sh`'te sabit.
 
 **O2 — Aşama 4 (K1-K4) için (`emergency_landing_mode.hpp`).**
 `veri_toplama_kipi` parametresi (varsayılan false). Açıkken VALIDATE'te `v_ref`
@@ -250,10 +328,8 @@ değişmeden başka yolu yok.
 - **O2b (isteğe bağlı):** aynı bayrak açıkken `/eland/veri/hiz_dongusu`
   (v_cmd, I, e, v_ölçülen) yayını. Gerekçe: integralin kesin değeri (E6).
 
-**O3 — K5 (tırmanmalı tesis testi).** Kod eklemesi **gerekmiyor**: mevcut
-tanımlama kipi (`ident_enabled`, `ident_low_mps` / `ident_high_mps`, EKF'ye
-göre 8-25 m koruması) genlikleri parametreyle alıyor. Şartname ayrıca onay
-istediği için burada. Rüzgâr için E4.
+**O3 — K5 (tırmanmalı tesis testi).** **Onaylandı;** rüzgârsız yarısı
+yapıldı (yukarıda). Kod eklemesi gerekmedi.
 
 **Bilgi (onay gerekmiyor) — Aşama 5.** Bozucu yeni bir düğüm.
 `detector_node`, `mapping_node` ve `hud_node`'un zaten `mask_topic` parametresi
@@ -262,22 +338,12 @@ harita da bozulmuş maskeyi görür; şartnamenin "maske hattından sonra" dedi�
 
 ---
 
-## Kararın gerekenler
+## Açık kalan karar
 
-- **K1 (E2):** küçük adalar (W1, W2 ve 6 m altındaki rastgele adalar) ne olsun?
-  - (a) çevre su/yapı kalsın, bunlar "aday yok" örneği olsun
-  - (b) küçük adaların çevresi arazi tehlikesi sınıfı olsun (tehlike sayılmıyor,
-    yalnız 1 m sığma + 2 m sınıf sınırı kuralı)
-  - (c) veri kipinde hedef dünya yaml'ından alınsın — bu durum makinesine
-    dokunur
-- **K2 (E3):** K4 için
-  - (a) 40 m'den başla
-  - (b) tanımlamayı K5'e bırak
-  - (c) 12 s'ye kısalt
-- **K3 (E4):** rüzgâr için kuvvet eşdeğeri yeterli mi?
-- **K4 (E1):** PX4 parametrelerini varsayılana döndüreyim mi, yoksa bugünkü
-  hâliyle (2.0) mi toplanacak? Seçilen hâl tüm toplama boyunca sabit kalmalı.
-- **K5 (E7):** toplama ne zaman? Tek başına sim gerekiyor.
+- **K2 (E3):** K4 (basamak/çoklu sinüs) tırmanmasız ve 15 m'den başlarsa
+  20-30 s sürmez, araç yere iner. Seçenekler: (a) 40 m'den başlat,
+  (b) tanımlamayı K5'e bırak (K5 artık var), (c) 12 s'ye kısalt.
+- **Toplama zamanı (E7):** tek başına sim gerekiyor.
 
 ---
 

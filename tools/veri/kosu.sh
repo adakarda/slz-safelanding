@@ -9,6 +9,11 @@
 # starting next to someone's interactive session ends that session.
 #
 # Episodes go to $VERI_KOK/<kol>/<dunya>/<ep_id>/ (default ~/eland_veri).
+#
+# Environment, for runs that are not ordinary landings:
+#   KAYIT_SURE=S        stop recording after S wall seconds (default 240)
+#   INIS_BEKLE=0        do not stop on touchdown (identification never lands)
+#   BASLANGIC_IRTIFA=A  take off to A m instead of the seeded 10-20 m draw
 set -o pipefail
 
 WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -43,6 +48,9 @@ export GZ_IP=127.0.0.1
 
 # Start altitude 10-20 m, drawn from the seed so the episode can be repeated.
 ALT=$(python3 -c "import random; r = random.Random($TOHUM); print(round(r.uniform(10, 20), 1))")
+ALT="${BASLANGIC_IRTIFA:-$ALT}"
+INIS_ARG="--inince-dur"
+[ "${INIS_BEKLE:-1}" = 0 ] && INIS_ARG=""
 
 # shellcheck disable=SC2086  # EXTRA_PARAMS is a list on purpose
 python3 "$WS_DIR/tools/make_params.py" "$PARAMS" obstacle_driver.randomize_mobs=true \
@@ -70,7 +78,7 @@ fi
 KP=$(python3 -c "import yaml; p = yaml.safe_load(open('$PARAMS')); print(p['emergency_landing_mode']['ros__parameters'].get('descent_kp', 0.8))")
 python3 "$WS_DIR/tools/veri/kaydedici.py" --cikti "$OUT" --ep-id "$EP_ID" \
 	--dunya-id "$DUNYA" --tohum "$TOHUM" --kol "$KOL" --kp "$KP" \
-	--sure 240 --inince-dur --maske-kaydet >"$OUT/kaydedici.log" 2>&1 &
+	--sure "${KAYIT_SURE:-240}" $INIS_ARG --maske-kaydet >"$OUT/kaydedici.log" 2>&1 &
 REC=$!
 
 # The conditions, written while PX4 is still up so its parameters can be read.
