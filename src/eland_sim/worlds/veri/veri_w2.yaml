@@ -1,0 +1,38 @@
+dunya_id: veri_w2
+gz_world: veri_w2
+aciklama: 6x6 m kare ada
+zemin_z: 0.0
+zemin_sinifi: 2
+hedef: ada
+yuzeyler:
+- ad: ada
+  z: 0.02
+  inilebilir: true
+  sekil: kare
+  merkez:
+  - 0.0
+  - 0.0
+  dikdortgenler:
+  - - -3.0
+    - -3.0
+    - 3.0
+    - 3.0
+  daireler: []
+  alan_m2: 36.0
+baslangic:
+  irtifa_m: 16.6
+  ofset_m: 3.88
+  ofset_aci_deg: 262.5
+  dogus:
+  - -0.5
+  - -3.84
+  - 0.0
+  - 0.0
+  - 0.0
+  - 2.356
+ruzgar:
+  hiz_mps: 0.0
+  yon_deg: 45.0
+  olcek: 1.0
+hareketli_kisi: 0
+mob_layout_file: /home/arda/ros2_ws/src/eland_sim/worlds/veri/veri_w2.mobs.yaml

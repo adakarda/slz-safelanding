@@ -70,5 +70,18 @@ class Dunya:
         return (float(m[0]), float(m[1])) if m else None
 
     def hedefte_mi(self, x: float, y: float):
-        """True/False if a target is defined, None for the open field."""
-        return self._icinde(self.hedef, x, y) if self.hedef else None
+        """True/False if a target is defined, None for the open field.
+
+        On the target and not on anything non-landable standing on it (W8's
+        centre obstacle sits inside the island's rectangle)."""
+        if not self.hedef:
+            return None
+        if not self._icinde(self.hedef, x, y):
+            return False
+        top = float(self.hedef.get('z', self.zemin_z))
+        for s in self.yuzeyler:
+            if s is self.hedef or s.get('inilebilir', True):
+                continue
+            if float(s.get('z', 0.0)) > top and self._icinde(s, x, y):
+                return False
+        return True

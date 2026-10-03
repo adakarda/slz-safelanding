@@ -1,0 +1,46 @@
+dunya_id: veri_w5
+gz_world: veri_w5
+aciklama: 10x10 m, zeminden 4 m yuksek platform
+zemin_z: 0.0
+zemin_sinifi: 2
+hedef: ada
+yuzeyler:
+- ad: ada
+  z: 4.02
+  inilebilir: true
+  sekil: kare
+  merkez:
+  - 0.0
+  - 0.0
+  dikdortgenler:
+  - - -5.0
+    - -5.0
+    - 5.0
+    - 5.0
+  daireler: []
+  alan_m2: 100.0
+- ad: platform
+  z: 4.0
+  inilebilir: false
+  dikdortgenler:
+  - - -5.0
+    - -5.0
+    - 5.0
+    - 5.0
+baslangic:
+  irtifa_m: 11.3
+  ofset_m: 7.83
+  ofset_aci_deg: 181.1
+  dogus:
+  - -7.83
+  - -0.15
+  - 0.0
+  - 0.0
+  - 0.0
+  - -1.871
+ruzgar:
+  hiz_mps: 0.0
+  yon_deg: 45.0
+  olcek: 1.0
+hareketli_kisi: 0
+mob_layout_file: /home/arda/ros2_ws/src/eland_sim/worlds/veri/veri_w5.mobs.yaml
