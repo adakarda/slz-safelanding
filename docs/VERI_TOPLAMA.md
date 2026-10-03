@@ -1,0 +1,262 @@
+# Veri toplama — dikey iniş kontrolcüsü (MATLAB/Simulink) ve RL için
+
+Başlangıç: 2026-10-03 · Kod: `main` @ `v4.5-hud-canli-kamera` · Görev tanımı:
+kullanıcının verdiği 7 aşamalı şartname (projenin akışı değişmeyecek; mevcut
+koda her ekleme onayla, parametreyle seçilir, varsayılan kapalı).
+
+Etiketler: **ölçülen** · **_hesap** (ölçülenden hesaplanan) · **_tahmin**
+(varsayım içeren).
+
+---
+
+## Aşama 0 — okuma (dosya:satır)
+
+### 1. EKF irtifası neye göre?
+
+**Kalkış noktasına göre, alttaki zemine göre değil.** Mod irtifayı
+`emergency_landing_mode.hpp:244` (`altitude_m = -pos_ned.z()`) ile alıyor: EKF
+yerel çerçevesinin z'si, orijin EKF'nin açılışta yerde kurduğu nokta.
+`mapping_node.py:219` ve `hud_node` `dist_bottom` geçerliyse onu kullanıyor;
+**ölçülen** canlı durumda `dist_bottom_valid = false`,
+`dist_bottom_sensor_bitfield = 0`: x500'de mesafe sensörü yok (`x500_base`
+yalnız basınç, manyetometre, IMU, GNSS taşıyor). `EKF2_HGT_REF = 1` (barometre),
+`EKF2_GPS_CTRL = 7`. Yani her yerde fiilen `−z` kullanılıyor ve
+`LandingState.altitude_agl` adına rağmen AGL değil. Düz dünyada fark yok;
+4 m'lik platformda (W5) yerden kalkılırsa EKF platformun üstünde 4 m fazla okur.
+
+### 2. Maske ve ρ hangi damgayı taşıyor, moda nasıl gidiyor?
+
+- **Maske: yakalama damgası.** `perception_node.py:147` `out.header = msg.header`:
+  Gazebo'nun kareyi işlediği sim zamanı olduğu gibi geçiyor. Alma damgası yok;
+  kaydedici kendisi ölçüyor (pasif testte yakalamadan kaydediciye **ölçülen**
+  ortanca 41.6 ms, p90 63 ms; Gazebo penceresi açıkken).
+- **ρ:** `detector_node.py:340-378` her maskede (10 Hz) hesaplıyor, ama moda
+  yalnızca `LandingCandidate.area_ratio` içinde gidiyor (`detector_node.py:835`),
+  karar hızında: sınır `max_rate_hz: 2.0` (`eland_params.yaml:132`), **ölçülen**
+  1.78-1.83 Hz.
+- **Damga uyuşmazlığı:** adayın damgası haritanınki (`detector_node.py:827`),
+  `area_ratio` ise o ana kadar gelen son maskeden; iki ayrı abonelik, en çok
+  bir kare kayabilir.
+- **Modda:** `onCandidate` değeri tutuyor (`emergency_landing_mode.hpp:570-586`).
+  `LandingState` onu ≤ 10 Hz'de yeniden yayınlıyor (`publishState`, `:667`,
+  0.1 s kısma).
+
+### 3. area ≈ 1584-1591 m² ve clearance = 20.00 m gerçek mi?
+
+**İkisi de 40×40 m harita tavanı** (`eland_params.yaml:25-26`, 1600 m²).
+`cv2.distanceTransform` ızgara kenarını sınır saymıyor; **ölçülen** sentetik
+denemede tamamen güvenli ızgarada merkez açıklığı 6.3·10⁶ m, kenarda tek
+hücrelik bilinmeyen halkayla 19.80 m çıktı. Harita araçla kaydıkça kenara
+bilinmeyen hücreler giriyor; merkezdeki araçtan kenara ~20 m. Alan da 1600 m²
+eksi bu kenar hücreleri. Gerçek alan daha büyük.
+
+Karara etkisi yok: açıklık skorda `min(…, r_ideal = 8 m)` ile, alan da hız
+tavanında `0.20·√A` olarak kullanılıyor ve A > 56 m²'de 1.5 m/s'de doyuyor.
+Ama `area_m2` gerçek alan olarak **kullanılmamalı**; `rho_hesap` dünya
+yaml'ındaki alanla hesaplanıyor.
+
+### 4. 83.7 m'de APPROACH, arama irtifası 15 m — neden?
+
+**Ölçülen**, PX4 kaydı `2026-10-03/10_40_52.ulg`: nav_state 4 → 2 (POSCTL,
+manuel) t = 30 s'de, gaz çubuğu en fazla 1.00, araç 83.9 m'ye çıkıyor; mod
+(nav_state 23) t = 90 s'de **83.9 m'de** devreye giriyor. Yani araç elle
+yükseltilmiş.
+
+Mod onu indirmiyor çünkü aday hazırsa SEARCH ilk adımda APPROACH'a geçiyor
+(`emergency_landing_mode.hpp:254-277`) ve APPROACH **o anki irtifada** gidiyor
+(`:287`, `target_ned = {cand.x(), cand.y(), pos_ned.z()}`). Arama irtifası
+(`eland_params.yaml:282`, 15 m) yalnız aday yokken uygulanıyor. Bu bir kusur
+değil, tasarım özelliği: mod, devreye girdiği irtifayı devralıyor. 83.9 m'de
+kamera yerde ~199×149 m görüyor (**_hesap**), harita ise 40 m.
+
+### 5. Kamera tam aşağı mı, bozulma var mı, sınır keskin mi?
+
+- **Yön:** `x500_seg_cam_down/model.sdf:27` ve `CameraJoint` (`:30`), eğim
+  1.5707 rad = 89.9947°; nadirden 0.0053° (**_hesap**). Kamera model
+  orijininin 0.10 m üstünde.
+- **Bozulma yok:** `seg_cam/model.sdf`'de `<distortion>` yok, ideal iğne delik.
+  320×240, yatay FOV 1.74 rad, 10 Hz (`:85`). İç parametreler FOV'dan:
+  fx = 134.7; Gazebo'nun kendi değeri 134.984, fark %0.2
+  (`mapping_node.py:232`).
+- **Sınır keskin:** Gazebo piksel başına tek etiket veriyor, kenar yumuşatma
+  yok. GT yolu yalnız etiket ofsetini çıkarıyor (`perception_node.py:160-190`);
+  yeniden boyutlandırma ya da süzme yok. Sınırlar tek piksel keskinliğinde;
+  eğitilmiş model böyle olmayacak.
+
+### 6. COMMIT'te iniş nasıl algılanıyor, yere değme anı nereden?
+
+- **Mod:** `emergency_landing_mode.hpp:410` `_land_detected->landed()`, yani
+  `/fmu/out/vehicle_land_detected.landed`.
+- **PX4 iniş algılayıcısı:** `ground_contact → maybe_landed → landed`, her
+  basamakta ~1/3 s gecikme; mesafe sensörü olmadığı için toplam 1 s
+  (`MulticopterLandDetector.cpp:126-134`). **Ölçülen** 10 uçuşta (2026-09-26)
+  `landed`, `ground_contact`'tan 0.69 s sonra geliyor; onda onunda aynı.
+- **Gerçek temas:** ikisi de bir kestirim. Gerçek an Gazebo'dan geliyor (model
+  yüksekliği dinlenme değerinin 0.03 m içine indiği an). Kaydedici bunu
+  `t_temas_gercek` olarak ve iki bayrağın ona göre gecikmesiyle birlikte yazıyor.
+- **run_scorer:** "indi" demek için COMMIT + durum kanalının 3 s susmasını
+  bekliyor (`run_scorer.py:181-185`), yani daha da geç.
+
+### 7. Gazebo gerçek konum ve yüzey yüksekliği nereden?
+
+- **Araç konumu:** `/world/eland_test/dynamic_pose/info` (gz.msgs.Pose_V,
+  **ölçülen** 50.7 Hz, modelin dünya ENU pozu; linkler modele göre).
+  `/world/eland_test/pose/info` her şeyi düzensiz aralıkla veriyor.
+- **Hız yok:** PX4'ün gz köprüsü `/model/x500_seg_cam_down_0/odometry_with_covariance`'a
+  abone (`GZBridge.cpp:249-252`), ama modelde odometri eklentisi olmadığı için
+  kimse yayınlamıyor (**ölçülen**: yayıncı yok). Gerçek dikey hız z'nin türevi:
+  `vz_gercek_hesap`.
+- **ROS köprüsü isimleri kaybediyor:** `ros_gz_bridge` Pose_V → TFMessage
+  çevirisinde `child_frame_id` boş (**ölçülen**). Kaydedici gz-transport'u
+  Python'dan doğrudan dinliyor.
+- **Yüzey yüksekliği:** konusu yok; dünyalar düz kutulardan yapılı, yükseklik
+  dünya tanımından (`tools/veri/dunya.py`). Model orijini yerde dururken
+  z = −0.013 m (**ölçülen**).
+- **Hareketli engeller:** `/eland/obstacle_truth` (sim zamanıyla damgalı).
+
+### 8. Gerçek zamandan hızlı koşabilir mi, bir iniş kaç saniye?
+
+- **Mümkün ama önerilmez.** Dünya `real_time_factor 1.0`, 4 ms adım
+  (`eland_test.sdf.in:57-61`); PX4 `PX4_SIM_SPEED_FACTOR`'u destekliyor
+  (`px4-rc.gzsim:154-158`). **Ölçülen** RTF 0.96-1.00, gz sunucusu 10 Hz
+  kamerayla tek çekirdeğin %70-100'ünde (GPU yok, llvmpipe).
+- **Neden önerilmez:**
+  - İşlemci zaten dolu.
+  - Hiçbir düğüm sim zamanı kullanmıyor (`use_sim_time` yok). Karar
+    sınırlayıcısı (2 Hz), aday zaman aşımı (3 s) ve harita unutması duvar
+    saatinde. 2× hızda karar döngüsü fiziğe göre yarı hızda kalır, veri temsil
+    edici olmaz. Düzeltmek mevcut ayarı değiştirmek demek (onay ister).
+- **Süre (ölçülen):** mod devreye girişi (~17.5 m) → PX4 `landed`: ortanca
+  **21.7 s** [21.0, 23.1], n = 10. Arm → disarm 52-57 s. Toplu koşuda bir
+  iniş, açılış-kapanış dahil **79-90 s duvar saati**.
+
+---
+
+## Ek bulgular (görevi etkiliyor)
+
+| # | Bulgu | Etki |
+|---|---|---|
+| E1 | **PX4 parametreleri varsayılan değil ve kalıcı:** `MPC_Z_V_AUTO_DN = 2.0`, `MPC_Z_VEL_MAX_DN = 2.0` (varsayılan 1.5 / 1.5), `MIS_TAKEOFF_ALT = 18`. `run_sim --px4-param` ile verilenler PX4'ün parametre dosyasına yazılıp sonraki koşulara taşınıyor. Brif ve TEZ_NOTLARI 1.5 diyor. | Kapalı çevrim alçalmada etkisiz (mod komutu 1.5'te kırpıyor); goto fazlarında etkili olabilir. Şartname "PX4 parametrelerine dokunma" diyor: her bölümde `kosul.yaml`'a yazılıyor, geri almak senin kararın (K4). |
+| E2 | **Su ya da yapıyla çevrili küçük adalar seçilemiyor.** Su ve yapı tehlike sınıfı (`eland_params.yaml:64`) ve 3 m mesafe şart (`:89`). 4×4 m adada merkez sudan 2 m, 6×6 m'de en iyi ihtimalle 3.0 m. | W1 hiç, W2 büyük ihtimalle aday üretmez. Aday yoksa mod VALIDATE'e girmez, alçalma verisi çıkmaz (K kipleri dahil); 60 s sonra kör iniş. Karar K1. |
+| E3 | **K4 kendi içinde çelişkili:** tırmanma yok, v ∈ [0.3, 1.5], 15 m'de 20-30 s. Ortalama ~0.9 m/s ile 25 s'de 22 m iner, 15 m yetmez. | Karar K2. |
+| E4 | **Gazebo rüzgârı yok:** `WindEffects` model linklerinde `<enable_wind>` ister, x500'de yok; eklemek modeli değiştirmek demek. Elde olan yanal kuvvet (`wind_inject.py`); 2-3 m/s ≈ 0.24-0.54 N (**_tahmin**, `F ≈ 0.06·v²`). | Karar K3. |
+| E5 | **W5 (platform):** 0-4 m ofset 10×10 m platformun içine düşer; araç platformda doğarsa EKF orijini platformun üstü olur ve fark ölçülemez. | Doğuş platformun dışında, yerde olmalı (ofset ≥ 6 m). **_tahmin:** EKF 2 m'de tetiklenen COMMIT platformun 2 m altına denk gelir, temas VALIDATE'te ~1.4 m/s ile olur. Kol 0'da W5 tam bunu ölçecek. |
+| E6 | PI'nin integrali yayınlanmıyor. | Şimdilik `I_hesap` (geri çatım, yalnız VALIDATE'te ve doyumsuzken). Kesin değer için O2b. |
+| E7 | **Makine ortak:** `run_sim.sh` açık bir simi kapatıyor (2026-10-03'te bir kez oldu). | `tools/veri/kosu.sh` açık sim görürse başlamıyor. Toplama için ~24 saatlik tek başına sim zamanı gerek. Karar K5. |
+| E8 | Bu makinede MATLAB/Octave yok. | `.mat` yalnız `scipy.io.loadmat` ile geri okunarak doğrulandı. |
+| E9 | `/tmp/eland_logs` her koşuda üzerine yazılıyor. | Koşucu logları bölüm klasörüne kopyalıyor. |
+
+---
+
+## Aşama 1 — kayıt düğümü
+
+**Durum: yazıldı, birim testi ve pasif test geçti; uçan bir inişte henüz
+denenmedi** (sim kullanımdaydı).
+
+Dosyalar (yeni, mevcut koda dokunmuyor): `tools/veri/kaydedici.py`,
+`tools/veri/ozellik.py`, `tools/veri/dunya.py`, `tools/veri/kosu.sh`,
+`tools/veri/data_dictionary.md`.
+
+- **Yalnız dinliyor.** ROS'ta PX4 çıkışları, modun setpoint'leri,
+  `/eland/state`, `/eland/candidate`, maske; Gazebo'da sim saati ve gerçek poz.
+  Hiçbir şey yayınlamıyor.
+- **Önce kayıt, sonra tablo.** Her mesaj geldiği sim zamanıyla tutuluyor;
+  tablolar bölüm sonunda kuruluyor. 50 Hz ızgara sıfırıncı mertebe tutmalı,
+  her kanal için `_yas_ms`.
+- **Çıktılar:** `duzenli.csv`, `maske_olaylari.csv`, `karar_olaylari.csv`,
+  `durum_gecisleri.csv`, `ep_ozet.json`, `kosul.yaml`, `ep.mat` (v7),
+  `maskeler.npz`.
+- **Pasif test (ölçülen,** senin yerdeki aracında, 20 s):
+
+  | Kanal | Hız | En uzun boşluk | Kayıp |
+  |---|---|---|---|
+  | PX4 konum | 50.3 Hz | 24 ms | 0 |
+  | PX4 tutum | 50.3 Hz | 24 ms | 0 |
+  | Gerçek poz | 50.7 Hz | 24 ms | 0 |
+  | Sim saati | 250 Hz | 4 ms | 0 |
+  | Maske | 10.0 Hz | 200 ms | 1 |
+  | Aday | 1.83 Hz | 647 ms | 0 |
+
+  `.mat` ve `.npz` geri okundu. Mod yerde etkin olmadığı için durum ve
+  setpoint kanalları boştu.
+- **Öznitelik birim testi:** 100×100 px kare → ρ = 0.1302, iç daire 50 px,
+  kadraja sığıyor; açık alan → ρ = 1, 4 kenar, iç daire 120 px (kare kenarı
+  sınır); merkez suda → ρ = 0; çim + asfalt tek bölge. Ayak izi katsayısı
+  4.216 (**_hesap**).
+
+Eksik: uçan bir bölümde doğrulama; birleşik `.mat` ve `tum_ozet.csv` (Aşama 6).
+
+---
+
+## Onay bekleyenler — mevcut koda eklemeler
+
+Hepsi parametreyle seçilir, varsayılan kapalı, mevcut davranış değişmez.
+
+**O1 — Aşama 2'yi uçurabilmek için (`run_sim.sh`, `batch_run.sh`).**
+`run_sim.sh`'e `--world AD`: verilirse `PX4_GZ_WORLD=AD`, `gen_world.py` atlanır
+(yeni dünyaları yeni bir üretici yazar), dünya dosyası PX4'ün dünya klasörüne
+bağlanır (`link_px4_assets.sh`'in yaptığı gibi). Verilmezse bugünküyle aynı.
+`batch_run.sh`'e isteğe bağlı `DUNYA` ortam değişkeni. ~15 satır. Gerekçe:
+şartname "mevcut batch_run.sh ile uçurulabilmeli" diyor ve dünya adı şu an
+`run_sim.sh`'te sabit.
+
+**O2 — Aşama 4 (K1-K4) için (`emergency_landing_mode.hpp`).**
+`veri_toplama_kipi` parametresi (varsayılan false). Açıkken VALIDATE'te `v_ref`
+yeni bir konudan gelir (`/eland/veri/v_ref`, std_msgs/Float32); konu 0.3 s'den
+bayatsa mevcut yasa kullanılır. COMMIT'e geçiş, mevcut EKF 2 m kuralına ek
+olarak `/eland/veri/h_gercek_hedef < 2.5 m` olunca. PI iç döngü, durum makinesi
+ve mesajlar aynı kalır. ~40 satır. Politikaların hepsi (sabit hız, kâhin
+ıraksama, rastgele, basamak/çoklu-sinüs) ve gerçek irtifa yayını yeni
+düğümlerde (`tools/veri/`). Gerekçe: v_ref'i dışarıdan vermenin, mod
+değişmeden başka yolu yok.
+- **O2b (isteğe bağlı):** aynı bayrak açıkken `/eland/veri/hiz_dongusu`
+  (v_cmd, I, e, v_ölçülen) yayını. Gerekçe: integralin kesin değeri (E6).
+
+**O3 — K5 (tırmanmalı tesis testi).** Kod eklemesi **gerekmiyor**: mevcut
+tanımlama kipi (`ident_enabled`, `ident_low_mps` / `ident_high_mps`, EKF'ye
+göre 8-25 m koruması) genlikleri parametreyle alıyor. Şartname ayrıca onay
+istediği için burada. Rüzgâr için E4.
+
+**Bilgi (onay gerekmiyor) — Aşama 5.** Bozucu yeni bir düğüm.
+`detector_node`, `mapping_node` ve `hud_node`'un zaten `mask_topic` parametresi
+var; parametre dosyasından `/eland/semantic_mask_bozuk`'a çevrilir. Füzyonlu
+harita da bozulmuş maskeyi görür; şartnamenin "maske hattından sonra" dediği bu.
+
+---
+
+## Kararın gerekenler
+
+- **K1 (E2):** küçük adalar (W1, W2 ve 6 m altındaki rastgele adalar) ne olsun?
+  - (a) çevre su/yapı kalsın, bunlar "aday yok" örneği olsun
+  - (b) küçük adaların çevresi arazi tehlikesi sınıfı olsun (tehlike sayılmıyor,
+    yalnız 1 m sığma + 2 m sınıf sınırı kuralı)
+  - (c) veri kipinde hedef dünya yaml'ından alınsın — bu durum makinesine
+    dokunur
+- **K2 (E3):** K4 için
+  - (a) 40 m'den başla
+  - (b) tanımlamayı K5'e bırak
+  - (c) 12 s'ye kısalt
+- **K3 (E4):** rüzgâr için kuvvet eşdeğeri yeterli mi?
+- **K4 (E1):** PX4 parametrelerini varsayılana döndüreyim mi, yoksa bugünkü
+  hâliyle (2.0) mi toplanacak? Seçilen hâl tüm toplama boyunca sabit kalmalı.
+- **K5 (E7):** toplama ne zaman? Tek başına sim gerekiyor.
+
+---
+
+## Süre ve disk tahmini (_tahmin, bölüm başına ~85 s ölçümünden)
+
+| İş | Bölüm | Süre |
+|---|---|---|
+| Kol 0 (W2, W3, W5, W6, 20 ada, açık alan; ×3) | 75 | ~1.8 sa |
+| K1 (4 hız × 5 dünya × 3) | 60 | ~1.4 sa |
+| K2 (5 D* × 5 dünya × 3) | 75 | ~1.8 sa |
+| K3 (≥ 400) | 400 | ~9.5 sa |
+| K4 + K5 | ~45 | ~1.1 sa |
+| Aşama 5 (~9 bozucu ayarı × ~26) | ~230 | ~5.5 sa |
+| **Toplam** | **~885** | **~21 sa** |
+
+Disk: bölüm başına 2-3 MB, toplam ~2-3 GB.
+
+**Ham veri yolu:** `~/eland_veri/<kol>/<dunya>/<ep_id>/` (Windows'tan
+`\\wsl.localhost\ubuntu\home\arda\eland_veri`). Pasif test çıktısı:
+`/tmp/veri_test/ep_pasif/`.
