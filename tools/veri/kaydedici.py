@@ -41,6 +41,7 @@ from gz.msgs10.clock_pb2 import Clock as GzClock
 from gz.msgs10.pose_v_pb2 import Pose_V
 from gz.transport13 import Node as GzNode
 from sensor_msgs.msg import Image
+from std_msgs.msg import Float32
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dunya as dunya_mod  # noqa: E402
@@ -86,12 +87,15 @@ class Kaydedici(Node):
         self.a = a
         self.clock = None             # (sim_s, monotonic)
         self.ev = {k: [] for k in ('lp', 'att', 'land', 'status', 'sp',
-                                   'state', 'cand', 'gt', 'clock')}
+                                   'state', 'cand', 'gt', 'clock', 'vdis')}
         self.masks = []               # (t_yakalama, t_alma, array)
         self.masks_bozuk = []
         self.t_start_mono = time.monotonic()
         self.landed_since = None
         self.saw_commit = False
+        # Any descent: in W5's data-collection variant there is no COMMIT,
+        # the aircraft touches the platform in VALIDATE.
+        self.saw_descent = False
         self.done = False
 
         # gz-transport callbacks run on gz's own threads; they only append.
@@ -115,6 +119,9 @@ class Kaydedici(Node):
         sub(LandingState, '/eland/state', self.on_state, RELIABLE)
         sub(LandingCandidate, '/eland/candidate', self.on_cand, RELIABLE)
         sub(Image, a.mask_topic, self.on_mask, BEST_EFFORT)
+        # The data-collection pattern, when one runs (tools/veri/politika.py).
+        sub(Float32, '/eland/veri/v_ref',
+            lambda m: self.ev['vdis'].append((self.t_gz(), float(m.data))), RELIABLE)
         if a.mask_bozuk_topic:
             sub(Image, a.mask_bozuk_topic, self.on_mask_bozuk, BEST_EFFORT)
         self.create_timer(0.5, self.check_stop)
@@ -171,6 +178,8 @@ class Kaydedici(Node):
     def on_state(self, msg):
         if msg.state == COMMIT:
             self.saw_commit = True
+        if msg.state in (VALIDATE, COMMIT):
+            self.saw_descent = True
         self.ev['state'].append((self.t_gz(), float(msg.state),
                                  float(msg.altitude_agl),
                                  float(msg.commanded_descent_mps),
@@ -201,7 +210,8 @@ class Kaydedici(Node):
         if time.monotonic() - self.t_start_mono > self.a.sure:
             self.get_logger().info('kayit suresi doldu')
             self.done = True
-        elif (self.a.inince_dur and self.saw_commit and self.landed_since
+        elif (self.a.inince_dur and (self.saw_commit or self.saw_descent)
+              and self.landed_since
               and time.monotonic() - self.landed_since > 3.0):
             self.get_logger().info('inis algilandi, kayit bitiyor')
             self.done = True
@@ -356,6 +366,13 @@ def build(node, a):
     add('vz_gercek_hesap', tg, vz_gt)
     add('landed', *tv(land, 1))
     add('ground_contact', *tv(land, 3))
+    add('v_ref_dis', *tv(arr(ev['vdis'], 2), 1))   # pattern sent, before the mode's clamp
+    # Horizontal position: Gazebo truth (world ENU) and the EKF's (local NED),
+    # for drift and for distances to the target.
+    add('x_gercek', tg, gx if len(gt) else np.array([]))
+    add('y_gercek', tg, gy if len(gt) else np.array([]))
+    add('x_ekf_kuzey', *tv(lp, 1))
+    add('y_ekf_dogu', *tv(lp, 2))
 
     # v_cmd only means something while the mode is sending velocity
     # setpoints (VALIDATE closed loop, COMMIT); elsewhere it is a stale value.
@@ -394,9 +411,11 @@ def build(node, a):
 
     # -- mask events --------------------------------------------------------
     m_cols = ['t_yakalama', 't_alma', 'maske_yasi_ms'] + list(ozellik.FEATURE_COLUMNS) + \
-        ['h_kamera_gercek', 'h_gercek_zemin', 'rho_hesap']
+        ['h_kamera_gercek', 'h_gercek_zemin', 'rho_hesap',
+         'rho_temiz', 'rho_bozuk', 'view_bounded_bozuk', 't_alma_bozuk']
     md = {c: [] for c in m_cols}
     masks = node.masks
+    bozuk = {round(t_cap, 4): (t_rx, m) for t_cap, t_rx, m in node.masks_bozuk}
     if masks:
         h_px, w_px = masks[0][2].shape
         k_fp = ozellik.footprint_factor(math.radians(a.hfov_deg), w_px, h_px)
@@ -413,6 +432,20 @@ def build(node, a):
             md['h_kamera_gercek'].append(hk)
             md['h_gercek_zemin'].append(hz)
             md['rho_hesap'].append(a_true / (k_fp * hk * hk) if hk > 0 else float('nan'))
+            # Clean and disturbed rho on the same row, matched by capture
+            # stamp (the disturber keeps the stamp; a repeated frame carries
+            # the new stamp over old content, which is the point).
+            md['rho_temiz'].append(float(f['rho']))
+            fb = bozuk.get(round(t_cap, 4))
+            if fb is not None:
+                fbz = ozellik.features(fb[1])
+                md['rho_bozuk'].append(float(fbz['rho']))
+                md['view_bounded_bozuk'].append(float(fbz['view_bounded']))
+                md['t_alma_bozuk'].append(fb[0])
+            else:
+                md['rho_bozuk'].append(float('nan'))
+                md['view_bounded_bozuk'].append(float('nan'))
+                md['t_alma_bozuk'].append(float('nan'))
         for c in m_cols:
             md[c] = np.asarray(md[c], dtype=float)
     else:

@@ -19,9 +19,11 @@ yuzeyler:
     - 5.0
   daireler: []
   alan_m2: 96.0
-- ad: engel
+- ad: sinif_siniri_nesnesi
   z: 0.52
   inilebilir: false
+  tehlike_sinifi: false
+  not: 'sinif 2: yalniz 2 m sinif siniri kurali, 3 m tehlike kurali degil'
   dikdortgenler:
   - - -1.0
     - -1.0
@@ -43,4 +45,5 @@ ruzgar:
   yon_deg: 45.0
   olcek: 1.0
 hareketli_kisi: 0
+negatif_ornek: false
 mob_layout_file: /home/arda/ros2_ws/src/eland_sim/worlds/veri/veri_w8.mobs.yaml

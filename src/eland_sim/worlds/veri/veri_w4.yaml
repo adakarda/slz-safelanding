@@ -35,4 +35,5 @@ ruzgar:
   yon_deg: 45.0
   olcek: 1.0
 hareketli_kisi: 0
+negatif_ornek: false
 mob_layout_file: /home/arda/ros2_ws/src/eland_sim/worlds/veri/veri_w4.mobs.yaml

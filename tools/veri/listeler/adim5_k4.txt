@@ -1,0 +1,13 @@
+# Oncelik 5 -- K4 coklu-sinus + basamak, 40 m, W3. Tek tohum coklu-sinus once.
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 1" tools/veri/kosu.sh 1 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 2" tools/veri/kosu.sh 2 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 3" tools/veri/kosu.sh 3 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 4" tools/veri/kosu.sh 4 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 5" tools/veri/kosu.sh 5 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 6" tools/veri/kosu.sh 6 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 7" tools/veri/kosu.sh 7 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 8" tools/veri/kosu.sh 8 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 9" tools/veri/kosu.sh 9 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 10" tools/veri/kosu.sh 10 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 11" tools/veri/kosu.sh 11 k4 veri_w3
+BASLANGIC_IRTIFA=40 POLITIKA="k4 --tohum 12" tools/veri/kosu.sh 12 k4 veri_w3

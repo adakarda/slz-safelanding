@@ -364,3 +364,162 @@ Disk: bölüm başına ~1 MB (ölçülen, 3 iniş), toplam ~1 GB.
 **Ham veri yolu:** `~/eland_veri/<kol>/<dunya>/<ep_id>/` (Windows'tan
 `\\wsl.localhost\ubuntu\home\arda\eland_veri`). Pasif test çıktısı:
 `/tmp/veri_test/ep_pasif/`.
+
+---
+
+# Tur 2 — diğer sohbetin kararlarından sonra (2026-10-03 akşam)
+
+Kararlar (kullanıcı, diğer sohbet üzerinden):
+- **O1 verildi, O2 verildi, O2b verilmedi.**
+- **K4:** 40 m'den, [0.3, 1.5] içinde kırpmasız, 0.9 ± 0.6 m/s çevresinde
+  çoklu-sinüs ve basamak, ~20 s periyot, 2 tur, yalnız W3, 12 uçuş.
+- **Şartname değişiklikleri 1-7** uygulandı (aşağıda).
+
+## Doğrulamalar
+
+**6a / W5 hükmü (a) — COMMIT tetiği EKF yüksekliğine bağlı mı?** Evet.
+`emergency_landing_mode.hpp:297`:
+`if (altitude_m <= _landing_altitude_m && !_ident_enabled)` → COMMIT.
+`altitude_m` `:244`'te `-pos_ned.z()` (EKF yerel z, kalkış noktasına göre).
+`landing_altitude` `eland_params.yaml:286` = 2.0 (varsayılan `:467`). W5'te
+platform 4 m yüksekte olduğu için bu kural platformun üstünde tetiklenmez.
+
+**6 — Eski taban çizgi hangi parametrelerle ölçüldü?** PX4'ün 266 uçuş
+kaydının parametre başlığı tarandı (ölçülen):
+
+| Kayıt aralığı | MPC_Z_V_AUTO_DN | MPC_Z_VEL_MAX_DN |
+|---|---|---|
+| 2026-09-04 08:38 → 2026-09-05 20:50 | 1.5 | 1.5 |
+| 2026-09-05 20:50 | 1.5 | 2.0 |
+| **2026-09-05 20:54 → bugün** | **2.0** | **2.0** |
+
+Brifteki taban çizgi (alçalma 21 s, takip RMS 0.19-0.20, 5/5 iniş) 2026-09-26
+akşamı ölçüldü (53 kayıt, hepsi 2.0 / 2.0). Kapalı çevrim (`v2.7`, 2026-09-06)
+ve sonrasındaki her ölçüm de 2.0 / 2.0. Yalnız TEZ_NOTLARI §2.1'deki ilk açık
+çevrim ölçümü 1.5 / 1.5 döneminden. Kontrolcü tasarım sınırı yine [0, 1.5] m/s
+(modun kendi kırpması).
+
+**O2b yerine — `I_hesap` ile çevrimdışı PI yeniden oynatma** (`tools/veri/pi_tekrar.py`,
+Kp 0.8, Ki 0.6, Kaw 1.0, VALIDATE girişinde sıfırlama, 50 Hz ızgarada):
+
+| Bölüm | n | v_cmd: yeniden oynatma − kayıt, RMS / ort / en çok | I: yeniden oynatma − I_hesap, RMS / ort / en çok |
+|---|---|---|---|
+| kol0_acik_alan_t1001 | 566 | 0.028 / +0.021 / 0.100 m/s | 0.029 / +0.021 / 0.100 m/s |
+| kol0_acik_alan_t1002 | 475 | 0.036 / +0.025 / 0.124 m/s | 0.037 / +0.026 / 0.124 m/s |
+| kol0_acik_alan_t1003 | 489 | 0.026 / +0.016 / 0.090 m/s | 0.028 / +0.019 / 0.090 m/s |
+
+- **Yeniden oynatma komutu 0.03 m/s RMS ile tutturuyor.** Ama integral için
+  fark (0.031 m/s RMS) integralin kendi büyüklüğü mertebesinde (|I| p95
+  0.10-0.16 m/s); korelasyon −0.6 ile +0.7 arasında.
+- **Yani integral ızgaradan ±0.03 m/s'den iyi bilinemiyor.** Sebep: `v_ref`
+  durum kanalından ≤ 10 Hz geliyor, mod ise kendi döngüsünde (~30-50 Hz)
+  taze yasa değeriyle hesaplıyor. Yasa irtifayla sürekli azaldığı için tutulan
+  `v_ref` hep biraz yüksek kalıyor; artı yönlü sapmanın sebebi bu.
+- **MATLAB'da yeniden oynatırken öneri:** irtifa yedeğindeyken `v_ref`'i
+  `clamp(0.35·h_ekf, 0.3, tavan)` ile yeniden hesaplamak, tutulan değeri
+  kullanmaktan iyi.
+
+## Uçuş gerektirmeyen işler
+
+**A) 10 Hz ayrı ρ yayını — değişecek dosyalar (uygulanmadı, ayrı onay bekliyor):**
+1. `src/eland_msgs/msg/GoruntuKapsami.msg` (yeni):
+   - `std_msgs/Header header` — damga = maskenin yakalama damgası
+   - `float32 area_ratio`, `bool view_bounded` — aynı mesajda
+   - `uint32 bolge_piksel`, `uint8 merkez_sinif`
+2. `src/eland_msgs/CMakeLists.txt`: `rosidl_generate_interfaces` listesine
+   bir satır.
+3. `src/eland_mapping/eland_mapping/detector_node.py`, `on_mask`
+   (`:340-378`): ρ ve `view_bounded` zaten her maskede (10 Hz) hesaplanıyor;
+   kısma yalnız `on_map`'te (`:583`). Sonuna `publish_area_ratio`
+   parametresiyle (varsayılan false, konu `/eland/area_ratio`) mesajı
+   yayınlayan ~10 satır.
+4. `src/eland_mode/include/emergency_landing_mode.hpp`: `use_fast_area_ratio`
+   (varsayılan false). Açıkken `_area_ratio` / `_view_bounded` bu konudan,
+   bayatlık kontrolüyle güncellenir; `area_m2` adaydan gelmeye devam eder.
+   ~25 satır.
+5. İsteğe bağlı: kaydedici ve HUD yeni konuyu da okuyabilir.
+
+**B) Veri seti düzeni** (`tools/veri/birlestir.py`):
+- `tum_ozet.csv`: bölüm başına bir satır, bölmesiyle.
+- **Bölme 70/15/15, kararlı bir özetle (hash):** rastgele adalarda adanın
+  tamamı tek anahtar (test adası hiçbir desenle, hiçbir rüzgârla eğitime
+  girmez); diğer dünyalarda anahtar dünya + tohum.
+- `_bolme/{train,val,test}/` bölüm klasörlerine bağlantılar ve her bölme için
+  `birlesik_<bolme>.mat`: sayısal sütunlar float32, `ep_idx` sütunu, `ep`
+  tablosu. Test ayrı klasörde.
+
+**C)** `data_dictionary.md`'ye eklendi: `h_ekf` kalkış noktasına göre, hedef
+yüzeye göre değil; `altitude_agl` adı yanıltıcı. Ayrıca 4.4 m eşiği (W1, W6
+kolları, negatif örnekler), W8 sınıf sınırı nesnesi, `kosul.yaml` alanları.
+
+**D)** Açık alan yüzey yükseklikleri tanımlandı:
+`src/eland_sim/worlds/veri/acik_alan.yaml`, şablonun çarpışma geometrisinden,
+30 yüzey. Kaydedici artık bunu kullanıyor. Öncesindeki 3 açık alan bölümü zemin
+0 ile kaydedildi; sözlükte etkilenen sütunlar yazılı.
+
+**E) Zaman hizası — bir ep.mat** (`tools/veri/zaman_hizasi.py`, k1_v1.0_veri_w3_t3001):
+
+| Yapı | Alan | Sayısal | Metin (MATLAB'da cell) | Uzunluk |
+|---|---|---|---|---|
+| duzenli | 44 | 40 | ep_id, dunya_id, tohum, kol | 2547 |
+| maske | 26 | 26 | — | 505 |
+| karar | 12 | 12 | — | 91 |
+| gecis | 4 | 1 | onceki, sonraki, neden | 3 |
+
+- **Maske yakalama → kayıt:** p50 19.1 ms, p90 39.7 ms, p99 94.5 ms, en çok
+  295 ms.
+- **Izgara:** aralık tam 20.000 ms (yapı gereği jitter 0). Zamanlama
+  kanalların yaşında görünüyor:
+
+| Kanal | Yaş p50 | p95 | Not |
+|---|---|---|---|
+| h_ekf, roll | 11 ms | 11 ms | 50 Hz |
+| h_gercek_zemin | 12 ms | 20 ms | Gazebo, 50 Hz |
+| v_ref_dis | 19 ms | 19 ms | politika, 50 Hz |
+| v_ref, durum | 66 ms | 1600 ms | 10 Hz; mod durunca (iniş sonrası) yaşlanıyor |
+| v_cmd | 6 ms | 1576 ms | 50 Hz; aynı sebep |
+| landed | 493 ms | 952 ms | PX4 yalnız değişince/1 Hz yayınlıyor |
+
+- **Yapı:** `duzenli`'de 4 metin sütunu her satırda aynı değeri taşıyor;
+  MATLAB'da cell dizisi olarak gelir. Bozuk yapı görülmedi; MATLAB yok, yalnız
+  scipy ile okundu.
+
+## Kod değişiklikleri (onaylı, parametreyle, varsayılan kapalı)
+
+**O1:**
+- `run_sim.sh`: `--world AD|DOSYA` ve `--model AD`. Verilmezse eski davranış:
+  `eland_test`, `gen_world`, rastgele doğuş, `x500_seg_cam_down`.
+- `batch_run.sh`: `DUNYA` / `MODEL` ortam değişkenleri ve bunların
+  `obstacle_driver` ayarları (`tools/veri/dunya_parametreleri.py`).
+
+**O2:** `emergency_landing_mode.hpp`, `veri_toplama_kipi` (varsayılan false;
+kapalıyken hiçbir abonelik oluşmuyor).
+- **Açıkken:** VALIDATE'te referans `/eland/veri/v_ref`'ten gelir, 0.3 s'den
+  bayatsa yasaya düşer. Gazebo hedef yüksekliği
+  (`/eland/veri/h_gercek_hedef`) < 2.5 m olunca COMMIT'e devreder.
+- **Değişmeyenler:** PI, sınırları, durum makinesi, mesajlar.
+- **W5 hükmü:** politika `--devir-yok --son-hiz 0.5` ile yüksekliği hiç
+  yayınlamaz (devir yok) ve 2.5 m altında 0.5 m/s komut eder. Temas
+  Gazebo'dan ölçülür. `kosul.yaml`'da `gt_devir` alanı.
+
+**Yeni dosyalar (onay gerekmiyor):**
+- `tools/veri/politika.py` (K1-K4)
+- `tools/veri/bozucu.py` (Aşama 5, varsayılan kapalı)
+- `tools/veri/baslangic.py` (tohumdan başlangıç)
+- `tools/veri/toplu.sh`, `tools/veri/adim_ozet.py`, `tools/veri/pi_tekrar.py`
+- `tools/veri/zaman_hizasi.py`, `tools/veri/ruzgar_karsilastir.py`
+- `tools/veri/acik_alan_yuzey.py`
+
+**Şartname değişiklikleri:**
+1. W1 yalnız Kol 0.
+2. Rastgele adalar 5-20 m, ~%10 negatif (45 adadan 4'ü), `negatif_ornek`
+   etiketli.
+3. W5 doğuş ofseti 6.5-8 m.
+4. W6 kolları 6 m, sözlükte.
+5. W8'deki nesne "sınıf sınırı nesnesi".
+6. PX4 2.0 sabit.
+7. Rüzgâr karşılaştırması 4. adımda.
+
+**Ek düzeltme:** sabit dünyalarda başlangıç dünya yaml'ında tek değerdi, aynı
+dünyanın 3 tekrarı aynı noktadan başlardı. Artık (dünya, tohum) çiftinden
+çekiliyor.

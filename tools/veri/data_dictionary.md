@@ -32,7 +32,7 @@ Kaydedici: `tools/veri/kaydedici.py`. Her iniş (ep) bir klasör:
 | t_gz | s | ızgara | sim saati, 0.02 s adım |
 | durum | — | `/eland/state.state` | 0 SEARCH, 1 APPROACH, 2 VALIDATE, 3 HOLD, 4 ABORT, 5 COMMIT; mod etkin değilken boş |
 | nav_state | — | `/fmu/out/vehicle_status_v4` | 23 = acil iniş modu |
-| h_ekf | m | `vehicle_local_position.z`, işareti çevrilmiş | **kalkış noktasına göre**, yere göre değil |
+| h_ekf | m | `vehicle_local_position.z`, işareti çevrilmiş | **kalkış noktasına (EKF orijinine) göre; hedef yüzeye ya da alttaki zemine göre değil.** Mesafe sensörü yok. `LandingState.altitude_agl` de aynı −z'dir; adı yanıltıcı, AGL değildir. Düz dünyada fark ±0.15 m (ölçülen), W5'te platformun üstünde ~4 m |
 | vz_ekf | m/s | `vehicle_local_position.vz` | aşağı + |
 | vx, vy | m/s | `vehicle_local_position` | NED kuzey / doğu |
 | roll, pitch, yaw | rad | `vehicle_attitude.q` | FRD→NED, ZYX Euler |
@@ -44,6 +44,9 @@ Kaydedici: `tools/veri/kaydedici.py`. Her iniş (ep) bir klasör:
 | h_gercek_hedef | m | Gazebo model z − hedef yüzeyin yüksekliği − dinlenme ofseti | açık alanda = h_gercek_zemin |
 | vz_gercek_hesap | m/s | Gazebo z'nin türevi (`np.gradient`) | aşağı +; simülatör hız yayınlamıyor |
 | landed, ground_contact | 0/1 | `/fmu/out/vehicle_land_detected` | PX4 iniş algılayıcısı; gerçek temastan 3-5 s geç (ölçülen), temas anı için kullanmayın |
+| x_gercek, y_gercek | m | Gazebo model konumu, dünya ENU (x doğu, y kuzey) | 2026-10-03 akşamından itibaren |
+| x_ekf_kuzey, y_ekf_dogu | m | `vehicle_local_position.x / .y`, EKF yerel NED | dünya = `yerel_dunya_ofset_en_m` + (doğu, kuzey) |
+| v_ref_dis | m/s | `/eland/veri/v_ref` (tools/veri/politika.py) | veri toplama kipinde desenin gönderdiği referans, modun [0, 1.5] kırpmasından önce. Desen VALIDATE'e girişten ~0.1-0.2 s sonra başlar; o aralıkta `v_ref` hâlâ yasanın değeridir |
 | yatay_hata_m | m | EKF konumu ile o an yayınlanan son geçerli aday arası yatay mesafe | COMMIT'te mod hedefi dondurur; aday yayını sürer |
 | yatay_hata_hedef_gercek_m | m | Gazebo konumu ile hedef yüzey merkezi | yalnız dünya yaml'ında hedef varsa |
 
@@ -72,6 +75,9 @@ girdilerinin yaşlarına bakın.
 | h_kamera_gercek | m | yakalama anında kameranın altındaki yüzeye yüksekliği (model z + 0.10 m) |
 | h_gercek_zemin | m | yakalama anında, duzenli.csv'deki tanım |
 | rho_hesap | — | `A_gercek / (4.22 · h_kamera_gercek²)`; A_gercek dünya yaml'ından. Yalnız bölge kadraja sığarken anlamlı |
+| rho_temiz | — | `rho` ile aynı (temiz maske); Aşama 5 tablolarında yan yana okunmak için |
+| rho_bozuk, view_bounded_bozuk | — | bozucunun çıkardığı maskeden aynı öznitelik; aynı yakalama damgasıyla eşlenir. Bozucu yoksa boş |
+| t_alma_bozuk | s | bozuk maskenin kaydediciye ulaştığı sim zamanı (gecikme bozucusunda farkı gösterir) |
 
 Görüntü: 320×240, yatay FOV 99.7°, üstü = aracın burnu. Ham maskeler
 `maskeler.npz` içinde (`maskeler` N×240×320 uint8, `t_yakalama`, `t_alma`);
@@ -115,3 +121,39 @@ MATLAB `load('ep.mat')`: `duzenli`, `maske`, `karar`, `gecis` yapıları
 (sütunlar alan olarak) ve `ozet_json` (metin; `jsondecode` ile açılır).
 Biçim v7 (sıkıştırılmış). Bu makinede MATLAB yok; dosya yalnızca
 `scipy.io.loadmat` ile geri okunarak doğrulandı.
+
+## Dünyalar ve geometri eşikleri
+
+- **Zemin sınıfı:** ada dünyalarında her yer arazi tehlikesi (sınıf 2), adalar
+  çim. Sınıf 2 inilemez ama **tehlike sınıfı değildir**: iniş noktasına yalnız
+  2 m sınıf sınırı kuralı uygulanır, 3 m tehlike (SORA) mesafesi değil.
+- **4.4 m eşiği:** seçici, iniş noktasını sınıf sınırından ≥ 2 m
+  (`r_class_edge`) uzakta istiyor ve 0.2 m'lik ızgarada çalışıyor. Bir adanın
+  en dar yeri ~4.4 m'den (22 hücre) dar ise merkezi sınıra en çok 1.8-1.9 m
+  uzaklıktadır ve **hiçbir hücre aday olamaz**. Bu yüzden:
+  - **W1 (4×4 m) negatif örnek:** aday üretmez, mod 60 s arar ve kör iner.
+  - **W6'nın L kolları 6 m:** 4 m'lik kollar aday üretmezdi.
+  - Rastgele adalar 5-20 m; ~%10'u bilerek < 4.4 m (negatif örnek).
+- **negatif_ornek** (`kosul.yaml`, `tum_ozet.csv`): `true` ise dünya bu eşiğin
+  altında; yalnız Kol 0'da uçurulur, K kiplerinde ve Aşama 5'te kullanılmaz.
+- **W8:** ortadaki 2×2 m nesne bir **sınıf sınırı nesnesi**dir (sınıf 2), engel
+  değil: yalnız 2 m sınıf sınırı kuralını tetikler, 3 m tehlike kuralını değil.
+  Yapı (tehlike sınıfı) olsaydı 10×10 m adada iniş yeri kalmazdı.
+- **W5:** platform 10×10×4 m, üstü çim. Araç platformun dışında, yerde doğar
+  (ofset 6.5-8 m), EKF orijini yerdedir.
+- **Açık alan yüzeyleri:** `src/eland_sim/worlds/veri/acik_alan.yaml`
+  (`tools/veri/acik_alan_yuzey.py`, şablonun çarpışma geometrisinden): yol ve
+  yamalar 0.02 m, binalar 6-12 m, ağaç gövdeleri 7-8 m, çit 1.8 m, park etmiş
+  araç 1.5 m. Göletlerin çarpışma kutusu yok, altlarında zemin 0'dır.
+  2026-10-03'ten önceki üç açık alan bölümü (Kol 0, t1001-t1003) bu tablo
+  olmadan, zemin 0 alınarak kaydedildi: yol/yama üstünde `h_gercek_*` 0.02 m
+  fazla, bina/ağaç üstünden geçerken yanlıştır.
+
+## kosul.yaml alanları (bölüm başına)
+
+`ep_id`, `kol`, `dunya`, `dunya_yaml`, `tohum`, `model`, `baslangic_irtifasi_m`,
+`baslangic_ofset_m`, `dogus` (x,y,z,r,p,yaw), `negatif_ornek`, `ruzgar_mps`,
+`politika` (politika.py argümanları; boşsa Kol 0), `gt_devir` (veri kipinde
+COMMIT'e nasıl devredildiği: Gazebo hedef yüksekliği < 2.5 m, ya da W5'te devir
+yok + 0.5 m/s; **ground truth kullanır, yalnız simülasyon içindir**),
+`bozucu`, `ek_parametreler`, `git`, `px4_parametreleri`.

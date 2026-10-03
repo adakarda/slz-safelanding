@@ -42,6 +42,7 @@
 #include <px4_ros2/odometry/local_position.hpp>
 #include <px4_ros2/vehicle_state/land_detected.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -202,6 +203,30 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
         });
     _state_pub =
         _node.create_publisher<eland_msgs::msg::LandingState>(_state_topic, decision_qos);
+
+    // Data collection (tools/veri, approved 2026-10-03). Off by default, and
+    // when off nothing below exists: no subscription, no code path. When on,
+    // VALIDATE tracks a reference published by tools/veri/politika.py
+    // instead of the descent law's, and hands over to COMMIT on the
+    // ground-truth height of the target surface. Ground truth makes this a
+    // simulation-only switch.
+    if (_veri_kipi) {
+      _veri_vref_sub = _node.create_subscription<std_msgs::msg::Float32>(
+          _veri_vref_topic, rclcpp::QoS(10),
+          [this](std_msgs::msg::Float32::UniquePtr msg) {
+            _veri_vref = msg->data;
+            _veri_vref_time = _node.get_clock()->now();
+          });
+      _veri_h_sub = _node.create_subscription<std_msgs::msg::Float32>(
+          _veri_h_topic, rclcpp::QoS(10), [this](std_msgs::msg::Float32::UniquePtr msg) {
+            _veri_h = msg->data;
+            _veri_h_time = _node.get_clock()->now();
+          });
+      RCLCPP_WARN(_node.get_logger(),
+                  "VERI TOPLAMA KIPI ACIK: v_ref %s'ten, COMMIT devri %s < %.2f m "
+                  "(yalniz simulasyon)",
+                  _veri_vref_topic.c_str(), _veri_h_topic.c_str(), _veri_devir_irtifasi_m);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -299,6 +324,14 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
                      "at " + toStr(altitude_m) + " m, committing to touchdown");
           break;
         }
+        // Data collection: the EKF height above is measured from the take-off
+        // point, so over a raised target it fires late or never. The
+        // ground-truth height of the target surface hands over instead.
+        if (_veri_kipi && veriFresh(_veri_h_time) && _veri_h < _veri_devir_irtifasi_m) {
+          transition(State::Commit, "veri kipi: gercek yukseklik " + toStr(_veri_h) +
+                                        " m, COMMIT'e devrediliyor");
+          break;
+        }
         if (!live) {
           // Below min_radius_altitude the camera no longer sees enough ground
           // to re-acquire, so freezing in place beats flying on blind. HOLD is
@@ -318,6 +351,14 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
         const Eigen::Vector3f cand = candidateNed();
         target_ned = {cand.x(), cand.y(), -_landing_altitude_m};
         max_vertical_speed = descentSpeed(altitude_m);
+        // Data collection: the pattern replaces the law's output as the
+        // reference. The PI, its limits and the state machine are unchanged,
+        // and the published reference is the one actually tracked.
+        const bool veri_ref = _veri_kipi && veriFresh(_veri_vref_time);
+        if (veri_ref) {
+          max_vertical_speed = std::clamp(_veri_vref, 0.f, _descent_max_mps);
+          _last_commanded_mps = max_vertical_speed;
+        }
         if (_ident_enabled) {
           // Open loop on purpose: what is being measured is the plant, so the
           // rate controller must not be in the path shaping it.
@@ -360,7 +401,7 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
           _trajectory_setpoint->update(descent);
           _reason = "descending at " + toStr(v_cmd) + " m/s (ref " +
                     toStr(max_vertical_speed) + ", measured " + toStr(v_meas) +
-                    ") [" + std::string(_view_bounded ? "area" : "altitude") +
+                    ") [" + std::string(veri_ref ? "veri" : (_view_bounded ? "area" : "altitude")) +
                     "], alt " + toStr(altitude_m) + " m";
           publishState(altitude_m);
           return;
@@ -503,6 +544,15 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
     _ident_low_mps = declare("ident_low_mps", -1.0);
     _ident_high_mps = declare("ident_high_mps", 1.0);
 
+    // Data collection, see the constructor. Off by default.
+    _veri_kipi = _node.declare_parameter<bool>("veri_toplama_kipi", false);
+    _veri_vref_topic =
+        _node.declare_parameter<std::string>("veri_v_ref_topic", "/eland/veri/v_ref");
+    _veri_h_topic =
+        _node.declare_parameter<std::string>("veri_h_topic", "/eland/veri/h_gercek_hedef");
+    _veri_devir_irtifasi_m = declare("veri_devir_irtifasi", 2.5);
+    _veri_bayat_s = declare("veri_bayat_s", 0.3);
+
     _candidate_topic = _node.declare_parameter<std::string>("candidate_topic", "/eland/candidate");
     _state_topic = _node.declare_parameter<std::string>("state_topic", "/eland/state");
   }
@@ -584,6 +634,13 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
       _view_bounded = msg->view_bounded;
       _have_area_measurement = msg->area_m2 > 0.f;
     }
+  }
+
+  /// A data-collection input is used only while it keeps arriving; a silent
+  /// pattern node falls back to the descent law rather than to its last word.
+  bool veriFresh(const rclcpp::Time& t) const
+  {
+    return t.nanoseconds() != 0 && (_node.get_clock()->now() - t).seconds() <= _veri_bayat_s;
   }
 
   bool candidateIsLive() const
@@ -777,6 +834,15 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
   bool _area_law_active{false};
   std::string _candidate_topic{"/eland/candidate"};
   std::string _state_topic{"/eland/state"};
+  bool _veri_kipi{false};
+  std::string _veri_vref_topic{"/eland/veri/v_ref"};
+  std::string _veri_h_topic{"/eland/veri/h_gercek_hedef"};
+  float _veri_devir_irtifasi_m{2.5f};
+  float _veri_bayat_s{0.3f};
+  float _veri_vref{0.f};
+  float _veri_h{1e9f};
+  rclcpp::Time _veri_vref_time{0, 0, RCL_ROS_TIME};
+  rclcpp::Time _veri_h_time{0, 0, RCL_ROS_TIME};
 
   std::shared_ptr<px4_ros2::MulticopterGotoSetpointType> _goto_setpoint;
   std::shared_ptr<px4_ros2::TrajectorySetpointType> _trajectory_setpoint;
@@ -784,6 +850,8 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
   std::shared_ptr<px4_ros2::LandDetected> _land_detected;
   rclcpp::Subscription<eland_msgs::msg::LandingCandidate>::SharedPtr _candidate_sub;
   rclcpp::Publisher<eland_msgs::msg::LandingState>::SharedPtr _state_pub;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr _veri_vref_sub;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr _veri_h_sub;
 };
 
 }  // namespace eland

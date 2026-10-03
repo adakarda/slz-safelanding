@@ -25,9 +25,12 @@ r_class_edge 2 m on a 0.2 m grid):
     (4x4) and random islands under ~4.4 m produce no candidate -- kept as
     "no site" examples, the mode then times out and descends blind;
   * W6's L arms are 6 m wide for the same reason (4 m arms are unselectable);
-  * W8's centre obstacle is also non-hazard class, otherwise the 3 m SORA
-    separation from it and the 2 m seam margin leave nothing on a 10x10 m
-    island.
+  * W8's centre object is non-hazard class too, so it is a CLASS-SEAM OBJECT
+    ("sinif siniri nesnesi"), not an obstacle: it triggers only the 2 m seam
+    rule, not the 3 m SORA separation (which would leave nothing on 10x10 m).
+
+Random islands (2026-10-03 spec change): 5-20 m, and about 10 % negative
+examples under 4.4 m, flagged `negatif_ornek: true` -- those go to Kol 0 only.
 """
 import argparse
 import math
@@ -193,7 +196,8 @@ def island(kind, cx, cy, **k):
     if k.get('engel'):
         e = k['engel']
         h = 0.5
-        models.append(box('engel', cx, cy, top + h / 2, e, e, h, LABEL['terrain'], TERRAIN_RGB))
+        models.append(box('sinif_siniri_nesnesi', cx, cy, top + h / 2, e, e, h,
+                          LABEL['terrain'], TERRAIN_RGB))
         holes = [[cx - e / 2, cy - e / 2, cx + e / 2, cy + e / 2]]
         area -= e * e
     return {
@@ -203,7 +207,9 @@ def island(kind, cx, cy, **k):
                   'dikdortgenler': [[round(v, 3) for v in r] for r in rects],
                   'daireler': [[round(v, 3) for v in d] for d in discs],
                   'alan_m2': round(area, 3)},
-        'engel': ({'ad': 'engel', 'z': round(top + 0.5, 3), 'inilebilir': False,
+        'engel': ({'ad': 'sinif_siniri_nesnesi', 'z': round(top + 0.5, 3),
+                   'inilebilir': False, 'tehlike_sinifi': False,
+                   'not': 'sinif 2: yalniz 2 m sinif siniri kurali, 3 m tehlike kurali degil',
                    'dikdortgenler': holes} if holes else None),
     }
 
@@ -253,7 +259,7 @@ def wind_block(v, yon_deg, olcek):
 
 
 def write_world(name, desc, isl, extra_models, start, outdir, mobs=None,
-                ruzgar=(0.0, 0.0, 1.0), platform=None):
+                ruzgar=(0.0, 0.0, 1.0), platform=None, negatif=False):
     plugins, wind = wind_block(*ruzgar)
     parts = [HEADER.format(aciklama=desc, ad=name, eklentiler=plugins,
                            t_amb=TERRAIN_RGB[0], t_dif=TERRAIN_RGB[1],
@@ -275,6 +281,10 @@ def write_world(name, desc, isl, extra_models, start, outdir, mobs=None,
         'yuzeyler': yuzeyler, 'baslangic': start,
         'ruzgar': {'hiz_mps': ruzgar[0], 'yon_deg': ruzgar[1], 'olcek': ruzgar[2]},
         'hareketli_kisi': len(mobs or []),
+        # Too narrow for the detector's 2 m class-seam rule on its 0.2 m grid
+        # (needs >= ~4.4 m): no candidate, the mode times out and descends
+        # blind. Kol 0 only.
+        'negatif_ornek': bool(negatif),
     }
     if mobs is not None:
         layout = os.path.join(outdir, f'{name}.mobs.yaml')
@@ -321,34 +331,47 @@ def sabit(ruzgar, outdir):
         start = start_conditions(rng, (0.0, 0.0), off)
         name = f'veri_{key}{suffix(ruzgar)}'
         made.append(write_world(name, desc, isl, extra, start, outdir,
-                                mobs=[], ruzgar=ruzgar, platform=platform))
+                                mobs=[], ruzgar=ruzgar, platform=platform,
+                                negatif=(key == 'w1')))
     return made
 
 
 def rastgele(seed, ruzgar, outdir, params):
     rng = random.Random(seed)
-    kind = rng.choice(['kare', 'L', 'daire'])
+    negatif = rng.random() < 0.10
     cx, cy = round(rng.uniform(-8, 8), 2), round(rng.uniform(-8, 8), 2)
-    if kind == 'kare':
-        sx = rng.uniform(3, 20)
-        sy = min(20.0, max(3.0, sx * rng.uniform(0.5, 2.0)))
-        isl = island('kare', cx, cy, sx=round(sx, 2), sy=round(sy, 2))
-        desc = f'rastgele kare ada {sx:.1f}x{sy:.1f} m'
-    elif kind == 'L':
-        s = rng.uniform(8, 20)
-        kol = s * rng.uniform(0.4, 0.6)
-        isl = island('L', cx, cy, s=round(s, 2), kol=round(kol, 2))
-        desc = f'rastgele L ada {s:.1f} m, kol {kol:.1f} m'
+    if negatif:
+        # Under the ~4.4 m the class-seam rule needs: a "no site" example.
+        kind = rng.choice(['kare', 'daire'])
+        size = round(rng.uniform(3.0, 4.3), 2)
+        if kind == 'kare':
+            isl = island('kare', cx, cy, sx=size, sy=size)
+        else:
+            isl = island('daire', cx, cy, d=size)
+        desc = f'NEGATIF ornek, rastgele {kind} ada {size:.1f} m'
     else:
-        d = rng.uniform(3, 20)
-        isl = island('daire', cx, cy, d=round(d, 2))
-        desc = f'rastgele daire ada d={d:.1f} m'
+        kind = rng.choice(['kare', 'L', 'daire'])
+        if kind == 'kare':
+            sx = rng.uniform(5, 20)
+            sy = min(20.0, max(5.0, sx * rng.uniform(0.5, 2.0)))
+            isl = island('kare', cx, cy, sx=round(sx, 2), sy=round(sy, 2))
+            desc = f'rastgele kare ada {sx:.1f}x{sy:.1f} m'
+        elif kind == 'L':
+            s = rng.uniform(10, 20)
+            # Arms at least 5 m: narrower than ~4.4 m produces no candidate.
+            kol = max(5.0, s * rng.uniform(0.4, 0.6))
+            isl = island('L', cx, cy, s=round(s, 2), kol=round(kol, 2))
+            desc = f'rastgele L ada {s:.1f} m, kol {kol:.1f} m'
+        else:
+            d = rng.uniform(5, 20)
+            isl = island('daire', cx, cy, d=round(d, 2))
+            desc = f'rastgele daire ada d={d:.1f} m'
     n = rng.randint(0, 2)
     mobs, blocks = people(rng, n, (cx, cy), params)
     start = start_conditions(rng, (cx, cy), (0.0, 4.0))
     name = f'veri_ada_t{seed}{suffix(ruzgar)}'
     return write_world(name, desc + f', {n} hareketli kisi', isl, blocks, start,
-                       outdir, mobs=mobs, ruzgar=ruzgar)
+                       outdir, mobs=mobs, ruzgar=ruzgar, negatif=negatif)
 
 
 def main():

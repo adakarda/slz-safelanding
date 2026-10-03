@@ -1,0 +1,25 @@
+# Oncelik 3 -- K2 kahin sabit iraksama (uzman gosterimi, ground truth).
+POLITIKA="kahin --d 0.2" tools/veri/kosu.sh 1 k2_d0.2 veri_w2
+POLITIKA="kahin --d 0.2" tools/veri/kosu.sh 2 k2_d0.2 veri_w2
+POLITIKA="kahin --d 0.35" tools/veri/kosu.sh 1 k2_d0.35 veri_w2
+POLITIKA="kahin --d 0.35" tools/veri/kosu.sh 2 k2_d0.35 veri_w2
+POLITIKA="kahin --d 0.5" tools/veri/kosu.sh 1 k2_d0.5 veri_w2
+POLITIKA="kahin --d 0.5" tools/veri/kosu.sh 2 k2_d0.5 veri_w2
+POLITIKA="kahin --d 0.2" tools/veri/kosu.sh 1 k2_d0.2 veri_w3
+POLITIKA="kahin --d 0.2" tools/veri/kosu.sh 2 k2_d0.2 veri_w3
+POLITIKA="kahin --d 0.35" tools/veri/kosu.sh 1 k2_d0.35 veri_w3
+POLITIKA="kahin --d 0.35" tools/veri/kosu.sh 2 k2_d0.35 veri_w3
+POLITIKA="kahin --d 0.5" tools/veri/kosu.sh 1 k2_d0.5 veri_w3
+POLITIKA="kahin --d 0.5" tools/veri/kosu.sh 2 k2_d0.5 veri_w3
+POLITIKA="kahin --d 0.2" tools/veri/kosu.sh 1 k2_d0.2 veri_w4
+POLITIKA="kahin --d 0.2" tools/veri/kosu.sh 2 k2_d0.2 veri_w4
+POLITIKA="kahin --d 0.35" tools/veri/kosu.sh 1 k2_d0.35 veri_w4
+POLITIKA="kahin --d 0.35" tools/veri/kosu.sh 2 k2_d0.35 veri_w4
+POLITIKA="kahin --d 0.5" tools/veri/kosu.sh 1 k2_d0.5 veri_w4
+POLITIKA="kahin --d 0.5" tools/veri/kosu.sh 2 k2_d0.5 veri_w4
+POLITIKA="kahin --d 0.2 --devir-yok --son-hiz 0.5" tools/veri/kosu.sh 1 k2_d0.2 veri_w5
+POLITIKA="kahin --d 0.2 --devir-yok --son-hiz 0.5" tools/veri/kosu.sh 2 k2_d0.2 veri_w5
+POLITIKA="kahin --d 0.35 --devir-yok --son-hiz 0.5" tools/veri/kosu.sh 1 k2_d0.35 veri_w5
+POLITIKA="kahin --d 0.35 --devir-yok --son-hiz 0.5" tools/veri/kosu.sh 2 k2_d0.35 veri_w5
+POLITIKA="kahin --d 0.5 --devir-yok --son-hiz 0.5" tools/veri/kosu.sh 1 k2_d0.5 veri_w5
+POLITIKA="kahin --d 0.5 --devir-yok --son-hiz 0.5" tools/veri/kosu.sh 2 k2_d0.5 veri_w5

@@ -63,7 +63,7 @@
       </link>
       <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>1</label></plugin>
     </model>
-    <model name="engel">
+    <model name="sinif_siniri_nesnesi">
       <static>true</static>
       <pose>0.000 0.000 0.270 0 0 0</pose>
       <link name="link">

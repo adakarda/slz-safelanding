@@ -1,0 +1,21 @@
+# Oncelik 6 -- Asama 5 bozuculari, W3.
+POLITIKA="kahin --d 0.35" BOZUCU="sinir 2" EP_EK=sinir2 tools/veri/kosu.sh 1 a5_k2d0.35 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="sinir 2" EP_EK=sinir2 tools/veri/kosu.sh 2 a5_k2d0.35 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="sinir 2" EP_EK=sinir2 tools/veri/kosu.sh 1 a5_k1v1.0 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="sinir 2" EP_EK=sinir2 tools/veri/kosu.sh 2 a5_k1v1.0 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="cevir 0.02" EP_EK=cevir0.02 tools/veri/kosu.sh 1 a5_k2d0.35 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="cevir 0.02" EP_EK=cevir0.02 tools/veri/kosu.sh 2 a5_k2d0.35 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="cevir 0.02" EP_EK=cevir0.02 tools/veri/kosu.sh 1 a5_k1v1.0 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="cevir 0.02" EP_EK=cevir0.02 tools/veri/kosu.sh 2 a5_k1v1.0 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="kayip 0.05" EP_EK=kayip0.05 tools/veri/kosu.sh 1 a5_k2d0.35 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="kayip 0.05" EP_EK=kayip0.05 tools/veri/kosu.sh 2 a5_k2d0.35 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="kayip 0.05" EP_EK=kayip0.05 tools/veri/kosu.sh 1 a5_k1v1.0 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="kayip 0.05" EP_EK=kayip0.05 tools/veri/kosu.sh 2 a5_k1v1.0 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="gecikme 0.2" EP_EK=gecikme0.2 tools/veri/kosu.sh 1 a5_k2d0.35 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="gecikme 0.2" EP_EK=gecikme0.2 tools/veri/kosu.sh 2 a5_k2d0.35 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="gecikme 0.2" EP_EK=gecikme0.2 tools/veri/kosu.sh 1 a5_k1v1.0 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="gecikme 0.2" EP_EK=gecikme0.2 tools/veri/kosu.sh 2 a5_k1v1.0 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="tekrar 2" EP_EK=tekrar2 tools/veri/kosu.sh 1 a5_k2d0.35 veri_w3
+POLITIKA="kahin --d 0.35" BOZUCU="tekrar 2" EP_EK=tekrar2 tools/veri/kosu.sh 2 a5_k2d0.35 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="tekrar 2" EP_EK=tekrar2 tools/veri/kosu.sh 1 a5_k1v1.0 veri_w3
+POLITIKA="sabit --hiz 1.0" BOZUCU="tekrar 2" EP_EK=tekrar2 tools/veri/kosu.sh 2 a5_k1v1.0 veri_w3

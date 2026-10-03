@@ -20,6 +20,11 @@ N="${1:-10}"
 OUT="${2:-/tmp/eland_batch.csv}"
 shift 2 2>/dev/null || shift $#
 EXTRA_PARAMS="$*"
+# Data collection only (approved 2026-10-03): DUNYA flies an island world,
+# MODEL another model. Unset, the batch is exactly the default one.
+WORLD_ARGS=""
+[ -n "${DUNYA:-}" ] && WORLD_ARGS="--world $DUNYA"
+[ -n "${MODEL:-}" ] && WORLD_ARGS="$WORLD_ARGS --model $MODEL"
 
 # shellcheck disable=SC1091
 source /opt/ros/jazzy/setup.bash
@@ -56,12 +61,18 @@ for i in $(seq 1 "$N"); do
 	SEED=$((1000 + i))
 	echo "=== kosu $i/$N (seed $SEED) ==="
 	cleanup
+	DUNYA_PARAMS=""
+	if [ -n "${DUNYA:-}" ]; then
+		DUNYA_PARAMS=$(python3 "$WS_DIR/tools/veri/dunya_parametreleri.py" "$DUNYA") || exit 1
+	fi
+	# shellcheck disable=SC2086
 	python3 "$WS_DIR/tools/make_params.py" /tmp/eland_batch_params.yaml \
 		obstacle_driver.randomize_mobs=true \
-		"obstacle_driver.mob_seed=$SEED" $EXTRA_PARAMS >/dev/null || continue
+		"obstacle_driver.mob_seed=$SEED" $DUNYA_PARAMS $EXTRA_PARAMS >/dev/null || continue
 
+	# shellcheck disable=SC2086
 	"$WS_DIR/src/eland_sim/scripts/run_sim.sh" --seed "$SEED" --headless \
-		--no-hud --auto --params /tmp/eland_batch_params.yaml \
+		--no-hud --auto --params /tmp/eland_batch_params.yaml $WORLD_ARGS \
 		>"/tmp/eland_batch_run_$i.log" 2>&1 &
 	RUN=$!
 	sleep 32

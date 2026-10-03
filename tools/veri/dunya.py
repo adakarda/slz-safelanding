@@ -16,6 +16,7 @@ Format (world frame, metres, x east, y north):
         inilebilir: true
         dikdortgenler: [[x0, y0, x1, y1], ...]   # union of rectangles
         daireler: [[cx, cy, r], ...]             # and/or discs
+        kutular: [[cx, cy, yaw, sx, sy], ...]    # and/or rotated boxes
         alan_m2: 100.0
 
 A missing file means the existing open-field world: flat ground at z = 0, no
@@ -45,6 +46,11 @@ class Dunya:
                 return True
         for cx, cy, r in s.get('daireler', []) or []:
             if math.hypot(x - cx, y - cy) <= r:
+                return True
+        for cx, cy, yaw, sx, sy in s.get('kutular', []) or []:
+            c, sn = math.cos(yaw), math.sin(yaw)
+            dx, dy = x - cx, y - cy
+            if abs(c * dx + sn * dy) <= sx / 2.0 and abs(-sn * dx + c * dy) <= sy / 2.0:
                 return True
         return False
 

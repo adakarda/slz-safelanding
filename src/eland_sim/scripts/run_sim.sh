@@ -42,6 +42,10 @@ PARAMS_ARG=""
 PARAMS_FILE_PATH=""
 EXTRA_LAUNCH_ARGS=""
 PX4_PARAMS=""
+# Data collection only (tools/veri, approved 2026-10-03). Empty WORLD and the
+# default MODEL leave every step below exactly as it was.
+WORLD=""
+MODEL="x500_seg_cam_down"
 HEADLESS=""
 HUD="true"
 STATION="true"
@@ -74,6 +78,12 @@ run_sim.sh [options]
   --px4-param K=V    set a PX4 parameter once SITL is up, repeatable. For
                      control experiments: the descent law can only command
                      what MPC_Z_V_AUTO_DN allows.
+  --world NAME|FILE  data collection: fly an island world from tools/veri
+                     (src/eland_sim/worlds/veri or ~/eland_veri/dunyalar).
+                     Skips gen_world and the random spawn; the pose comes
+                     from the world's yaml unless --pose is given.
+  --model NAME       data collection: spawn another model (e.g. the wind one,
+                     x500_seg_cam_down_ruzgar). Default x500_seg_cam_down.
   --headless         no Gazebo window (faster; software rendering here)
   --no-hud           no HUD and no control station
   --hud-headless     publish /eland/hud but open no window at all
@@ -159,6 +169,14 @@ while [ $# -gt 0 ]; do
 		;;
 	--px4-param)
 		PX4_PARAMS="$PX4_PARAMS ${2:-}"
+		shift 2
+		;;
+	--world)
+		WORLD="$2"
+		shift 2
+		;;
+	--model)
+		MODEL="$2"
 		shift 2
 		;;
 	--launch-arg)
@@ -251,6 +269,44 @@ command -v MicroXRCEAgent >/dev/null ||
 [ -e "$PX4_DIR/Tools/simulation/gz/worlds/eland_test.sdf" ] ||
 	fail "Gazebo varliklari bagli degil: scripts/link_px4_assets.sh calistir"
 
+# -------------------------------------------------------- world and model
+# Data collection only. A world named NAME is NAME.sdf and its gz world is
+# also NAME, because PX4 opens $PX4_GZ_WORLDS/$PX4_GZ_WORLD.sdf; it is linked
+# there the way link_px4_assets.sh links eland_test.sdf.
+WORLD_NAME="eland_test"
+if [ -n "$WORLD" ]; then
+	WORLD_FILE=""
+	case "$WORLD" in
+	*.sdf) WORLD_FILE="$WORLD" ;;
+	*)
+		for d in "$WS_DIR/src/eland_sim/worlds/veri" "$HOME/eland_veri/dunyalar"; do
+			if [ -f "$d/$WORLD.sdf" ]; then
+				WORLD_FILE="$d/$WORLD.sdf"
+				break
+			fi
+		done
+		;;
+	esac
+	[ -n "$WORLD_FILE" ] && [ -f "$WORLD_FILE" ] || fail "dunya bulunamadi: $WORLD"
+	WORLD_NAME="$(basename "$WORLD_FILE" .sdf)"
+	ln -sfn "$WORLD_FILE" "$PX4_DIR/Tools/simulation/gz/worlds/$WORLD_NAME.sdf"
+	if [ "$SPAWN_MODE" = "random" ]; then
+		# No explicit --pose: the world's own start conditions.
+		POSE=$(python3 -c "import yaml; d = yaml.safe_load(open('${WORLD_FILE%.sdf}.yaml')); print(','.join(str(v) for v in d['baslangic']['dogus']))") ||
+			fail "dogus okunamadi: ${WORLD_FILE%.sdf}.yaml"
+		SPAWN_MODE="dunya"
+	fi
+	echo "[run_sim] dunya: $WORLD_NAME (pose $POSE)"
+fi
+if [ "$MODEL" != "x500_seg_cam_down" ]; then
+	# The wind model includes two derived models; link every model of the
+	# package, idempotently, rather than tracking the chain here.
+	for m in "$WS_DIR"/src/eland_sim/models/*/; do
+		ln -sfn "${m%/}" "$PX4_DIR/Tools/simulation/gz/models/$(basename "$m")"
+	done
+	echo "[run_sim] model: $MODEL"
+fi
+
 # --------------------------------------------------------------- spawn pose
 #
 # Picked BEFORE the world is generated, because the mob routes are drawn
@@ -296,15 +352,18 @@ if [ -n "$PARAMS_ARG" ]; then
 	# scattered the traffic across the whole world again.
 	GEN_ARGS="$GEN_ARGS --params ${PARAMS_ARG#params_file:=}"
 fi
-# shellcheck disable=SC2086
-python3 "$(dirname "$0")/gen_world.py" $GEN_ARGS >/dev/null ||
-	fail "dunya uretilemedi: scripts/gen_world.py"
+# An island world is already complete; only eland_test is generated.
+if [ -z "$WORLD" ]; then
+	# shellcheck disable=SC2086
+	python3 "$(dirname "$0")/gen_world.py" $GEN_ARGS >/dev/null ||
+		fail "dunya uretilemedi: scripts/gen_world.py"
+fi
 
 mkdir -p "$LOG_DIR"
 # Kept with the run's own logs, so a recording and the pose it was made from
 # do not have to be matched up by memory afterwards.
-printf 'pose %s\nseed %s\nmode %s\n' "$POSE" "${SPAWN_SEED:--}" "$SPAWN_MODE" \
-	>"$LOG_DIR/spawn.txt"
+printf 'pose %s\nseed %s\nmode %s\nworld %s\nmodel %s\n' "$POSE" "${SPAWN_SEED:--}" \
+	"$SPAWN_MODE" "$WORLD_NAME" "$MODEL" >"$LOG_DIR/spawn.txt"
 # Anything left over from a previous run steals the ports and the topics.
 pkill -x px4 2>/dev/null
 stop_gz
@@ -316,9 +375,9 @@ echo "[run_sim] PX4 + Gazebo baslatiliyor (pose $POSE${HEADLESS:+, headless})...
 (
 	cd "$PX4_DIR/build/px4_sitl_default/rootfs" || exit 1
 	HEADLESS="$HEADLESS" \
-		PX4_GZ_WORLD=eland_test \
+		PX4_GZ_WORLD="$WORLD_NAME" \
 		PX4_SYS_AUTOSTART=4001 \
-		PX4_SIM_MODEL=gz_x500_seg_cam_down \
+		PX4_SIM_MODEL="gz_$MODEL" \
 		PX4_GZ_MODEL_POSE="$POSE" \
 		GZ_IP=127.0.0.1 \
 		exec ../bin/px4 -d
