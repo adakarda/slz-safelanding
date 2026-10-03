@@ -18,11 +18,19 @@ controller -- ``commanded_descent_mps`` and ``descent_ceiling_mps`` are
 published by the mode precisely so this panel does not have to re-derive them
 and drift.
 
-A note on the label: the descent law is a proportional controller, not a PID.
-The panel says so. There is no integral term (in windless flight it only
-winds up) and no derivative term (the goto setpoint's jerk-limited smoother
-already provides the damping one would add it for), so printing Ki and Kd as
-zero would suggest a tuning knob that is not there.
+Third column: the camera, live. The left panel is NOT what the camera sees --
+it is the fused map, 40 m across at every altitude and holding 30 s of
+memory, which is what the descent needs and what makes it a poor picture of
+the present. Close to the ground the camera covers about a square metre and
+everything else on the map is remembered; without this column that looked
+like the HUD showing the wrong altitude, and the map's inertia looked like
+camera lag. The cyan box on the map is the same footprint, so the two can be
+read together.
+
+The descent section used to be titled "P, not PID" with "Ki, Kd not used".
+That was true of the open-loop law it was written for and stopped being true
+when the vertical rate loop was closed (PI + feedforward, v2.7): the law now
+produces a reference and the PI tracks it.
 """
 
 import math
@@ -82,6 +90,18 @@ class HudNode(Node):
         self.declare_parameter('descent_size_gain', 0.20)
         self.declare_parameter('descent_min_mps', 0.3)
         self.declare_parameter('descent_max_mps', 2.0)
+        # Display-only copies of the mode's rate loop settings; see yaml.
+        self.declare_parameter('descent_closed_loop', True)
+        self.declare_parameter('descent_kp', 0.8)
+        self.declare_parameter('descent_ki', 0.6)
+        # The live camera column.
+        self.declare_parameter('show_camera', True)
+        self.declare_parameter('camera_width_px', 330)
+        self.declare_parameter('mask_topic', '/eland/semantic_mask')
+        self.declare_parameter('camera_hfov_deg', 99.7)
+        # Only for outlining the region area_ratio refers to; the number
+        # itself is still the detector's, read from the candidate.
+        self.declare_parameter('safe_classes', [0, 1])
         self.declare_parameter('map_topic', '/eland/ground_map')
         self.declare_parameter('obstacles_topic', '/eland/dynamic_obstacles')
         # The exclusion the detector applied, as it applied it. Not
@@ -103,6 +123,18 @@ class HudNode(Node):
         self.k_size = float(self.get_parameter('descent_size_gain').value)
         self.v_min = float(self.get_parameter('descent_min_mps').value)
         self.v_max = float(self.get_parameter('descent_max_mps').value)
+        self.closed_loop = bool(self.get_parameter('descent_closed_loop').value)
+        self.kp = float(self.get_parameter('descent_kp').value)
+        self.ki = float(self.get_parameter('descent_ki').value)
+        self.show_camera = bool(self.get_parameter('show_camera').value)
+        self.camera_px = int(self.get_parameter('camera_width_px').value)
+        self.tan_half_hfov = math.tan(
+            math.radians(float(self.get_parameter('camera_hfov_deg').value)) / 2.0)
+        self.safe_classes = [int(c) for c in
+                             self.get_parameter('safe_classes').value]
+        self.mask = None
+        self._mask_rx = None
+        self.heading = None
 
         self.bridge = CvBridge()
         self.palette = np.zeros((classes.NUM_CLASSES, 3), dtype=np.uint8)
@@ -138,6 +170,10 @@ class HudNode(Node):
         self.create_subscription(
             OccupancyGrid, self.get_parameter('block_map_topic').value,
             self.on_block, SENSOR_QOS)
+        if self.show_camera:
+            self.create_subscription(
+                Image, self.get_parameter('mask_topic').value,
+                self.on_mask, SENSOR_QOS)
         self.create_subscription(
             DynamicObstacleArray, self.get_parameter('obstacles_topic').value,
             self.on_obstacles, DECISION_QOS)
@@ -184,6 +220,13 @@ class HudNode(Node):
         self.render()
         self.render_timer.reset()
 
+    def on_mask(self, msg: Image) -> None:
+        if msg.width == 0 or msg.height == 0:
+            return
+        rows = np.frombuffer(msg.data, np.uint8).reshape(msg.height, msg.step)
+        self.mask = rows[:, :msg.width].copy()
+        self._mask_rx = time.monotonic()
+
     def on_block(self, msg: OccupancyGrid) -> None:
         w, h = msg.info.width, msg.info.height
         if w == 0 or h == 0:
@@ -203,6 +246,7 @@ class HudNode(Node):
     def on_local_position(self, msg: VehicleLocalPosition) -> None:
         self.pos_enu = (float(msg.y), float(msg.x), float(-msg.z))
         self.vel_enu = (float(msg.vy), float(msg.vx), float(-msg.vz))
+        self.heading = float(msg.heading) if math.isfinite(msg.heading) else None
         self.altitude = (float(msg.dist_bottom) if msg.dist_bottom_valid
                          else float(-msg.z))
 
@@ -232,7 +276,10 @@ class HudNode(Node):
             self._age_ms.append((t0 - self._map_rx) * 1000.0)
         panel = self.draw_map()
         text = self.draw_panel(panel.shape[0])
-        hud = np.hstack([panel, text])
+        columns = [panel, text]
+        if self.show_camera:
+            columns.append(self.draw_camera(panel.shape[0]))
+        hud = np.hstack(columns)
 
         out = self.bridge.cv2_to_imgmsg(np.ascontiguousarray(hud), encoding='bgr8')
         out.header.stamp = self.get_clock().now().to_msg()
@@ -324,6 +371,101 @@ class HudNode(Node):
                 cv2.line(img, (0, p), (self.map_px, p), (70, 70, 70), 1)
         return img
 
+    def footprint_m(self):
+        """(width, length) of the ground the camera sees now, metres.
+
+        Level flight assumed: the image is 4:3 and its long side runs across
+        the body (image x -> body right, see mapping_node.R_BODY_CAM).
+        """
+        if self.pos_enu is None or self.altitude <= 0.05:
+            return None
+        aspect = (self.mask.shape[0] / self.mask.shape[1]
+                  if self.mask is not None else 0.75)
+        width = 2.0 * self.altitude * self.tan_half_hfov
+        return width, width * aspect
+
+    def footprint_enu(self):
+        """Corners of the camera footprint in the map frame (east, north)."""
+        size = self.footprint_m()
+        if size is None or self.heading is None:
+            return None
+        half_right, half_fwd = size[0] / 2.0, size[1] / 2.0
+        c, s = math.cos(self.heading), math.sin(self.heading)
+        out = []
+        for fwd, right in ((half_fwd, -half_right), (half_fwd, half_right),
+                           (-half_fwd, half_right), (-half_fwd, -half_right)):
+            north = fwd * c - right * s
+            east = fwd * s + right * c
+            out.append((self.pos_enu[0] + east, self.pos_enu[1] + north))
+        return out
+
+    def draw_camera(self, height: int) -> np.ndarray:
+        """What the camera sees right now: the mask, in camera orientation."""
+        w = self.camera_px
+        img = np.full((height, w, 3), 24, dtype=np.uint8)
+        cv2.putText(img, 'CAMERA  (live mask)', (12, 26), FONT, 0.5,
+                    (130, 190, 240), 1, cv2.LINE_AA)
+        if self.mask is None:
+            cv2.putText(img, 'no mask yet', (12, 60), FONT, 0.42,
+                        (140, 140, 140), 1, cv2.LINE_AA)
+            return img
+
+        m = np.clip(self.mask, 0, classes.NUM_CLASSES - 1)
+        mh, mw = m.shape
+        disp_w = w - 24
+        disp_h = int(round(disp_w * mh / float(mw)))
+        k = disp_w / float(mw)
+        view = cv2.resize(self.palette[m], (disp_w, disp_h),
+                          interpolation=cv2.INTER_NEAREST)
+
+        # The connected safe region under the image centre -- the one the
+        # detector's area_ratio is computed from. Outlined so it is visible
+        # when it starts to touch the frame edge (view_bounded goes false).
+        safe = np.isin(m, self.safe_classes).astype(np.uint8)
+        _, labels = cv2.connectedComponents(safe, connectivity=8)
+        centre = int(labels[mh // 2, mw // 2])
+        touches = None
+        if centre:
+            region = (labels == centre).astype(np.uint8)
+            touches = bool(region[0, :].any() or region[-1, :].any()
+                           or region[:, 0].any() or region[:, -1].any())
+            contours, _ = cv2.findContours(region, cv2.RETR_EXTERNAL,
+                                           cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(view, [np.round((c + 0.5) * k).astype(np.int32)
+                                    for c in contours], -1, (255, 255, 255), 1,
+                             cv2.LINE_AA)
+        cx, cy = disp_w // 2, disp_h // 2
+        cv2.drawMarker(view, (cx, cy), (255, 255, 255), cv2.MARKER_CROSS, 14, 1)
+
+        y0 = 40
+        img[y0:y0 + disp_h, 12:12 + disp_w] = view
+        cv2.rectangle(img, (11, y0 - 1), (12 + disp_w, y0 + disp_h),
+                      (255, 255, 0), 1)
+
+        y = [y0 + disp_h + 22]
+
+        def line(text, color=(200, 200, 200), scale=0.40, gap=17):
+            cv2.putText(img, text, (12, y[0]), FONT, scale, color, 1, cv2.LINE_AA)
+            y[0] += gap
+
+        line('top of image = nose of the aircraft', (150, 150, 150), 0.36, 15)
+        size = self.footprint_m()
+        if size is not None:
+            line(f'sees          {size[0]:5.1f} x {size[1]:4.1f} m', (255, 255, 0))
+            line('(cyan box on the map)', (150, 150, 150), 0.36, 15)
+        if self._mask_rx is not None:
+            age = (time.monotonic() - self._mask_rx) * 1000.0
+            line(f'mask age      {age:5.0f} ms since received')
+        if touches is None:
+            line('nothing landable under the centre', (120, 140, 240))
+        else:
+            line('white outline: region of area_ratio', (150, 150, 150), 0.36, 15)
+            line(f'touches edge  {"yes -> ratio not usable" if touches else "no -> ratio usable"}',
+                 (120, 140, 240) if touches else (140, 235, 140))
+        line('left map = 40 m fused memory,', (150, 150, 150), 0.36, 15)
+        line('not the camera view', (150, 150, 150), 0.36, 15)
+        return img
+
     def draw_map(self) -> np.ndarray:
         if self._layer is None or self._layer_dirty:
             self._layer = self._map_layer()
@@ -376,6 +518,12 @@ class HudNode(Node):
                 cv2.putText(img, f'{label} {ob.speed:.1f}',
                             (p[0] + 7, p[1] - 6), FONT, 0.34, colour, 1,
                             cv2.LINE_AA)
+
+        footprint = self.footprint_enu()
+        if footprint is not None:
+            pts = np.array([self.world_to_px(e, n) for e, n in footprint],
+                           dtype=np.int32)
+            cv2.polylines(img, [pts], True, (255, 255, 0), 1, cv2.LINE_AA)
 
         if vehicle is not None:
             cv2.circle(img, vehicle, 6, (255, 255, 255), 2)
@@ -430,19 +578,24 @@ class HudNode(Node):
         else:
             line('no local position', (140, 140, 140))
 
-        header('DESCENT LAW  (P, not PID)')
+        header('DESCENT  (law -> PI rate loop)' if self.closed_loop
+               else 'DESCENT  (law, open loop)')
         if st is not None:
             law = 'area ratio' if st.area_law_active else 'altitude fallback'
             line(f'active input  {law}', (200, 220, 160))
             line(f'area_ratio    {st.area_ratio * 100:5.1f} %')
             line(f'ceiling       {st.descent_ceiling_mps:6.2f} m/s')
-            line(f'commanded     {st.commanded_descent_mps:6.2f} m/s',
+            line(f'reference     {st.commanded_descent_mps:6.2f} m/s',
                  (140, 235, 140))
         else:
             line('idle', (140, 140, 140))
         line(f'k_size        {self.k_size:6.2f}', (170, 170, 170))
         line(f'v_min / v_max {self.v_min:.2f} / {self.v_max:.2f}', (170, 170, 170))
-        line('Ki, Kd        not used', (140, 140, 140))
+        if self.closed_loop:
+            line(f'rate loop     PI  Kp {self.kp:.2f}  Ki {self.ki:.2f}',
+                 (170, 170, 170))
+        else:
+            line('rate loop     off (law is a limit)', (140, 140, 140))
 
         header('MOVING HAZARDS')
         if self.obstacles is None:

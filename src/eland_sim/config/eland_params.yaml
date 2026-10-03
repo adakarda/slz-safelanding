@@ -353,6 +353,10 @@ hud_node:
     # HUD reports a ceiling the controller never uses. It said 2.00 while the
     # mode had already been lowered to 1.5.
     descent_max_mps: 1.5
+    # Display copies of emergency_landing_mode's rate loop, same rule.
+    descent_closed_loop: true
+    descent_kp: 0.8
+    descent_ki: 0.6
     map_size_px: 520
     panel_width_px: 330
     # 10 Hz. This line used to say 5.0 and silently overrode the node's own
