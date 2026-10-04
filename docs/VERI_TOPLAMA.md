@@ -1042,4 +1042,54 @@ CSV'de):
 
 ## A ve B — planlar onay bekliyor
 
-Ayrıntı sohbette verildi; onaydan sonra buraya uygulama ve ölçüm eklenecek.
+Onaydan sonra buraya uygulama ve ölçüm eklenecek.
+
+**A — ρ'nun maske hızında ayrı yayını (`/eland/rho`).**
+
+Değişecek dosyalar:
+1. `src/eland_msgs/msg/GoruntuKapsami.msg` (yeni): `std_msgs/Header header`
+   (damga = maskenin yakalama damgası), `float32 rho`, `bool view_bounded`.
+2. `src/eland_msgs/CMakeLists.txt`: `rosidl_generate_interfaces`'e bir satır.
+   Mevcut mesajlar değişmiyor.
+3. `src/eland_mapping/eland_mapping/detector_node.py`:
+   - `publish_rho` (false) ve `rho_topic` (`/eland/rho`) parametreleri
+     (`:113-116` yanı).
+   - Yayıncı yalnız açıkken oluşturuluyor (`:300` yanı).
+   - `on_mask` sonunda (`:378`) aynı maskenin başlığıyla yayın, ~6 satır.
+   - ρ hesabı, aday mesajı ve `on_map` aynı.
+4. Kendi aracım `kaydedici.py`: konu varsa alma zamanlarını kaydeder.
+
+**Mod bu konuyu dinlemeyecek** (istek yalnız yayın).
+
+Doğrulama:
+- **Kapalıyken:** konu yok, düğümün yayıncı listesi aynı. Kol 0 W2 t1-t3
+  yeniden uçurulup kayıtlılarla karşılaştırılacak (geçiş dizisi, COMMIT
+  irtifası, temas hızı, süre).
+- **Açıkken:** aynı 3 bölümde yayın hızı ve iki gecikmenin p50 / p90'ı.
+  - yakalama → `/eland/rho` alma,
+  - maskenin alınması → `/eland/rho` alma.
+- **Ayrıca:** yayınlanan ρ, aynı maskeden hesaplananla aynı mı.
+
+**B — `commit_irtifa_yasasi` (false).**
+
+Yalnız `emergency_landing_mode.hpp`:
+- **Parametre:** bool parametre ve üye.
+- **COMMIT (`:480`):** açıkken `descentSpeed` yerine yeni bir yardımcı;
+  kapalıyken satır aynı çağrı.
+- **Yardımcı:** `v = clamp(descent_altitude_gain · h_ekf, descent_min_mps,
+  tavan)`.
+  - Tavan `descentSpeed`'in irtifa dalıyla aynı: alan ölçümü varsa
+    `clamp(descent_size_gain·√area, min, max)`, yoksa `descent_max_mps`.
+  - Yeni sabit yok. `area_law_active` ve son komut / tavan güncellenir.
+- **Bilinen sınır:** W5 gibi yükseltilmiş hedefte EKF yüksekliği ~4 m kalır,
+  B bunu çözmez.
+
+Doğrulama:
+- **Kapalıyken:** A'daki Kol 0 koşusu.
+- **Açıkken:** sert temasların tekrarı rastlantıya bağlı (aday 3 kez
+  kaybolmalı). Bu yüzden erken COMMIT mevcut bir parametreyle zorlanacak:
+  yalnız test için `landing_altitude: 8.0`, W3'te (bölge kadraja sığsın),
+  3 tohum × {kapalı, açık}. COMMIT'teki hız profili ve temas hızı
+  karşılaştırılacak.
+- **Ayrıca:** sert temas yaşayan 3 K3 bölümü her iki ayarla yeniden
+  uçurulacak.
