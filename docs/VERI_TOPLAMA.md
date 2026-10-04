@@ -899,5 +899,16 @@ tek bölmeye gidiyor.
 
 Birleşik dosyalar `_bolme/<bölme>/birlesik_<bölme>.mat`: train 36.9 MB,
 val 8.9 MB, test 12.8 MB.
+
+**Temas sonrası devrilme, `kol0_veri_ada_t2010_t1`:** 199 temaslı bölümden
+yalnız bu.
+- **Olay:** araç 0.30 m/s ile adaya düzgün indi. Temastan 7.5 s sonra
+  devrilmeye başladı, motorlar dönerken 62.5 m savruldu.
+- **Kayıt:** PX4 `landed` ancak temastan 36.2 s sonra geldi. Dünyada bir
+  hareketli kişi var; muhtemelen araca çarptı (doğrulamadım).
+- **Ölçüt:** başarı ölçütü (landed + kör değil + hedefte) bunu "başarılı"
+  sayıyor.
+- **Etki:** alçalma ve temas verisi sağlam, temas sonrası kuyruk çöp.
+  **Analizleri `t_temas_gercek`'te kesin.**
   Diğer bütün başlangıçlar aynı kaldı (uçurulmuş bölümlerin `dogus` alanıyla
   karşılaştırıldı).

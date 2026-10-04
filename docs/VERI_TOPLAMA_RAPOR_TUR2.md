@@ -106,3 +106,7 @@ fark 3.92-4.04 m, COMMIT yok.
 12. **O2b verilmedi; I_hesap yerine çevrimdışı PI tekrarı:** komut farkı
     RMS 0.030 m/s, integral farkı 0.031 m/s. Sebep: v_ref durum kanalından
     10 Hz geliyor.
+13. **Temas sonrası devrilme (`kol0_veri_ada_t2010_t1`):** 0.30 m/s'lik
+    düzgün temastan 7.5 s sonra devrildi, 62.5 m savruldu. `landed` temastan
+    36.2 s sonra geldi. Dünyada bir hareketli kişi var (çarpma, doğrulanmadı).
+    199 temaslı bölümde tek. Analizleri `t_temas_gercek`'te kesin.
