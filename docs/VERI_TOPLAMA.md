@@ -1405,3 +1405,41 @@ sürerken o araçlara dokunulmadı.
   - `RUN_SIM_ESKI_TEMIZLIK=1`: `python3`, `tracker_node`, `obstacle_driver`.
   - İki bölüm de 0.30 m/s ile indi. Sonrasında makinede iki düğümden 0 / 0.
   - Koşular `_tur4_dogrulama/temizlik/`.
+
+## Tur 4 ek — mod seçme adımına kontrol ve yeniden deneme (uygulandı)
+
+**Karar** (diğer sohbet): `run_sim.sh`'nin mod seçme adımına "seçildi mi"
+kontrolü ve bir yeniden deneme, parametreli. Kapalıyken eski davranış bir
+koşuyla gösterilsin.
+
+**Değişiklik:** yalnız `src/eland_sim/scripts/run_sim.sh`, `--auto` yolu.
+- **`RUN_SIM_MOD_TEKRAR=N`** (ortam değişkeni). **Varsayılan kapalı** (yok ya
+  da 0).
+  - Kapalıyken komut bir kez gönderilir, kontrol yok: eskisiyle bire bir aynı.
+  - Komut aynı; yalnız `mod_komutu()` işlevine taşındı.
+- **Açıkken:**
+  - Komuttan sonra `px4-listener vehicle_status` ile `nav_state` 0.5 s
+    arayla 5 s izlenir.
+  - 23 görülürse "mod secildi (nav_state 23, deneme k)".
+  - Görülmezse "mod secilmedi (nav_state X, deneme k)" ve komut yeniden
+    gönderilir; en çok N yeniden deneme.
+- **`RUN_SIM_MOD_SINAMA=1`** (yalnız sınama): ilk komutu göndermez. Yeniden
+  deneme yolunu koşturmak için.
+- İkisi de yardım metninde yazıyor.
+- `kosu.sh` değişmedi; ona verilen ortam değişkeni `run_sim.sh`'ye geçiyor.
+
+**Doğrulama:** 3 Kol 0 koşusu, W2 tohum 1, `_tur4_dogrulama/mod_secim/`.
+
+| Koşu | `run_sim.log`'da modu seçme satırları | Mod devrede (sim s) | Bölüm |
+|---|---|---|---|
+| kapalı (varsayılan) | `Emergency Landing modu seciliyor...` | 34.16 | indi, 0.30 m/s |
+| açık (`RUN_SIM_MOD_TEKRAR=2`) | + `mod secildi (nav_state 23, deneme 1)` | 32.75 | indi, 0.30 m/s |
+| sınama (+ `RUN_SIM_MOD_SINAMA=1`) | + `mod secilmedi (nav_state 4, deneme 1)`, `mod secildi (nav_state 23, deneme 2)` | 41.16 | indi, 0.30 m/s |
+
+- **Kapalı = eski davranış:** kapalı koşunun `run_sim.log`'u, değişiklikten
+  önce kaydedilmiş aynı koşulunkiyle (Tur 4 kapalı W2 t1) sayılar silinince
+  satır satır aynı (`diff` boş).
+- **Sınamada:** nav_state 4 (AUTO_LOITER, kalkıştan sonra) okundu, komut
+  yeniden gönderildi, mod ikinci denemede seçildi. Bekleme modu ~7 s
+  geciktirdi.
+- **Açıkta:** ilk komut tuttu, ek gecikme yok.

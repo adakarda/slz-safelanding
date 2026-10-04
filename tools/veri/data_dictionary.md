@@ -224,4 +224,4 @@ Bölüm başına bir satır, `ep_ozet.json` ve `kosul.yaml`'dan; sütunlar
 | `_tur3_dogrulama/` | Tur 3 A/B doğrulama koşuları (ayar başına alt klasör) |
 | `_ornek_matlab/` (+ `.zip`) | Tur 3 E: seçilmiş bölümlerin tek dosyalık `.mat` örnekleri ve sözlükleri |
 | `_tur4/` | Tur 4: yeniden puanlama raporu (`temas_puanla.md`), doğrulama tablosu (`tur4_dogrula.md`), öncesinin yedekleri (`ep_ozet_yedek_tur4oncesi.tar.gz`, `tum_ozet_tur4oncesi.csv`, `tum_ozet_madde3oncesi.csv`) |
-| `_tur4_dogrulama/` | Tur 4: `commit_irtifa_yasasi` kapalı / açık Kol 0 koşuları (`kapali/`, `acik/`), mod komutu kaybolan iki ilk deneme (`_basarisiz/`), `run_sim.sh` temizlik doğrulaması (`temizlik/yeni`, `temizlik/eski`) |
+| `_tur4_dogrulama/` | Tur 4: `commit_irtifa_yasasi` kapalı / açık Kol 0 koşuları (`kapali/`, `acik/`), mod komutu kaybolan iki ilk deneme (`_basarisiz/`), `run_sim.sh` temizlik doğrulaması (`temizlik/yeni`, `temizlik/eski`), mod seçme kontrolünün doğrulaması (`mod_secim/{kapali,acik,sinama}`) |

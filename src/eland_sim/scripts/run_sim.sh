@@ -93,6 +93,11 @@ run_sim.sh [options]
 Environment:
   RUN_SIM_ESKI_TEMIZLIK=1  on exit, leave tracker_node and obstacle_driver
                      running (the cleanup before 2026-10-04)
+  RUN_SIM_MOD_TEKRAR=N  --auto: check that PX4 switched to the mode
+                     (nav_state 23) and send the command again, up to N
+                     more times. Unset or 0: send once, no check.
+  RUN_SIM_MOD_SINAMA=1  with RUN_SIM_MOD_TEKRAR: skip the first send, to
+                     exercise the retry (testing only)
 EOF
 }
 
@@ -500,11 +505,42 @@ if [ -n "$TAKEOFF_ALT" ]; then
 fi
 
 # --------------------------------------------------------------- trigger
-if [ "$DO_TRIGGER" = 1 ]; then
-	echo "[run_sim] Emergency Landing modu seciliyor..."
+mod_komutu() {
 	ros2 topic pub -1 /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \
 		"{command: 100001, param1: 23.0, target_system: 1, target_component: 1, source_system: 255, source_component: 190, from_external: true}" \
 		--qos-reliability best_effort --qos-durability transient_local >/dev/null 2>&1
+}
+# The nav_state PX4 reports; 23 is the external mode the command asks for.
+nav_state_oku() {
+	"$PX4_BIN/px4-listener" vehicle_status 2>/dev/null |
+		awk '$1 == "nav_state:" {print $2; exit}'
+}
+if [ "$DO_TRIGGER" = 1 ]; then
+	echo "[run_sim] Emergency Landing modu seciliyor..."
+	if [ "${RUN_SIM_MOD_TEKRAR:-0}" -gt 0 ] 2>/dev/null; then
+		# The one best-effort command got lost in 2 of 48 runs (2026-10-04):
+		# mode registered, vehicle up, nav_state never changed. Wait for
+		# nav_state 23 and send again, up to RUN_SIM_MOD_TEKRAR more times.
+		# RUN_SIM_MOD_SINAMA=1 skips the first send, to exercise the retry.
+		for deneme in $(seq 1 $((RUN_SIM_MOD_TEKRAR + 1))); do
+			if [ "$deneme" != 1 ] || [ "${RUN_SIM_MOD_SINAMA:-0}" != 1 ]; then
+				mod_komutu
+			fi
+			ns=""
+			for _ in $(seq 1 10); do
+				ns=$(nav_state_oku)
+				[ "$ns" = 23 ] && break
+				sleep 0.5
+			done
+			if [ "$ns" = 23 ]; then
+				echo "[run_sim]   mod secildi (nav_state 23, deneme $deneme)"
+				break
+			fi
+			echo "[run_sim]   mod secilmedi (nav_state ${ns:-?}, deneme $deneme)"
+		done
+	else
+		mod_komutu
+	fi
 fi
 
 if [ "$DO_LINK_DROP" = 1 ]; then
