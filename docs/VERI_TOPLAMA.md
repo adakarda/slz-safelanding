@@ -1294,4 +1294,46 @@ dünyalarında temas 0.29-0.31 m/s, W5 hariç.
   - ~0.30 m/s: modun alt sınırı `descent_min_mps`.
   - 0.48-0.51 m/s: W5 veri kipi.
   - 1.10-1.48 m/s: sert temaslar.
-  - 0.51 ile 1.0 m/s arasında temas yok.
+  - 0.507 ile 1.096 m/s arasında temas yok.
+
+## Madde 2 — `commit_irtifa_yasasi` varsayılanı `true` (uygulandı, doğrulama sürüyor)
+
+**Varsayılan uçuş davranışı değişti.**
+- `eland_params.yaml`: `commit_irtifa_yasasi: true`, yanında iki yorum.
+- **Kod değişmedi.** Düğümün kendi varsayılanı `false`: bu yaml olmadan
+  başlatılan mod eski yasayla uçar.
+- **Kurulu yaml:** `colcon build --packages-select eland_sim` ile yenilendi.
+  - Etkileşimli `run_sim.sh` (`--params` olmadan) kurulu yaml'ı okuyor. Kurulu
+    kopya Tur 3'ten beri eskiydi (`publish_rho` ve `commit_irtifa_yasasi`
+    satırları yoktu; düğüm varsayılanları da `false`, davranış farkı yoktu).
+  - Şimdi kaynakla aynı (`diff`).
+  - Derleme ayrıca rüzgârlı üç modeli kuruluma ekledi ve `mob_layout.yaml`'ı
+    değiştirdi. Bu dosya her koşuda yeniden yazılıyor.
+- **`kosu.sh`:** `make_params.py` kaynaktaki yaml'ı okuyor. Varsayılan `true`,
+  `emergency_landing_mode.commit_irtifa_yasasi=false` ile `false` (ikisi de
+  üretilen dosyada görüldü).
+- **Ne zaman fark eder:** yalnız COMMIT'e alan yasası etkinken girildiğinde.
+  Veri kipi (K1-K4) koşuları da bundan sonra yeni yasayla iner.
+
+**Doğrulama:** liste `tools/veri/listeler/tur4_kol0_commit.txt`, tablo
+`tools/veri/tur4_dogrula.py`.
+- **24 koşul:** W2-W6 × tohum 1-3 ve dokuz pozitif ada (t2003-t2011) ×
+  tohum 1. Veri setindeki Kol 0 koşulları; W1 ve t2012 negatif örnek olduğu
+  için dışarıda.
+- **Koşul başına iki bölüm:** önce kapalı (`=false`), sonra açık
+  (geçersiz kılma yok, yaml varsayılanı).
+- **Toplam 48 bölüm,** veri setinin dışında: `~/eland_veri/_tur4_dogrulama/`.
+
+**Ara durum (8 / 48 bölüm, 4 koşul × 2 ayar; final değil):**
+- **Ayar:** `params.yaml`'a göre kapalı 4/4 `false`, açık 4/4 `true`.
+  Kaydedici temas seviyelerini 8/8 bölümde kendisi yazdı.
+- **Temas:** iki ayarda da 0.29-0.31 m/s.
+  - COMMIT'te alan yasası payı iki ayarda da 0.
+  - Temastan önceki komut iki ayarda da 0.30 m/s.
+- **Durum dizisi:** W2 t2 ve t3'te açık koşu APPROACH'a girdi, kapalı
+  girmedi.
+  - Parametre yalnız COMMIT'te etkili; bu fark ondan önce.
+  - Eski kodla kaydedilmiş veri setinde W2 tohum 2'nin 9 bölümünün 5'inde
+    APPROACH var, 4'ünde yok; tohum 3'ün 2 bölümünün 1'inde var.
+  - Tur 3'te de W2 t2 ve t3 APPROACH'sız uçtu.
+- **Kapalı, veri setindeki aynı koşulla:** 4/4 durum dizisi aynı.

@@ -317,13 +317,16 @@ emergency_landing_mode:
     # not help -- the goto controller plans its own smoothed profile, so the
     # speed stayed at 1.5 and the descent got slower.
     descent_max_mps: 1.5
-    # Only used before the first area measurement arrives.
+    # Used before the first area measurement arrives and, with
+    # commit_irtifa_yasasi below, all through COMMIT.
     descent_altitude_gain: 0.35
     # COMMIT speed from the altitude law alone,
     #   v = clamp(descent_altitude_gain * altitude, descent_min_mps, v_ceiling)
     # instead of the law above, whose area branch runs on the ratio frozen at
-    # COMMIT entry. false = the old behaviour.
-    commit_irtifa_yasasi: false
+    # COMMIT entry. On since Tur 4 (decided 2026-10-04); false = the old
+    # behaviour, kept for comparison. The node's own default is still false:
+    # a launch without this file gets the old law.
+    commit_irtifa_yasasi: true
 
     # --- vertical rate loop -------------------------------------------
     # The law above produces a reference; this tracks it. Measured on the

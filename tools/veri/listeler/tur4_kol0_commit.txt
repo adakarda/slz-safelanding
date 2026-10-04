@@ -1,0 +1,52 @@
+# Tur 4 madde 2: commit_irtifa_yasasi varsayilani true (eland_params.yaml). Kol 0, W2-W6 x tohum 1-3
+# ve 9 pozitif ada x tohum 1 (veri setindeki Kol 0 kosullari; W1 ve t2012 negatif, disarida).
+# Kosul basina iki bolum: kapali = emergency_landing_mode.commit_irtifa_yasasi=false (eski davranis),
+# acik = gecersiz kilma yok, yaml varsayilani (true).
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_w2 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_w2
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 2 kol0 veri_w2 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 2 kol0 veri_w2
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 3 kol0 veri_w2 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 3 kol0 veri_w2
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_w3 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_w3
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 2 kol0 veri_w3 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 2 kol0 veri_w3
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 3 kol0 veri_w3 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 3 kol0 veri_w3
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_w4 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_w4
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 2 kol0 veri_w4 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 2 kol0 veri_w4
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 3 kol0 veri_w4 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 3 kol0 veri_w4
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_w5 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_w5
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 2 kol0 veri_w5 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 2 kol0 veri_w5
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 3 kol0 veri_w5 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 3 kol0 veri_w5
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_w6 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_w6
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 2 kol0 veri_w6 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 2 kol0 veri_w6
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 3 kol0 veri_w6 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 3 kol0 veri_w6
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2003 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2003
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2004 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2004
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2005 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2005
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2006 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2006
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2007 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2007
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2008 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2008
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2009 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2009
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2010 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2010
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/kapali tools/veri/kosu.sh 1 kol0 veri_ada_t2011 emergency_landing_mode.commit_irtifa_yasasi=false
+VERI_KOK=/home/arda/eland_veri/_tur4_dogrulama/acik tools/veri/kosu.sh 1 kol0 veri_ada_t2011
