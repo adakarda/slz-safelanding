@@ -3,20 +3,25 @@
 
     tools/veri/adim_ozet.py GUNLUK [--kok ~/eland_veri]
 
-Per (kol, world): episodes, successes / failures, measured wall time; a line
-per failure with its reason; and for W5 the three numbers the task asks for
-instead of the COMMIT altitude: whether COMMIT was entered, the touchdown
-speed, and h_ekf - h_gercek_hedef at touchdown (all ground truth from
-Gazebo).
+Per (kol, world): episodes, successes / failures by basarili_v10 (the primary
+criterion since Tur 4), successes by the old criterion, measured wall time,
+touchdown speed median and max; a line per failure with its reason; and for
+W5 the three numbers the task asks for instead of the COMMIT altitude:
+whether COMMIT was entered, the touchdown speed, and h_ekf - h_gercek_hedef
+at touchdown (all ground truth from Gazebo).
 """
 import argparse
 import csv
 import json
 import os
 import shlex
+import sys
 from collections import defaultdict
 
 import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import basari  # noqa: E402
 
 
 def ep_dir_of(cmd, kok):
@@ -63,20 +68,22 @@ def main():
         oz['_negatif'] = neg
         groups[(kol, dunya)].append((ep, secs, rc, oz))
 
-    print('| kol | dünya | bölüm | başarılı | başarısız | süre, ortanca (duvar) | temas hızı, ortanca (m/s) |')
-    print('|---|---|---|---|---|---|---|')
+    print('| kol | dünya | bölüm | başarılı, v < 1.0 (birincil) | başarısız | başarılı (eski ölçüt) | '
+          'süre, ortanca (duvar) | temas hızı ortanca / en büyük (m/s) |')
+    print('|---|---|---|---|---|---|---|---|')
     fails = []
     w5 = []
     total_s = 0
     for (kol, dunya), rows in sorted(groups.items()):
-        ok = [r for r in rows if r[3].get('basarili')]
-        bad = [r for r in rows if not r[3].get('basarili')]
+        ok = [r for r in rows if basari.temas_seviyeleri(r[3])['basarili_v10']]
+        bad = [r for r in rows if not basari.temas_seviyeleri(r[3])['basarili_v10']]
         total_s += sum(r[1] for r in rows)
         v = [r[3].get('temas_dikey_hiz_gercek_hesap_mps') for r in rows]
         v = [x for x in v if x is not None]
         print(f'| {kol} | {dunya} | {len(rows)} | {len(ok)} | {len(bad)} | '
+              f"{sum(bool(r[3].get('basarili')) for r in rows)} | "
               f'{np.median([r[1] for r in rows]):.0f} s | '
-              f'{np.median(v) if v else float("nan"):.2f} |')
+              f'{np.median(v) if v else float("nan"):.2f} / {max(v) if v else float("nan"):.2f} |')
         for ep, secs, rc, oz in bad:
             why = []
             if rc:
@@ -94,6 +101,9 @@ def main():
                     why.append(f"ABORT x{oz['abort_sayisi']}")
                 if oz.get('hold_sayisi'):
                     why.append(f"HOLD x{oz['hold_sayisi']}")
+                v_t = oz.get('temas_dikey_hiz_gercek_hesap_mps')
+                if oz.get('basarili') and v_t is not None and v_t >= 1.0:
+                    why.append(f'sert temas {v_t:.2f} m/s (v >= 1.0)')
             if oz.get('_negatif'):
                 why.append('NEGATIF ORNEK: basarisizlik beklenen')
             fails.append((os.path.basename(ep), ', '.join(why) or 'bilinmiyor'))

@@ -89,6 +89,10 @@ run_sim.sh [options]
   --hud-headless     publish /eland/hud but open no window at all
   --rqt              plain rqt_image_view on the HUD, no keyboard
   -h, --help
+
+Environment:
+  RUN_SIM_ESKI_TEMIZLIK=1  on exit, leave tracker_node and obstacle_driver
+                     running (the cleanup before 2026-10-04)
 EOF
 }
 
@@ -244,6 +248,14 @@ cleanup() {
 	pkill -x mapping_node 2>/dev/null
 	pkill -x perception_node 2>/dev/null
 	pkill -x image_bridge 2>/dev/null
+	# tracker_node and obstacle_driver too: they outlived script-stopped runs
+	# and piled up (64 pairs over one batch, 2026-10-03) until the EKF
+	# vertical velocity drifted. RUN_SIM_ESKI_TEMIZLIK=1 leaves them running,
+	# as before 2026-10-04.
+	if [ "${RUN_SIM_ESKI_TEMIZLIK:-0}" != 1 ]; then
+		pkill -x tracker_node 2>/dev/null
+		pkill -x obstacle_driver 2>/dev/null
+	fi
 	pkill emergency_land 2>/dev/null
 	[ -n "${LAUNCH_PID:-}" ] && kill "$LAUNCH_PID" 2>/dev/null
 	pkill -x MicroXRCEAgent 2>/dev/null

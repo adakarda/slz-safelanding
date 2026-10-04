@@ -49,10 +49,11 @@ fi
 # Every process of this episode is started with this marker in its
 # environment, so the teardown finds whatever outlived run_sim.sh, even after
 # it was reparented, without touching anyone else's processes. run_sim.sh's
-# cleanup kills the pipeline by name and misses tracker_node and
-# obstacle_driver: 64 pairs of them piled up over one batch (2026-10-03) until
-# the EKF vertical velocity was off by up to 1 m/s and the mode timed out in
-# DDS discovery.
+# cleanup kills the pipeline by name, and until 2026-10-04 it missed
+# tracker_node and obstacle_driver: 64 pairs of them piled up over one batch
+# (2026-10-03) until the EKF vertical velocity was off by up to 1 m/s and the
+# mode timed out in DDS discovery. It kills them now (unless
+# RUN_SIM_ESKI_TEMIZLIK=1); this stays as the backstop.
 ISARET="$EP_ID.$$.$(date +%s)"
 artik_temizle() { # $1 marker ("" = any episode's), $2 file to list them in
 	local desen="^VERI_KOSU_ISARET=${1:-.*}\$" pids

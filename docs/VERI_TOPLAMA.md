@@ -1296,7 +1296,7 @@ dünyalarında temas 0.29-0.31 m/s, W5 hariç.
   - 1.10-1.48 m/s: sert temaslar.
   - 0.507 ile 1.096 m/s arasında temas yok.
 
-## Madde 2 — `commit_irtifa_yasasi` varsayılanı `true` (uygulandı, doğrulama sürüyor)
+## Madde 2 — `commit_irtifa_yasasi` varsayılanı `true` (uygulandı, doğrulandı)
 
 **Varsayılan uçuş davranışı değişti.**
 - `eland_params.yaml`: `commit_irtifa_yasasi: true`, yanında iki yorum.
@@ -1324,16 +1324,84 @@ dünyalarında temas 0.29-0.31 m/s, W5 hariç.
   (geçersiz kılma yok, yaml varsayılanı).
 - **Toplam 48 bölüm,** veri setinin dışında: `~/eland_veri/_tur4_dogrulama/`.
 
-**Ara durum (8 / 48 bölüm, 4 koşul × 2 ayar; final değil):**
-- **Ayar:** `params.yaml`'a göre kapalı 4/4 `false`, açık 4/4 `true`.
-  Kaydedici temas seviyelerini 8/8 bölümde kendisi yazdı.
-- **Temas:** iki ayarda da 0.29-0.31 m/s.
-  - COMMIT'te alan yasası payı iki ayarda da 0.
-  - Temastan önceki komut iki ayarda da 0.30 m/s.
-- **Durum dizisi:** W2 t2 ve t3'te açık koşu APPROACH'a girdi, kapalı
-  girmedi.
-  - Parametre yalnız COMMIT'te etkili; bu fark ondan önce.
-  - Eski kodla kaydedilmiş veri setinde W2 tohum 2'nin 9 bölümünün 5'inde
-    APPROACH var, 4'ünde yok; tohum 3'ün 2 bölümünün 1'inde var.
-  - Tur 3'te de W2 t2 ve t3 APPROACH'sız uçtu.
-- **Kapalı, veri setindeki aynı koşulla:** 4/4 durum dizisi aynı.
+- **2 bölüm yeniden uçuruldu:** açık W6 t2 ve kapalı ada t2006 t1.
+  - Mod PX4'e kaydoldu, araç kalktı, ama mod seçme komutu sonuçsuz kaldı
+    (`nav_state` 23'e geçmedi, kayıt 240 s boş).
+  - İkisi de bir kez yeniden uçuruldu ve indi. İlk denemeler `_basarisiz/`
+    altında.
+- **Tablolar:** `~/eland_veri/_tur4/tur4_dogrula.md`.
+
+**Sonuç (48 bölüm, ölçülen):**
+
+| Ayar | Bölüm | Temas ortanca | En büyük | v ≥ 1.0 | Başarılı, v < 1.0 (birincil) | v ≥ 0.5 (W5 dışı 21) | Başarılı (eski) |
+|---|---|---|---|---|---|---|---|
+| kapalı | 24 | 0.31 m/s | 1.49 m/s (W5) | 3 (W5) | 21 | 0 | 24 |
+| açık | 24 | 0.31 | 1.48 (W5) | 3 (W5) | 21 | 0 | 24 |
+
+- **Ayar:** `params.yaml`'a göre kapalı 24/24 `false`, açık 24/24 `true`.
+  Kaydedici temas seviyelerini 48/48 bölümde kendisi yazdı.
+- **İki ayar bu 24 koşulda aynı komutu verdi:**
+  - COMMIT'te alan yasası payı her bölümde 0; W5'te COMMIT yok.
+  - Temastan önceki komut her bölümde 0.30 m/s.
+  - Ayar yalnız erken COMMIT'te fark ediyor (Tur 3).
+- **W5 dışında temas:** kapalıda 0.30-0.36, açıkta 0.26-0.496 m/s.
+- **W5:** iki ayarda 3/3, 1.47-1.49 m/s.
+- **Açık W6 t1, 0.496 m/s: kestirici sapması.**
+  - Son 0.6 s'de EKF dikey hızı 0.27 m/s iken gerçek ~0.49 m/s.
+  - `h_ekf` temastan 0.1 s önce +0.135 m fazla.
+  - Diğer 41 W5 dışı bölümde `vz_gerçek − vz_ekf` −0.06 ile +0.03 m/s,
+    `h_ekf − h_gerçek` −0.17 ile +0.06 m.
+- **Durum dizisi** (hepsi COMMIT'ten önce):
+  - Kapalı ile açık 14/24 aynı.
+  - Kapalı ile veri setindeki aynı koşul (ikisi de eski yasa) 10/24 aynı.
+  - Bu farklar koşudan koşuya değişkenlik, ayardan değil.
+
+## Tur 4 kararları (ikinci set, 2026-10-04) — uygulandı
+
+**Kararlar** (diğer sohbet):
+1. Birincil ölçüt `basarili_v10`; `basarili` yeniden tanımlanmasın.
+   Raporlarda temas hızının ortancası ve en büyüğü olsun.
+2. W5 veri kipi: (a) + (c). Olduğu gibi bırak, W5'i yalnız 1.0 seviyesiyle
+   değerlendir; yeni koşu yok.
+3. `tum_ozet.csv`'ye `commit_irtifa_yasasi` sütunu (bölümün `params.yaml`'ından,
+   yoksa `false`).
+4. `run_sim.sh` temizliğine `tracker_node` ve `obstacle_driver`.
+
+3 ve 4 doğrulama (48 bölüm ve 2 tekrar) bittikten sonra uygulandı. Koşular
+sürerken o araçlara dokunulmadı.
+
+**1 ve 2 — yalnız raporlar,** veri değişmedi:
+- `temas_puanla.py`, `tur4_dogrula.py`: birincil sütun "başarılı, v < 1.0".
+  W5'in 0.5 sütunları "uygulanmaz"; toplamlarda 0.5 seviyesi W5 dışından.
+- `adim_ozet.py`:
+  - Başarılı / başarısız `basarili_v10`'a göre; eski ölçüt ayrı sütunda.
+  - Temas hızının ortancası ve en büyüğü.
+  - Sert temas başarısızlık nedeni olarak yazılıyor. Kol 0 günlüğüyle
+    denendi: W5 ×3 "sert temas 1.47-1.48 m/s".
+- **218 bölüm, yeni kurallarla:**
+  - Birincil (v < 1.0): 195'in 189'u.
+  - 0.5 seviyesi W5 dışında: 174'ün 171'i; düşen 3'ü erken COMMIT'li K3.
+  - W5'te 0.5 uygulanmıyor. Uygulansaydı ayrıca 6 W5 veri kipi bölümü
+    düşerdi (0.501-0.507 m/s).
+
+**3 — `birlestir.py`:**
+- `commit_yasasi()` yeni; sütun `bozucu`'dan sonra.
+- **Doğrulama:**
+  - Önce yedek: `_tur4/tum_ozet_madde3oncesi.csv`.
+  - Yeniden üretim: 218 satır, eski sütunlarda 0 fark, bölme aynı.
+  - Yeni sütun 218/218 `false`. Hepsinin `params.yaml`'ı var; hepsi
+    parametreden önce kaydedildi.
+  - Fonksiyon Tur 4 koşularında: kapalı 24/24 `false`, açık 24/24 `true`;
+    `params.yaml` yoksa `false`.
+  - `birlesik_*.mat`'in `ep` yapısında alan var.
+
+**4 — `run_sim.sh`: varsayılan davranış değişti.**
+- `cleanup()` artık `tracker_node` ve `obstacle_driver`'ı da adıyla kapatıyor.
+  `RUN_SIM_ESKI_TEMIZLIK=1` eski davranış; yardım metninde yazıyor.
+- `kosu.sh`'nin işaretli temizliği yedek olarak kaldı, yorumu güncellendi.
+- **Doğrulama:** iki Kol 0 koşusu, W2 t1. `kosu.sh`, `run_sim.sh`
+  kapandıktan sonra hâlâ yaşayan süreçleri `artik_surecler.txt`'ye yazıyor.
+  - Yeni: yalnız `python3` (ros2 daemon).
+  - `RUN_SIM_ESKI_TEMIZLIK=1`: `python3`, `tracker_node`, `obstacle_driver`.
+  - İki bölüm de 0.30 m/s ile indi. Sonrasında makinede iki düğümden 0 / 0.
+  - Koşular `_tur4_dogrulama/temizlik/`.

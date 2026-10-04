@@ -126,7 +126,7 @@ merkezi arası; yalnız hedefli dünyalarda).
 | abort_sayisi, hold_sayisi, abort_hold_nedenleri, kor_inis | |
 | aday_kayip_* | mod etkinken 3 s'den uzun geçerli adaysız aralıklar |
 | basarili, basari_olcutu, temas_yeri_uygun | landed + kör değil + temas yeri uygun (hedefli dünyada hedef yüzey, açık alanda temastan önceki maskede merkez inilebilir) |
-| basarili_v10, basarili_v05 | `basarili` **ve** temas hızı < 1.0 / < 0.5 m/s (Tur 4, `basari.py`); temas hızı yoksa ikisi de false. `basarili`'nin anlamı değişmedi. 2026-10-04'ten önceki 218 bölüme `temas_puanla.py` sonradan ekledi, o bölümlerin `ep.mat`'indeki `ozet_json`'da yoklar |
+| basarili_v10, basarili_v05 | `basarili` **ve** temas hızı < 1.0 / < 0.5 m/s (Tur 4, `basari.py`); temas hızı yoksa ikisi de false. `basarili`'nin anlamı değişmedi. 2026-10-04'ten önceki 218 bölüme `temas_puanla.py` sonradan ekledi, o bölümlerin `ep.mat`'indeki `ozet_json`'da yoklar. **Birincil ölçüt `basarili_v10`** (Tur 4 kararı). **W5 yalnız 1.0 seviyesiyle değerlendirilir:** veri kipindeki W5 bölümleri `--son-hiz 0.5` ile 0.476-0.507 m/s'de iniyor, 0.5 seviyesi onları gürültüyle bölüyor; raporlarda W5'in 0.5 sütunları "uygulanmaz" |
 | z_dinlenme_m, z_dinlenme_kaynak | model orijininin yerde dururkenki yüksekliği |
 | yerel_dunya_ofset_en_m | dünya (doğu, kuzey) = ofset + yerel (doğu, kuzey); bölümün ortancası |
 | sureklilik | kanal başına mesaj sayısı, hız, en uzun boşluk, jitter, kayıp tahmini |
@@ -192,6 +192,22 @@ içindir**), `bozucu`, `ek_parametreler`, `git`, `px4_parametreleri`.
   sonra yazılıyordu; tutulan 43 bölümde değer kalkış irtifasıyla aynı
   (kontrol edildi). Artık mod seçildikten sonra yazılıyor.
 
+## tum_ozet.csv (`birlestir.py`)
+
+Bölüm başına bir satır, `ep_ozet.json` ve `kosul.yaml`'dan; sütunlar
+`birlestir.py`'deki `OZET_COLS` sırasıyla. Aynı tablo `birlesik_*.mat`'te
+`ep` yapısı.
+
+- **`commit_irtifa_yasasi`** (Tur 4): bölümün uçtuğu COMMIT yasası.
+  - Değer bölüm klasöründeki `params.yaml`'dan.
+  - Dosya ya da anahtar yoksa `false`: parametreden önce kaydedilmiş, yani
+    eski yasa.
+  - 2026-10-04'e kadarki 218 bölümün hepsi `false`.
+  - `eland_params.yaml`'da varsayılan 2026-10-04'ten beri `true`; bundan
+    sonra toplanan bölümler `true` olur.
+- **`basarili`, `basarili_v10` (birincil), `basarili_v05`:** yukarıda,
+  `ep_ozet.json` tablosunda.
+
 ## Veri kökünde alt çizgiyle başlayan klasörler (veri setine girmez)
 
 `birlestir.py` bunları atlar.
@@ -207,5 +223,5 @@ içindir**), `bozucu`, `ek_parametreler`, `git`, `px4_parametreleri`.
 | `_tur3/` | Tur 3 çevrimdışı çözümlemeleri (C, D) ve A/B doğrulama tablosu |
 | `_tur3_dogrulama/` | Tur 3 A/B doğrulama koşuları (ayar başına alt klasör) |
 | `_ornek_matlab/` (+ `.zip`) | Tur 3 E: seçilmiş bölümlerin tek dosyalık `.mat` örnekleri ve sözlükleri |
-| `_tur4/` | Tur 4: temas hızıyla yeniden puanlama raporu, öncesinin yedeği (`ep_ozet_yedek_tur4oncesi.tar.gz`, `tum_ozet_tur4oncesi.csv`) |
-| `_tur4_dogrulama/` | Tur 4: `commit_irtifa_yasasi` açık / kapalı Kol 0 koşuları |
+| `_tur4/` | Tur 4: yeniden puanlama raporu (`temas_puanla.md`), doğrulama tablosu (`tur4_dogrula.md`), öncesinin yedekleri (`ep_ozet_yedek_tur4oncesi.tar.gz`, `tum_ozet_tur4oncesi.csv`, `tum_ozet_madde3oncesi.csv`) |
+| `_tur4_dogrulama/` | Tur 4: `commit_irtifa_yasasi` kapalı / açık Kol 0 koşuları (`kapali/`, `acik/`), mod komutu kaybolan iki ilk deneme (`_basarisiz/`), `run_sim.sh` temizlik doğrulaması (`temizlik/yeni`, `temizlik/eski`) |

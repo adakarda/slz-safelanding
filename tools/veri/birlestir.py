@@ -39,13 +39,25 @@ import basari  # noqa: E402
 
 SKIP = {'dogrulama', 'dunyalar', '_bolme'}
 OZET_COLS = ['ep_id', 'kol', 'dunya', 'tohum', 'bolme', 'negatif_ornek', 'model',
-             'ruzgar_mps', 'politika', 'bozucu', 'basarili', 'basarili_v05',
-             'basarili_v10', 'temas_yeri_uygun',
+             'ruzgar_mps', 'politika', 'bozucu', 'commit_irtifa_yasasi', 'basarili',
+             'basarili_v05', 'basarili_v10', 'temas_yeri_uygun',
              'kor_inis', 'inis_suresi_mod_landed_s', 'alcalma_suresi_validate_landed_s',
              't_temas_gercek', 'temas_dikey_hiz_gercek_hesap_mps',
              'ground_contact_gecikmesi_s', 'landed_gecikmesi_s', 'commit_h_ekf_m',
              'commit_h_gercek_hedef_m', 'abort_sayisi', 'hold_sayisi',
              'aday_kayip_sayisi', 'aday_kayip_toplam_s', 'kayit_suresi_s', 'yol']
+
+
+def commit_yasasi(ep_dir):
+    """commit_irtifa_yasasi the episode flew with, from its params.yaml; false
+    when the file or the key is missing (recorded before the parameter
+    existed, i.e. the old law)."""
+    path = os.path.join(ep_dir, 'params.yaml')
+    if not os.path.exists(path):
+        return False
+    doc = yaml.safe_load(open(path)) or {}
+    mod = (doc.get('emergency_landing_mode') or {}).get('ros__parameters') or {}
+    return bool(mod.get('commit_irtifa_yasasi', False))
 
 
 def split_of(dunya, tohum):
@@ -105,6 +117,7 @@ def main():
             'model': ks.get('model', 'x500_seg_cam_down'),
             'ruzgar_mps': ks.get('ruzgar_mps', 0.0),
             'politika': ks.get('politika', ''), 'bozucu': ks.get('bozucu', ''),
+            'commit_irtifa_yasasi': commit_yasasi(ep_dir),
             'yol': ep_dir,
             # from basarili and the touchdown speed, whether or not the
             # episode's ep_ozet.json was rescored
