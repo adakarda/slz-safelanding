@@ -1040,9 +1040,100 @@ CSV'de):
   adı 31 karakteri aşıyor (`bilgi.temas_dikey_hiz_gercek_hesap_mps`, 32);
   MATLAB R2006a'dan beri 63'e kadar kabul ediyor.
 
-## A ve B — planlar onay bekliyor
+## A ve B — uygulandı (2026-10-04, onaylı)
 
-Onaydan sonra buraya uygulama ve ölçüm eklenecek.
+**Kararlar** (diğer sohbet):
+- A: yeni `GoruntuKapsami` mesajı, `publish_rho` varsayılan false.
+- B: tavan donmuş alandan.
+- İki parametre `false` olarak `eland_params.yaml`'a yazıldı.
+- Mod `/eland/rho`'yu kullanmıyor.
+- **İstenen doğrulama:** B için ayar başına ≥ 5 tohum, temas hızının
+  ortancası ve en büyüğü; kapalıyken eski davranış koşuyla.
+
+**Değişen dosyalar:**
+- `src/eland_msgs/msg/GoruntuKapsami.msg` (yeni) ve `CMakeLists.txt`.
+- `detector_node.py`: içe aktarma, `publish_rho` / `rho_topic`, koşullu
+  yayıncı, `on_mask` sonunda yayın.
+- `emergency_landing_mode.hpp`: `commit_irtifa_yasasi`,
+  `commitAltitudeSpeed()`, COMMIT'te seçim.
+- `eland_params.yaml`: iki `false` satırı.
+- **Kendi araçlarım:**
+  - `kaydedici.py`: `/eland/rho` → `rho_yayini.csv`, `rho_yayini_sayisi`.
+  - `kosu.sh`: `DUGUM_BILGI=1`.
+  - `tur3_dogrula.py`.
+
+Derleme: `colcon build --packages-select eland_msgs eland_mapping eland_mode`.
+Önce kurulu dosyaların kaynakla aynı olduğu kontrol edildi; derleme yalnız bu
+değişiklikleri taşıyor.
+
+**Doğrulama koşuları:** veri setinin dışında, `~/eland_veri/_tur3_dogrulama/`.
+- 26 bölüm. 1'inde (K3 tekrarı, kapalı, `t2029_t2`) PX4 kalkmadı ("irtifa
+  0 m"); o bölüm yeniden uçuruldu, ilk deneme `_basarisiz/` altında.
+- Tablo: `~/eland_veri/_tur3/tur3_dogrula.md`.
+
+**1. İki parametre kapalı (varsayılan), Kol 0, kayıtlı bölümlerle:**
+
+| Bölüm | Durum dizisi | COMMIT h_ekf kayıtlı / yeni | COMMIT h_gerçek kayıtlı / yeni | Temas kayıtlı / yeni | VALIDATE→landed kayıtlı / yeni | `/eland/rho` mesajı |
+|---|---|---|---|---|---|---|
+| kol0_veri_w2_t1 | aynı | 1.95 / 1.98 m | 1.99 / 2.03 m | 0.31 / 0.29 m/s | 25.6 / 26.2 s | 0 |
+| kol0_veri_w2_t2 | aynı | 1.93 / 1.97 | 1.98 / 1.99 | 0.30 / 0.29 | 22.1 / 21.9 | 0 |
+| kol0_veri_w2_t3 | aynı | 1.96 / 1.98 | 1.99 / 2.07 | 0.30 / 0.31 | 22.9 / 22.9 | 0 |
+| kol0_veri_w3_t1 | aynı | 1.97 / 1.94 | 2.04 / 2.09 | 0.30 / 0.31 | 23.0 / 23.0 | 0 |
+| kol0_veri_w3_t2 | farklı: APPROACH atlandı | 1.93 / 1.95 | 2.03 / 2.01 | 0.30 / 0.31 | 19.8 / 19.5 | 0 |
+| kol0_veri_w3_t3 | aynı | 1.95 / 1.94 | 2.05 / 1.99 | 0.31 / 0.31 | 19.7 / 19.9 | 0 |
+
+- **W3 t2:** eski sürümle kaydedilmiş 20 W3-tohum-2 bölümünde (her kol)
+  APPROACH 11'inde atlanmış, 9'unda girilmiş. VALIDATE'ten önceki kısım koldan
+  bağımsız.
+- **Kapalıyken grafik** (bölüm ortasında `ros2 topic info /eland/rho`):
+  `Publisher count: 0`. Konu yalnız kaydedici dinlediği için görünüyor.
+- **Dedektörün yayıncıları kapalıyken:** `/eland/candidate`,
+  `/eland/trajectory_block`, `/parameter_events`, `/rosout`. `/eland/rho`
+  yok.
+
+**2. A açık** (`detector_node.publish_rho: true`, Kol 0 W2 t1-t3):
+
+| Bölüm | Mesaj / maske | Hız tüm / VALIDATE | Yakalama → `/eland/rho` alma p50 / p90 | Maske alma → `/eland/rho` alma p50 / p90 | ρ farkı (yayın − kaydedici), en büyük | view_bounded uyuşmayan | Durum dizisi |
+|---|---|---|---|---|---|---|---|
+| t1 | 494 / 494 | 10.00 / 9.99 Hz | 19.5 / 41.2 ms | 0.9 / 1.4 ms | 0.000001 (CSV yuvarlaması) | 0 | kayıtlıyla aynı |
+| t2 | 424 / 424 | 9.79 / 9.87 Hz | 19.5 / 40.1 ms | 0.9 / 1.4 ms | 0.000001 | 0 | aynı |
+| t3 | 427 / 427 | 9.95 / 9.86 Hz | 19.3 / 38.8 ms | 0.9 / 1.4 ms | 0.000001 | 0 | aynı |
+
+- **Üçü birlikte:** yakalamadan `/eland/rho`'nun alınmasına p50 19.5 ms, p90
+  39.6 ms. Dedektörün eklediği p50 0.9 ms, p90 1.4 ms.
+- **Alma zamanları** kaydedicinin sim saatiyle. Yayıncının kendi gönderme anı
+  ölçülmedi.
+- **Grafik açıkken:** `Publisher count: 1`, yayıncı `detector_node`,
+  `BEST_EFFORT`.
+- **Bu bölümde düğüm listesi alınamadı:** `ros2 node info /detector_node`
+  `--no-daemon` ile düğümü bulamadı ("Unable to find node").
+
+**3. B: zorlanmış erken COMMIT** (`landing_altitude: 10.0` yalnız test için,
+W3, kalkış 18 m, 5 tohum × 2 ayar):
+
+| Ayar | Bölüm | COMMIT h_gerçek | COMMIT'te alan yasası | v_cmd COMMIT girişi → temastan önce | Temas hızı ortanca / en büyük / en küçük |
+|---|---|---|---|---|---|
+| kapalı | 5 | 10.06-10.16 m | %100 | 1.18-1.19 → 1.18-1.19 m/s (sabit) | **1.20 / 1.22 / 1.18 m/s** |
+| açık | 5 | 10.02-10.16 m | %0 | 1.50 → 0.30 m/s | **0.30 / 0.31 / 0.30 m/s** |
+
+10 bölümün 10'u başarılı (başarı ölçütü hız içermiyor).
+
+**4. B: sert temaslı 3 K3 bölümü, iki ayarla yeniden:**
+
+| Ayar | Bölüm | COMMIT h_gerçek | COMMIT'te alan yasası | Temas | İlk uçuştaki temas |
+|---|---|---|---|---|---|
+| kapalı | k3_carpan_veri_ada_t2029_t2 | 2.47 m (normal devir) | %0 | 0.30 m/s | 1.10 m/s |
+| kapalı | k3_parca_veri_ada_t2024_t2 | 2.36 m (normal devir) | %0 | 0.29 | 1.33 |
+| kapalı | k3_parca_veri_ada_t2029_t1 | **13.94 m (erken)** | %100 | **1.27** | 1.27 |
+| açık | k3_carpan_veri_ada_t2029_t2 | 2.45 m (normal devir) | %0 | 0.29 | 1.10 |
+| açık | k3_parca_veri_ada_t2024_t2 | **14.31 m (erken)** | %0 | **0.30** | 1.33 |
+| açık | k3_parca_veri_ada_t2029_t1 | **14.66 m (erken)** | %0 | **0.30** | 1.27 |
+
+Erken COMMIT tekrarı rastlantıya bağlı. Kapalıda 3'te 1, açıkta 3'te 2
+kez oldu.
+- Kapalıyken erken giren bölüm ilk uçuştakiyle aynı hızda (1.27 m/s) yere
+  vurdu.
+- Açıkken erken giren ikisi 0.30 m/s ile indi.
 
 **A — ρ'nun maske hızında ayrı yayını (`/eland/rho`).**
 

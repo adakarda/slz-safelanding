@@ -133,6 +133,12 @@ detector_node:
     map_topic: "/eland/ground_map"
     mask_topic: "/eland/semantic_mask"
     candidate_topic: "/eland/candidate"
+    # rho and view_bounded at mask rate (~10 Hz) on rho_topic, one
+    # eland_msgs/GoruntuKapsami per mask with the mask's capture stamp. The
+    # candidate keeps carrying them at decision rate (~1.8 Hz) either way.
+    # Nothing subscribes to it yet.
+    publish_rho: false
+    rho_topic: "/eland/rho"
 
     # --- fourth test: where the hazard is going ------------------------
     # The three tests above describe the world as it is now. A vehicle at
@@ -313,6 +319,11 @@ emergency_landing_mode:
     descent_max_mps: 1.5
     # Only used before the first area measurement arrives.
     descent_altitude_gain: 0.35
+    # COMMIT speed from the altitude law alone,
+    #   v = clamp(descent_altitude_gain * altitude, descent_min_mps, v_ceiling)
+    # instead of the law above, whose area branch runs on the ratio frozen at
+    # COMMIT entry. false = the old behaviour.
+    commit_irtifa_yasasi: false
 
     # --- vertical rate loop -------------------------------------------
     # The law above produces a reference; this tracks it. Measured on the

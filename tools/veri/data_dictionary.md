@@ -83,6 +83,22 @@ Görüntü: 320×240, yatay FOV 99.7°, üstü = aracın burnu. Ham maskeler
 `maskeler.npz` içinde (`maskeler` N×240×320 uint8, `t_yakalama`, `t_alma`);
 öznitelikler `tools/veri/ozellik.py` ile yeniden hesaplanabilir.
 
+## rho_yayini.csv — `/eland/rho` mesajı başına (yalnız `detector_node.publish_rho: true` iken)
+
+`eland_msgs/GoruntuKapsami`, dedektörün her maskede hesapladığı ρ ve
+`view_bounded`, maskenin yakalama damgasıyla (2026-10-04'ten, Tur 3 / A).
+
+| Sütun | Birim | Not |
+|---|---|---|
+| t_alma | s | mesajın kaydediciye ulaştığı sim zamanı |
+| t_yakalama | s | mesajın başlık damgası = maskenin yakalama damgası; `maske_olaylari.csv` ile bu sütundan eşlenir |
+| rho | — | dedektörün `area_ratio`'su, maske hızında |
+| view_bounded | 0/1 | aynı |
+
+`ep_ozet.json`'da `rho_yayini_sayisi`: alınan mesaj sayısı (kapalıyken 0).
+`DUGUM_BILGI=1` ile koşulan bölümlerde `dugum_bilgi.txt`: bölüm ortasında
+`ros2 topic info /eland/rho -v` ve `ros2 node info /detector_node`.
+
 ## karar_olaylari.csv — aday başına (~1.8 Hz)
 
 `t_alma`, `t_damga` (adayın dayandığı haritanın damgası), `gecerli`,

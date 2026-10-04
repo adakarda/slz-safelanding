@@ -477,7 +477,8 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
         // here. That matters for the blind-descent path: with no candidate
         // ever received, candidateNed() would read a default-constructed
         // message and fly the aircraft to the local origin instead of down.
-        const float touchdown_speed = descentSpeed(altitude_m);
+        const float touchdown_speed =
+            _commit_irtifa_yasasi ? commitAltitudeSpeed(altitude_m) : descentSpeed(altitude_m);
         px4_ros2::TrajectorySetpoint touchdown;
         touchdown.withPositionX(_commit_target_ned.x())
             .withPositionY(_commit_target_ned.y())
@@ -546,6 +547,12 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
 
     // Data collection, see the constructor. Off by default.
     _veri_kipi = _node.declare_parameter<bool>("veri_toplama_kipi", false);
+    // In COMMIT, take the speed from the altitude law alone. The default
+    // (false) keeps descentSpeed(), whose area branch runs on the ratio
+    // frozen at COMMIT entry: entered high with view_bounded, that held the
+    // speed flat to the ground (3 of 218 data episodes touched down at
+    // 1.10-1.33 m/s).
+    _commit_irtifa_yasasi = _node.declare_parameter<bool>("commit_irtifa_yasasi", false);
     _veri_vref_topic =
         _node.declare_parameter<std::string>("veri_v_ref_topic", "/eland/veri/v_ref");
     _veri_h_topic =
@@ -614,6 +621,22 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
     _area_law_active = true;
     const float ratio = std::clamp(_area_ratio, 0.f, 1.f);
     _last_commanded_mps = std::clamp(ceiling * (1.f - ratio), _descent_min_mps, ceiling);
+    return _last_commanded_mps;
+  }
+
+  /// COMMIT with commit_irtifa_yasasi: descentSpeed()'s altitude branch,
+  /// whatever view_bounded was when COMMIT froze the candidate. Same gain,
+  /// floor and ceiling; no new constants.
+  float commitAltitudeSpeed(float altitude_m)
+  {
+    const float ceiling =
+        _have_area_measurement
+            ? std::clamp(_descent_size_gain * std::sqrt(_area_m2), _descent_min_mps, _descent_max_mps)
+            : _descent_max_mps;
+    _area_law_active = false;
+    _last_ceiling_mps = ceiling;
+    _last_commanded_mps =
+        std::clamp(_descent_altitude_gain * altitude_m, _descent_min_mps, ceiling);
     return _last_commanded_mps;
   }
 
@@ -835,6 +858,7 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
   std::string _candidate_topic{"/eland/candidate"};
   std::string _state_topic{"/eland/state"};
   bool _veri_kipi{false};
+  bool _commit_irtifa_yasasi{false};
   std::string _veri_vref_topic{"/eland/veri/v_ref"};
   std::string _veri_h_topic{"/eland/veri/h_gercek_hedef"};
   float _veri_devir_irtifasi_m{2.5f};

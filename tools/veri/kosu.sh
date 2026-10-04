@@ -18,6 +18,8 @@
 #   KAYIT_SURE=S        stop recording after S wall seconds (default 240)
 #   INIS_BEKLE=0        do not stop on touchdown (identification never lands)
 #   BASLANGIC_IRTIFA=A  take off to A m instead of the world's / seed's value
+#   DUGUM_BILGI=1       save `ros2 topic info /eland/rho` and `ros2 node info
+#                       /detector_node` from mid-episode (dugum_bilgi.txt)
 #
 # Refuses to start while another simulation is running: run_sim.sh kills any
 # PX4/gz it finds and its cleanup kills every pipeline node by name, so
@@ -203,6 +205,17 @@ done
 	done
 } >"$OUT/kosul.yaml"
 cp "$PARAMS" "$OUT/params.yaml"
+
+# Optional: the graph while the episode flies -- who publishes /eland/rho,
+# what the detector exposes. --no-daemon so nothing outlives the episode.
+if [ "${DUGUM_BILGI:-0}" = 1 ]; then
+	{
+		echo "# ros2 topic info /eland/rho -v"
+		timeout 30 ros2 topic info /eland/rho -v --no-daemon 2>&1
+		echo "# ros2 node info /detector_node"
+		timeout 30 ros2 node info /detector_node --no-daemon 2>&1
+	} >"$OUT/dugum_bilgi.txt"
+fi
 
 # bekle PID S: wait up to S seconds for PID to exit, then TERM, then KILL.
 bekle() {

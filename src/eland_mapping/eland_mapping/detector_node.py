@@ -69,7 +69,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from eland_common import classes
 from eland_common.qos import DECISION_QOS, SENSOR_QOS
-from eland_msgs.msg import DynamicObstacleArray, LandingCandidate
+from eland_msgs.msg import DynamicObstacleArray, GoruntuKapsami, LandingCandidate
 
 
 class DetectorNode(Node):
@@ -114,6 +114,10 @@ class DetectorNode(Node):
         self.declare_parameter('map_topic', '/eland/ground_map')
         self.declare_parameter('mask_topic', '/eland/semantic_mask')
         self.declare_parameter('candidate_topic', '/eland/candidate')
+        # rho at mask rate on its own topic. Off by default; the candidate
+        # message keeps carrying it at decision rate either way.
+        self.declare_parameter('publish_rho', False)
+        self.declare_parameter('rho_topic', '/eland/rho')
 
         # --- the trajectory-aware test ---------------------------------
         # Off restores the purely reactive behaviour, which is what the
@@ -300,6 +304,10 @@ class DetectorNode(Node):
         self.candidate_pub = self.create_publisher(
             LandingCandidate,
             self.get_parameter('candidate_topic').value, DECISION_QOS)
+        self.rho_pub = None
+        if self.get_parameter('publish_rho').value:
+            self.rho_pub = self.create_publisher(
+                GoruntuKapsami, self.get_parameter('rho_topic').value, SENSOR_QOS)
         self.create_subscription(
             OccupancyGrid, self.get_parameter('map_topic').value,
             self.on_map, SENSOR_QOS)
@@ -376,6 +384,12 @@ class DetectorNode(Node):
                 region[0, :].any() or region[-1, :].any()
                 or region[:, 0].any() or region[:, -1].any())
         self.have_mask = True
+        if self.rho_pub is not None:
+            out = GoruntuKapsami()
+            out.header = msg.header          # the mask's capture stamp
+            out.rho = float(self.area_ratio)
+            out.view_bounded = bool(self.view_bounded)
+            self.rho_pub.publish(out)
 
     # ------------------------------------------------------------------
     def stage(self, name, t0):

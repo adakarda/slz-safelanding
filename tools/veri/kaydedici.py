@@ -31,6 +31,10 @@ import numpy as np
 import rclpy
 import yaml
 from eland_msgs.msg import LandingCandidate, LandingState
+try:  # detector_node's mask-rate rho (publish_rho); absent in older builds
+    from eland_msgs.msg import GoruntuKapsami
+except ImportError:
+    GoruntuKapsami = None
 from px4_msgs.msg import (TrajectorySetpoint, VehicleAttitude,
                           VehicleLandDetected, VehicleLocalPosition,
                           VehicleStatus)
@@ -87,7 +91,7 @@ class Kaydedici(Node):
         self.a = a
         self.clock = None             # (sim_s, monotonic)
         self.ev = {k: [] for k in ('lp', 'att', 'land', 'status', 'sp',
-                                   'state', 'cand', 'gt', 'clock', 'vdis')}
+                                   'state', 'cand', 'gt', 'clock', 'vdis', 'rho')}
         self.masks = []               # (t_yakalama, t_alma, array)
         self.masks_bozuk = []
         self.t_start_mono = time.monotonic()
@@ -124,6 +128,13 @@ class Kaydedici(Node):
             lambda m: self.ev['vdis'].append((self.t_gz(), float(m.data))), RELIABLE)
         if a.mask_bozuk_topic:
             sub(Image, a.mask_bozuk_topic, self.on_mask_bozuk, BEST_EFFORT)
+        # rho at mask rate, only published when detector_node.publish_rho
+        # is on: receive time, capture stamp, value.
+        if GoruntuKapsami is not None:
+            sub(GoruntuKapsami, '/eland/rho',
+                lambda m: self.ev['rho'].append((self.t_gz(), stamp_s(m.header.stamp),
+                                                 float(m.rho), float(m.view_bounded))),
+                BEST_EFFORT)
         self.create_timer(0.5, self.check_stop)
 
     # -- time ------------------------------------------------------------
@@ -451,6 +462,12 @@ def build(node, a):
     else:
         md = {c: np.array([]) for c in m_cols}
     write_csv(os.path.join(out, 'maske_olaylari.csv'), m_cols, md)
+    if ev['rho']:
+        r = np.array(ev['rho'], dtype=float)
+        write_csv(os.path.join(out, 'rho_yayini.csv'),
+                  ['t_alma', 't_yakalama', 'rho', 'view_bounded'],
+                  {'t_alma': r[:, 0], 't_yakalama': r[:, 1], 'rho': r[:, 2],
+                   'view_bounded': r[:, 3]})
     if masks and a.maske_kaydet:
         np.savez_compressed(os.path.join(out, 'maskeler.npz'),
                             maskeler=np.stack([m for _, _, m in masks]),
@@ -594,6 +611,8 @@ def build(node, a):
     oz['maske_damga_geri_gitme'] = int((np.diff(stamps) < 0).sum()) if len(stamps) > 1 else 0
     clk = np.array([c[0] for c in ev['clock']])
     oz['clock_geri_gitme'] = int((np.diff(clk) < 0).sum()) if len(clk) > 1 else 0
+    # messages received on /eland/rho (0 when detector_node.publish_rho is off)
+    oz['rho_yayini_sayisi'] = len(ev['rho'])
     with open(os.path.join(out, 'ep_ozet.json'), 'w') as f:
         json.dump(oz, f, indent=2, ensure_ascii=False, default=float)
 
