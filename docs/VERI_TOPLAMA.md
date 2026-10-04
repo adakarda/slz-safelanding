@@ -858,7 +858,8 @@ bölüm başına ~80 s. Kapsam: W2-W8 ×4 tohum (28) + 30 ada 1. tohumla + 22 ad
   üstüne düşerse ofset aynı akıştan yeniden çekiliyor. W5'te 10×10
   platformun köşesi 7.07 m; 6.5-8 m ofset köşeye düşebilir, o da kapsanıyor.
 - **Tarama:** W1-W8 ve 45 ada dünyasının hepsi, tohum 1-4. Etkilenen tek çift
-  W8 tohum 3'tü.
+  W8 tohum 3'tü. Diğer bütün başlangıçlar aynı kaldı (uçurulmuş bölümlerin
+  `dogus` alanıyla karşılaştırıldı).
 
 **Tekrarlar (03:04-03:08):** üçü de başarılı, temas 0.30 m/s. İlk denemeleri
 `_karantina/2026-10-04_basarisiz/` altında.
@@ -910,5 +911,135 @@ yalnız bu.
   sayıyor.
 - **Etki:** alçalma ve temas verisi sağlam, temas sonrası kuyruk çöp.
   **Analizleri `t_temas_gercek`'te kesin.**
-  Diğer bütün başlangıçlar aynı kaldı (uçurulmuş bölümlerin `dogus` alanıyla
-  karşılaştırıldı).
+
+---
+
+# Tur 3 — kontrolcü tasarımı için eksikler (2026-10-04)
+
+İstek: diğer sohbetten (A-E). A ve B mevcut koda dokunuyor, **plan yazıldı, onay
+bekliyor**. C, D, E çevrimdışı, yapıldı. Çıktılar `~/eland_veri/_tur3/`.
+
+## C — Aşama 5 bozucularının uygulandığının doğrulanması
+
+`tools/veri/bozucu_dogrula.py`; tam tablo `~/eland_veri/_tur3/bozucu_dogrula.md`.
+
+- **Kayıt düzeni:** çevrimiçi bozuk maskelerin kendisi kaydedilmemiş; yalnız
+  öznitelikleri (`rho_bozuk`, `view_bounded_bozuk`, `t_alma_bozuk`) var.
+  Piksel sayımı, `bozucu.py`'nin kendi `disturb()` kodu kayıtlı temiz karelere
+  çevrimdışı uygulanarak yapıldı (aynı seviye, aynı tohum; çevrimiçi karelerin
+  birebiri değil).
+- **Yuvarlama:** Tur 2 raporundaki "sınır titremesi 0.000" üç ondalığa
+  yuvarlanmış değerdi.
+
+**`d = rho_bozuk − rho_temiz`** (kayıtlı, yakalama damgasıyla eşlenmiş;
+4'er bölüm, aralıklar bölümler arası):
+
+| Bozucu | Aralık | max \|d\| | p99 \|d\| | ort \|d\| | d ≠ 0 kare oranı |
+|---|---|---|---|---|---|
+| sınır 2 | tüm kayıt | 0.00135-0.00182 | 0.00106-0.00118 | 0.00020-0.00023 | 0.475-0.555 |
+| sınır 2 | VALIDATE | 0.00104-0.00154 | 0.00095-0.00130 | 0.00036-0.00043 | 0.879-0.992 |
+| çevir 0.02 | tüm kayıt | 0.887-1.000 | 0.079-0.116 | 0.0106-0.0121 | 0.681-0.751 |
+| çevir 0.02 | VALIDATE | 0.098-0.875 | 0.017-0.238 | 0.0070-0.0184 | 1.000 |
+| kayıp 0.05 | tüm kayıt | 1.000 | 0.809-0.999 | 0.0162-0.0219 | 0.029-0.040 |
+| kayıp 0.05 | VALIDATE | 0.534-1.000 | 0.233-0.936 | 0.0092-0.0339 | 0.034-0.083 |
+| gecikme 0.2 | tüm kayıt / VALIDATE | 0 | 0 | 0 | 0 |
+| tekrar 2 | tüm kayıt | 1.000 | 0.036-0.058 | 0.0097-0.0113 | 0.329-0.356 |
+| tekrar 2 | VALIDATE | 0.029-0.061 | 0.029-0.057 | 0.0060-0.0100 | 0.623-0.664 |
+
+**Değişen piksel** (VALIDATE'ten eşit aralıklı 4 kare / bölüm, 76800 pikselden):
+
+| Bozucu | Değişen piksel | Merkez bölge pikseli, temiz → bozuk |
+|---|---|---|
+| sınır 2 | 0-913 (2.5 m'de kare tek sınıf: 0) | en çok 78 piksel fark |
+| çevir 0.02 | her karede 1536 | 86-1286 piksel azalma |
+| kayıp 0.05 | örneklenen 16 karede 0 (%5 tetiklenir); seviye 1.0 ile zorla: bölgenin tamamı (5976-76800) | zorla: bölge → 0 |
+| gecikme 0.2 | 0 (yalnız 0.2 s geç) | aynı |
+| tekrar 2 | 0-2626 (tutulan karede 0) | en çok 2626 piksel fark |
+
+**view_bounded** (kayıtlı; temiz / bozuk):
+- **VALIDATE'te:**
+  - t1 bölümlerinde temiz 0.660-0.695;
+  - t2 bölümlerinde temiz 0.355-0.494;
+  - bozuk tarafta fark en çok −0.059 (kayıp), +0.024 (tekrar).
+- **Tüm kayıtta:** temiz 0.221-0.406.
+- **VALIDATE'te ortanca `rho_temiz`:** 0.229-0.350.
+
+## D — eğiklik ve ρ
+
+`tools/veri/egiklik_rho.py`; çıktılar `~/eland_veri/_tur3/egiklik_rho.md`,
+bölüm başına `merkez_guvensiz_rho0_bolum.csv`.
+
+- **Eğiklik** `arccos(cos roll · cos pitch)`. roll/pitch `maske_olaylari.csv`'de
+  yok; `duzenli.csv`'deki `roll`, `pitch` (rad, `vehicle_attitude`, 50 Hz)
+  maskenin `t_yakalama`'sına doğrusal ara değerlendi.
+- **Kareler:** yalnız `view_bounded = 1` ve `rho > 0` (`rho_hesap` ancak
+  bölge sığarken anlamlı).
+
+**`rho − rho_hesap`:**
+
+| Kol | Aralık | Eğiklik | Kare | Ort | Ortanca | RMS | p95 \|·\| | Göreli ort / ortanca |
+|---|---|---|---|---|---|---|---|---|
+| K1 | tüm | < 5° | 3572 | +0.0002 | +0.0000 | 0.0014 | 0.0016 | +0.001 / +0.000 |
+| K1 | tüm | ≥ 5° | 139 | +0.0079 | +0.0001 | 0.0179 | 0.0358 | +0.027 / +0.004 |
+| K1 | VALIDATE | < 5° | 2472 | +0.0003 | +0.0000 | 0.0015 | 0.0017 | +0.001 / +0.000 |
+| K1 | VALIDATE | ≥ 5° | 72 | +0.0123 | +0.0003 | 0.0204 | 0.0439 | +0.034 / +0.006 |
+| K3 | tüm | < 5° | 7729 | −0.0004 | −0.0003 | 0.0019 | 0.0033 | −0.002 / −0.003 |
+| K3 | tüm | ≥ 5° | 664 | +0.0038 | +0.0036 | 0.0121 | 0.0250 | +0.037 / +0.037 |
+| K3 | VALIDATE | < 5° | 3227 | −0.0002 | −0.0001 | 0.0019 | 0.0038 | −0.000 / −0.000 |
+| K3 | VALIDATE | ≥ 5° | 220 | +0.0021 | +0.0032 | 0.0098 | 0.0176 | +0.028 / +0.033 |
+
+**VALIDATE'te eğiklik:**
+- K1: ortanca 0.28°, p95 2.44°, en çok 9.57°, ≥ 5° oranı 0.013.
+- K3: ortanca 0.36°, p95 7.89°, en çok 43.7°, ≥ 5° oranı 0.084.
+
+**Merkez piksel güvenli değil ve ρ = 0 olan kare oranı** (bölüm başına
+CSV'de):
+
+| Kol | Bölüm | Tüm kayıt ortanca / en çok | VALIDATE ortanca / en çok (> 0 olan bölüm) | VALIDATE, temastan önce en çok (> 0 olan bölüm) | Merkez güvensiz ama ρ ≠ 0 |
+|---|---|---|---|---|---|
+| K1 | 32 | 0.313 / 0.667 | 0.000 / 0.299 (8) | 0.043 (4) | 0 kare |
+| K3 | 80 | 0.299 / 0.666 | 0.000 / 0.312 (16) | 0.221 (12) | 0 kare |
+
+- **Kayıt kalkıştan önce, yerde başlıyor.**
+- **VALIDATE'te > 0 olan 24 bölümün 12'si W5.** W5'te veri kipi devretmediği
+  için mod temastan sonra da VALIDATE'te kalıyor. Örnek
+  `k3_carpan_veri_w5_t2`: 44 kare, hepsi temastan sonra, `h_kamera_gercek`
+  0.09 m, merkez sınıfı 2.
+- **Ada örnekleri:** `k3_carpan_veri_ada_t2016_t1` 25 kare, 7.6-14.4 m,
+  sınıf 2; `k3_parca_veri_ada_t2042_t1` 9 kare, 11.4-12.4 m.
+
+## E — örnek MATLAB seti
+
+`tools/veri/ornek_mat.py` → `~/eland_veri/_ornek_matlab/` (Windows'tan
+`\\wsl.localhost\ubuntu\home\arda\eland_veri\_ornek_matlab`), zip'i
+`~/eland_veri/_ornek_matlab.zip` (2.6 MB).
+
+| Dosya | KB | duzenli (sütun × satır) | maske | karar |
+|---|---|---|---|---|
+| k5_A0.6_acik_alan_t1001.mat | 608 | 37 × 5023 | 22 × 951 | 12 × 177 |
+| k5_A1.0_acik_alan_t1001.mat | 598 | 37 × 5014 | 22 × 923 | 12 × 175 |
+| k1_v0.7_veri_w3_t1.mat | 392 | 48 × 2731 | 26 × 537 | 12 × 99 |
+| k1_v1.5_veri_w3_t1.mat | 306 | 48 × 2162 | 26 × 412 | 12 × 76 |
+| k2_d0.2_veri_w3_t1.mat | 353 | 48 × 2428 | 26 × 468 | 12 × 84 |
+| a5_k2d0.35_veri_w3_t1_gecikme0.2.mat | 306 | 48 × 2220 | 26 × 426 | 12 × 73 |
+
+- **Seçimler:**
+  - K2'den D* = 0.2: sabit ıraksama penceresi en uzun kol (5.6 s).
+  - Aşama 5'ten 0.2 s gecikme: aynı dosyada `rho_temiz` / `rho_bozuk` ve
+    `t_alma_bozuk` var.
+  - K5 dosyaları Tur 1 kaydedicisinden; `x_gercek` gibi sonradan eklenen
+    sütunlar yok (37 sütun).
+- **İçerik:** her `.mat`'ta `duzenli`, `maske`, `karar`, `gecis`, `bilgi`
+  (bölüm ve anlar), `ozet_json`, `kosul_yaml`. Kaydedicinin sütun adları
+  aynen. Her satırda tekrar eden 4 metin sütunu `bilgi`'ye taşındı. Yanında
+  `<ep_id>_sozluk.md` (koşullar, anlar, okuma örneği, sütun tablosu
+  `data_dictionary.md`'den) ve `BENIOKU.md`.
+- **Doğrulama:** her dosya `scipy.io.loadmat` ile geri okundu; her sütunun
+  satır sayısı ve NaN sayısı CSV ile aynı.
+- **Denenmedi:** MATLAB bu makinede yok, dosyalar MATLAB'da açılmadı. Bir alan
+  adı 31 karakteri aşıyor (`bilgi.temas_dikey_hiz_gercek_hesap_mps`, 32);
+  MATLAB R2006a'dan beri 63'e kadar kabul ediyor.
+
+## A ve B — planlar onay bekliyor
+
+Ayrıntı sohbette verildi; onaydan sonra buraya uygulama ve ölçüm eklenecek.
