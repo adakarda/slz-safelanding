@@ -114,6 +114,10 @@ merkezi arası; yalnız hedefli dünyalarda).
 | yerel_dunya_ofset_en_m | dünya (doğu, kuzey) = ofset + yerel (doğu, kuzey); bölümün ortancası |
 | sureklilik | kanal başına mesaj sayısı, hız, en uzun boşluk, jitter, kayıp tahmini |
 | maske_damga_geri_gitme, clock_geri_gitme | zaman damgası geri gitme sayısı |
+| ozet_yenilendi, onceki | yalnız `ozet_yenile.py`'nin dokunduğu bölümlerde (W1 kör inişleri): boş kalan temas alanları sonradan dolduruldu, eski değerler `onceki` altında |
+
+**K5 / K5r bölümlerinde** (`INIS_BEKLE=0`, tanımlama): araç inmiyor,
+`basarili: false` olması beklenen; başarı ölçütü bu kollar için anlamsız.
 
 ## ep.mat
 
@@ -153,7 +157,33 @@ Biçim v7 (sıkıştırılmış). Bu makinede MATLAB yok; dosya yalnızca
 
 `ep_id`, `kol`, `dunya`, `dunya_yaml`, `tohum`, `model`, `baslangic_irtifasi_m`,
 `baslangic_ofset_m`, `dogus` (x,y,z,r,p,yaw), `negatif_ornek`, `ruzgar_mps`,
-`politika` (politika.py argümanları; boşsa Kol 0), `gt_devir` (veri kipinde
-COMMIT'e nasıl devredildiği: Gazebo hedef yüksekliği < 2.5 m, ya da W5'te devir
-yok + 0.5 m/s; **ground truth kullanır, yalnız simülasyon içindir**),
-`bozucu`, `ek_parametreler`, `git`, `px4_parametreleri`.
+`ruzgar_olcek`, `politika` (politika.py argümanları; boşsa Kol 0), `gt_devir`
+(veri kipinde COMMIT'e nasıl devredildiği: Gazebo hedef yüksekliği < 2.5 m, ya
+da W5'te devir yok + 0.5 m/s; **ground truth kullanır, yalnız simülasyon
+içindir**), `bozucu`, `ek_parametreler`, `git`, `px4_parametreleri`.
+
+- **`ruzgar_olcek`** (2026-10-04'ten sonra): WindEffects'in *etkin* kuvvet
+  ölçeği, `F = m · olcek · (v_rüzgâr − v_link)`. 0.075 = PX4 motor modelinin
+  kendi rotor sürüklemesinin (2.5 m/s'de ~0.59 N) üstüne gövde sürüklemesi
+  (0.375 N, _tahmin). SDF'de karekökü yazılı (gz-sim 8 sabit ölçeğin karesini
+  alıyor), dünya yaml'ında `olcek_sdf`. Ölçülen: 2.5 m/s'de toplam eğim 2.6-2.8°.
+  Ayrıntı `docs/VERI_TOPLAMA.md`, "Adım 4".
+- **`artik_surecler.txt`** (bölüm klasöründe): `run_sim.sh` kapandıktan sonra
+  hâlâ yaşayan ve `kosu.sh`'nin kapattığı süreçler (pid, ad, komut). Normalde
+  `tracker_node`, `obstacle_driver` ve bir `python3`; fazlası bir sorun işareti.
+- **MIS_TAKEOFF_ALT:** 2026-10-03 akşamından önce `kosul.yaml` sabit 20 s
+  sonra yazılıyordu; tutulan 43 bölümde değer kalkış irtifasıyla aynı
+  (kontrol edildi). Artık mod seçildikten sonra yazılıyor.
+
+## Veri kökünde alt çizgiyle başlayan klasörler (veri setine girmez)
+
+`birlestir.py` bunları atlar.
+
+| Klasör | İçerik |
+|---|---|
+| `_gunlukler/` | toplu koşu günlükleri (`adimN_*.log`, `.ayrinti`) |
+| `_karantina/2026-10-03_sizinti/` | sızan süreç yükü altında kaydedilmiş ilk K1 / K2 (EKF bozuk), `BENIOKU.md` ile |
+| `_karantina/2026-10-04_basarisiz/` | sim açılmayan / mod komutu kaybolan iki bölümün ilk denemesi |
+| `_ruzgar_kalibrasyon/` | rüzgâr ölçeği denemeleri (1.0, ~0, SDF 0.075), `BENIOKU.md` ile |
+| `_duman/` | uçurulmamış kolların duman testleri |
+| `_bolme/` | `birlestir.py`'nin train / val / test bağlantıları ve birleşik `.mat` |

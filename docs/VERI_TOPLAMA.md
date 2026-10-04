@@ -14,7 +14,7 @@ Etiketler: **ölçülen** · **_hesap** (ölçülenden hesaplanan) · **_tahmin*
 ### 1. EKF irtifası neye göre?
 
 **Kalkış noktasına göre, alttaki zemine göre değil.** Mod irtifayı
-`emergency_landing_mode.hpp:244` (`altitude_m = -pos_ned.z()`) ile alıyor: EKF
+`emergency_landing_mode.hpp:244` (O2 sonrası `:269`) (`altitude_m = -pos_ned.z()`) ile alıyor: EKF
 yerel çerçevesinin z'si, orijin EKF'nin açılışta yerde kurduğu nokta.
 `mapping_node.py:219` ve `hud_node` `dist_bottom` geçerliyse onu kullanıyor;
 **ölçülen** canlı durumda `dist_bottom_valid = false`,
@@ -378,11 +378,16 @@ Kararlar (kullanıcı, diğer sohbet üzerinden):
 ## Doğrulamalar
 
 **6a / W5 hükmü (a) — COMMIT tetiği EKF yüksekliğine bağlı mı?** Evet.
-`emergency_landing_mode.hpp:297`:
-`if (altitude_m <= _landing_altitude_m && !_ident_enabled)` → COMMIT.
-`altitude_m` `:244`'te `-pos_ned.z()` (EKF yerel z, kalkış noktasına göre).
-`landing_altitude` `eland_params.yaml:286` = 2.0 (varsayılan `:467`). W5'te
-platform 4 m yüksekte olduğu için bu kural platformun üstünde tetiklenmez.
+Satır numaraları O2 sonrası (`v5.0-veri-kipi` ve sonrası); parantez içinde O2
+öncesi:
+- `emergency_landing_mode.hpp:322` (:297):
+  `if (altitude_m <= _landing_altitude_m && !_ident_enabled)` → COMMIT.
+- `altitude_m` `:269`'da (:244) `-pos_ned.z()` (EKF yerel z, kalkış
+  noktasına göre).
+- `landing_altitude` `src/eland_sim/config/eland_params.yaml:286` = 2.0
+  (varsayılan `hpp:508`, önce :467).
+- W5'te platform 4 m yüksekte olduğu için bu kural platformun üstünde
+  tetiklenmez.
 
 **6 — Eski taban çizgi hangi parametrelerle ölçüldü?** PX4'ün 266 uçuş
 kaydının parametre başlığı tarandı (ölçülen):
@@ -523,3 +528,376 @@ kapalıyken hiçbir abonelik oluşmuyor).
 **Ek düzeltme:** sabit dünyalarda başlangıç dünya yaml'ında tek değerdi, aynı
 dünyanın 3 tekrarı aynı noktadan başlardı. Artık (dünya, tohum) çiftinden
 çekiliyor.
+
+---
+
+# Tur 2 — yürütme (2026-10-03 gece)
+
+Günlükler: `~/eland_veri/_gunlukler/` (her adım için `adimN_*.log`: başlangıç,
+bitiş, duvar saniyesi, çıkış kodu, komut; ayrıntı `.ayrinti`'de).
+
+## Olay: sızan süreçler — K1 ve K2'nin ilk toplaması karantinada
+
+**Ne oldu:** `run_sim.sh`'nin kapanış temizliği boru hattını adla öldürüyor;
+`tracker_node` ve `obstacle_driver` listede yok (`run_sim.sh:241-251`).
+`tools/batch_run.sh` bu ikisini kendisi öldürdüğü için orada sorun yok, ama
+`kosu.sh` `run_sim.sh`'yi doğrudan TERM ile kapatıyor. Adım 1b'den itibaren
+her bölüm bir çift bıraktı: 8 + 32 + 24 = 64 çift. Son durumda ~10 GB bellek,
+~8 çekirdek (her `obstacle_driver` ~%12 CPU).
+
+**Etkisi (ölçülen, zincir sırasına göre):**
+
+| Bölümler | Sızan çift (başta) | vz_ekf − vz_gercek RMS (m/s) | EKF yükseklik kayması (m) | Maske yaşı p50 (ms) |
+|---|---|---|---|---|
+| Adım 1, Kol 0 (28) | 0 – 7 (1b); ilk 20 için bilinmiyor | 0.02 – 0.08 | ≤ 0.14 | 18 – 29 |
+| K1 W2 (8) | 8 – 15 | 0.01 – 0.04 | ≤ 0.04 | 20 – 22 |
+| K1 W3 (8) | 16 – 23 | 0.04 – 0.16 | −0.54'e kadar | 22 – 24 |
+| K1 W4 (8) | 24 – 31 | 0.08 – 0.45 | −0.80'e kadar | 22 – 26 |
+| K1 W5 (8) | 32 – 39 | 0.12 – 1.19 | 1.32'ye kadar | 26 – 29 |
+| K2 W2 (4) | 40 – 43 | 0.24 – 0.92 | 2.73'e kadar | 29 – 30 |
+| K2 kalan (20) | 44 – 63 | — | — | 31 – 46 |
+
+- **K1 W5'te 0.5 m/s komuta karşı 1.25 m/s temas:** EKF 0.6 m/s alçaldığını
+  sanırken araç gerçekte 1.4 m/s alçalıyordu. PI, EKF hızını referansa
+  çekmek için komutu artırdı.
+- **K2'nin kalan 20 bölümünden 13'ünde mod süreci öldü.** 9'unda açıkça
+  `timeout while waiting for FMU publisher discovery` → `Registration failed`.
+  Ayrıca 5 bölümde kör iniş oldu; yalnız 1 bölüm başarılı.
+- **Bölümler silinmedi:** `~/eland_veri/_karantina/2026-10-03_sizinti/` altında,
+  `BENIOKU.md` ile. Veri setine girmiyor.
+
+**Düzeltme (`v5.1-veri-temizlik`, yalnız yeni dosyalar):**
+- `kosu.sh` her alt süreci `VERI_KOSU_ISARET` ortam işaretiyle başlatıyor.
+  Kapanışta işaretli artıkları kapatıp bölümün `artik_surecler.txt`
+  dosyasına yazıyor. Her bölümde 3 artık çıkıyor: `tracker_node`,
+  `obstacle_driver` ve bir `python3` (politika ya da bozucu, TERM'den sonra
+  hâlâ kapanıyor).
+- Kaydedici ve `run_sim` için zaman sınırı var. Eski K1 v1.5 W3 t1, özetini
+  yazdıktan sonra 13 dk asılı kalmıştı.
+- `kosul.yaml` mod seçildikten sonra yazılıyor. Sabit 20 s bekleme yavaş
+  makinede önceki bölümün `MIS_TAKEOFF_ALT`'ını okuyordu. Tutulan 43 bölümün
+  hepsinde değer kalkış irtifasıyla aynı (kontrol edildi).
+- **`run_sim.sh`'ye dokunulmadı.** Temizlik listesine bu iki düğümü eklemek
+  mevcut koda ekleme, onay bekliyor.
+
+**Doğrulama:** 132 artık süreç öldürüldü, bayat FastDDS `/dev/shm` dosyaları
+silindi. Aynı K1 W5 bölümü (v0.7, t1) temiz sistemde yeniden uçuruldu:
+
+| | Eski (sızıntı altında) | Yeni |
+|---|---|---|
+| vz hata RMS | 0.42 m/s | 0.02 m/s |
+| EKF yükseklik kayması | 1.32 m | −0.02 m |
+| Temas hızı | 1.25 m/s | 0.53 m/s |
+| Temasta `h_ekf − h_gercek_hedef` | 5.26 m | 4.05 m |
+
+**Yan kayıp:** artıklar öldürülünce WSL dağıtımı boşta kalıp yeniden başladı
+ve `/tmp` silindi. Kayıplar:
+- **1.–3. adımın günlükleri.** 1b, K1 ve K2 satırları bu oturumun çıktısından
+  aynen geri alındı.
+- **Adım 1'in 7 satırı** (W3 ×3, W4 t1, W5 t3, W6 t1-t2). Bölüm klasörünün
+  doğum / son yazma zamanından yeniden kuruldu, `~` ile işaretli.
+
+Günlükler artık `/tmp`'de değil.
+
+## Adım 1 — Kol 0 (28 bölüm, tamam)
+
+| Dünya | Bölüm | Başarılı | Duvar süresi, ortanca | Temas hızı (gerçek), ortanca |
+|---|---|---|---|---|
+| W2 | 3 | 3 | 78 s | 0.30 m/s |
+| W3 | 3 | 3 | 74 s | 0.30 m/s |
+| W4 | 3 | 3 | 70 s | 0.31 m/s |
+| W5 | 3 | 3* | 65 s | **1.47 m/s** |
+| W6 | 3 | 3 | 76 s | 0.30 m/s |
+| W1 (negatif) | 3 | 0 (beklenen) | 134 s | 0.29-0.30 m/s |
+| 10 ada (t2003-t2012) | 10 | 9 / 9 + 1 negatif (beklenen başarısız) | 83 s | 0.29-0.31 m/s |
+
+Toplam duvar süresi 40 dk.
+
+- **W1:** aday hiç yok. Mod 60 s arayıp 15 m'den kör iniyor (SEARCH → COMMIT).
+  Temas 0.29-0.30 m/s; 3 bölümün 2'si şans eseri adaya indi.
+  `ozet_yenile.py` bu üç bölümün boş kalan temas alanlarını doldurdu.
+  Eski değerler `onceki` altında.
+- **t2012 negatif ada (< 4.4 m):** aday yok, kör iniş, hedef dışı.
+  Başarısızlık beklenen.
+- **\* W5:** "başarılı" ölçütü hız içermiyor; 1.47 m/s sert temas. Ayrıca
+  işaretlenmeli.
+
+**W5, Kol 0 (W5 hükmü d), ölçülen:**
+
+| Bölüm | COMMIT girildi mi | Temas hızı (gerçek) | Temasta h_ekf − h_gercek_hedef | Temastan hemen önce v_ref | PX4 landed, temastan sonra |
+|---|---|---|---|---|---|
+| kol0_veri_w5_t1 | hayır | 1.47 m/s | 3.81 m | 1.40 m/s | 1.05 s |
+| kol0_veri_w5_t2 | hayır | 1.47 m/s | 3.81 m | 1.40 m/s | 1.06 s |
+| kol0_veri_w5_t3 | hayır | 1.48 m/s | 3.87 m | 1.45 m/s | 1.07 s |
+
+- **Beklentiyle aynı:** EKF temasta ~4 m gösteriyor, komut 0.35·4 ≈ 1.4 m/s,
+  COMMIT yok.
+- **Land detector:** sert temasta 1.05 s, yumuşak temasta (W2, 0.30 m/s)
+  4.6-4.8 s sonra `landed` diyor.
+
+## Adım 2 — K1 sabit hız (32 bölüm, temiz sistemde yeniden)
+
+| Hız | Bölüm | Başarılı | Duvar süresi, ortanca | Temas hızı: W2-W4 / W5 |
+|---|---|---|---|---|
+| 0.4 m/s | 8 | 7 + 1 sim açılmadı | 86-106 s | 0.29-0.30 / 0.49-0.51 m/s |
+| 0.7 m/s | 8 | 8 | 77-90 s | 0.30 / 0.50 m/s |
+| 1.0 m/s | 8 | 8 | 74-83 s | 0.29-0.31 / 0.50 m/s |
+| 1.5 m/s | 8 | 8 | 72-79 s | 0.30-0.31 / 0.50 m/s |
+
+Toplam duvar süresi 43.5 dk.
+
+- **`k1_v0.4_veri_w4_t1`:** PX4 açılmadı (`run_sim`: "PX4 acilmadi").
+  `px4.log` sonraki bölümlerin altında kaldı; `kosu.sh` artık bu durumda onu
+  da bölüme kopyalıyor. Takılı kalan `px4` ve başlangıç kabukları işaretle
+  kapatıldı, sonraki bölüm normal kalktı. Bu bölüm adımların sonunda
+  yeniden uçurulacak.
+- **EKF sağlığı (31 bölüm):** vz_ekf − vz_gercek RMS 0.01-0.04 m/s, yükseklik
+  kayması ≤ 0.09 m, maske yaşı p50 18-24 ms. Adım 1 ile aynı.
+- **W5 (devir yok, 2.5 m altında 0.5 m/s):** 8/8'de COMMIT yok. Temas
+  0.49-0.51 m/s, temasta `h_ekf − h_gercek_hedef` 3.99-4.04 m.
+
+**Sabit referans takibi** (VALIDATE'in ilk 2 s'si hariç, devre kadar; W5'te
+son 0.5 m/s'lik kısım hariç):
+
+| Hız | Bölüm | Süre / bölüm | vz_gercek − v_ref ort / RMS | vz_ekf − v_ref ort / RMS |
+|---|---|---|---|---|
+| 0.4 | 7 | 29.3 s | −0.002 / 0.007 m/s | +0.000 / 0.005 m/s |
+| 0.7 | 8 | 14.6 s | −0.007 / 0.010 m/s | +0.001 / 0.007 m/s |
+| 1.0 | 8 | 9.8 s | −0.011 / 0.013 m/s | +0.003 / 0.009 m/s |
+| 1.5 | 8 | 6.2 s | −0.032 / 0.034 m/s | −0.006 / 0.008 m/s |
+
+- **İç döngü sabit hızı 1 cm/s mertebesinde tutuyor.** 1.5 m/s'de gerçek
+  hız ~3 cm/s düşük kalıyor.
+- **EKF bunu görmüyor:** vz_ekf − v_ref ~0. Fark EKF'nin hız kestiriminde,
+  PI'da değil.
+
+## Adım 3 — K2 kâhin sabit ıraksama (24 bölüm, temiz sistemde yeniden)
+
+| D* | Bölüm | Başarılı | Duvar süresi, ortanca | Temas hızı: W2-W4 / W5 |
+|---|---|---|---|---|
+| 0.2 | 8 | 8 | 72-82 s | 0.28-0.30 / 0.48-0.50 m/s |
+| 0.35 | 8 | 7 + 1 mod devreye girmedi | 68-80 s | 0.29-0.31 / 0.50 m/s |
+| 0.5 | 8 | 8 | 70-82 s | 0.28-0.31 / 0.48-0.49 m/s |
+
+Toplam duvar süresi 33.8 dk.
+
+- **`k2_d0.35_veri_w4_t1`:** mod PX4'e kaydoldu, kalkış oldu, ama
+  "Emergency Landing modu seciliyor" komutu hiç etki etmedi. Araç 240 s
+  boyunca 11.7 m'de `nav_state 4`'te (loiter) bekledi. Muhtemel sebep:
+  `run_sim.sh`'nin tek seferlik `ros2 topic pub -1` mod komutu kayboldu
+  (best effort). Bu bölüm sonda yeniden uçurulacak.
+- **EKF sağlığı (23 bölüm):** vz hata RMS 0.02-0.11 m/s, yükseklik kayması
+  ≤ 0.27 m (bir bölüm). Kâhin desenleri hızlı değiştiği için K1'den biraz
+  yüksek, ama sızıntı dönemindeki 0.2-1.2'nin çok altında.
+- **W5:** 6/6'da COMMIT yok. Temas 0.48-0.50 m/s, temasta
+  `h_ekf − h_gercek_hedef` 3.92-4.04 m.
+
+**Sabit ıraksama gerçekte ne kadar uçuluyor?** Yasa `D*·h`, [0.3, 1.5]
+içinde kırpılıyor ve 2.5 m'de devrediliyor. Bu yüzden sabit ıraksama yalnız
+`1.5/D*` ile 2.5 m arasında:
+
+| D* | Bölüm | Tavanda (1.5 m/s), ort | Sabit ıraksamada, ort | Gerçekleşen D ort | D − D* RMS |
+|---|---|---|---|---|---|
+| 0.2 | 8 | 4.6 s | 5.6 s | 0.197 1/s | 0.007 1/s |
+| 0.35 | 7 | 7.1 s | 1.6 s | 0.353 1/s | 0.004 1/s |
+| 0.5 | 8 | 7.6 s | 0.4 s | 0.507 1/s | 0.013 1/s |
+
+- **Pencere içinde takip çok iyi.**
+- **Ama D* = 0.5 kolu pratikte "1.5 m/s ile in, 3 m'de 0.4 s ıraksa, devret".**
+  D* = 0.35 de 1.6 s.
+- **Uzun sabit ıraksama örneği isteniyorsa iki seçenek, karar senin:**
+  - devir irtifası daha alçak (`veri_devir_irtifasi`, şu an şartnamedeki
+    2.5 m),
+  - ya da yalnız D* = 0.2 kolu esas alınır.
+
+## Adım 4 — K5 rüzgârlı: önce etiket kalibrasyonu
+
+**İlk çift** (W4, tohum 1, aynı model `x500_seg_cam_down_ruzgar`, aynı
+başlangıç, K5 deseni A = 0.6): rüzgârlı bölüm ile rüzgârsız eşi.
+
+| Bölüm | WindEffects (etkin) | roll ort / RMS | pitch ort / RMS | Eşine göre eğim farkı | Yatay sapma p95 / en çok |
+|---|---|---|---|---|---|
+| rüzgârsız eş (veri_w4) | — | −0.20 / 0.26° | −0.01 / 0.12° | — | 0.06 / 0.16 m |
+| 2.5 m/s, ölçek 1.0 | 1.0 | −15.07 / 15.10° | −3.04 / 3.07° | **15.2°** (~5.5 N) | 0.23 / 1.16 m |
+| 2.5 m/s, WindEffects kapalı | ~0 | −1.86 / 1.88° | −0.22 / 0.26° | 1.7° (~0.59 N) | 0.08 / 0.43 m |
+| 2.5 m/s, SDF 0.075 | 0.0056 | −1.92 / 1.94° | −0.19 / 0.24° | 1.7° | 0.06 / 0.41 m |
+| **2.5 m/s, etkin 0.075 (SDF 0.2739)** | 0.075 | −2.85 / 2.86° | −0.31 / 0.33° | **2.67°** (~0.94 N) | 0.06 / 0.13 m |
+
+- **Etiket boş değildi, fazla güçlüydü:** 1.0'da 15° yatış, fiziksel olarak
+  ~8 m/s rüzgâr gibi. Bu bölüm veri setinde değil,
+  `~/eland_veri/_ruzgar_kalibrasyon/` altında.
+- **PX4 motor modeli rüzgârı zaten görüyor:** WindEffects kapalıyken 0.59 N
+  rotor sürüklemesi var. x500'ün `rotorDragCoefficient` (8.06e-5) ve
+  `motorConstant` değerlerinden asılı uçuşta beklenen 4 × 8.06e-5 × ~757 rad/s
+  × 2.5 m/s ≈ 0.61 N.
+- **gz-sim 8 sabit ölçeğin karesini alıyor:** `MakeConstantScalingFactor(v)`
+  → `AdditivelySeparableScalarField3d(k = v/3, p = q = r = v)`, değerlendirme
+  `k·(p+q+r) = v²` (gz-math `AdditivelySeparableScalarField3.hh:78`). 1.0'da
+  görünmüyor. 0.075 yazınca etkin 0.0056 oldu ve WindEffects ~0.03 N kaldı
+  (ölçüldü).
+- **Seçim: etkin 0.075.** Motor modelinin üstüne yalnız gövde sürüklemesi
+  ekleniyor: 0.06·v² = 0.375 N, 2.5 m/s'de (_tahmin, Cd·A ≈ 0.1 m²).
+  WindEffects doğrusal (`F = m·k·Δv`), bu yüzden eşitlik yalnız 2.5 m/s'de
+  geçerli.
+- **Doğrulama:** öngörülen eğim 2.73°, ölçülen 2.67°. Kuvvet etkin ölçekle
+  doğrusal: 0.075'te 0.35 N, 1.0'da 4.9 N.
+- **Kayıt:** `dunya_uret.py` artık `--ruzgar-olcek`'i etkin ölçek alıyor ve
+  SDF'ye karekökünü yazıyor. Dünya yaml'ında `olcek` / `olcek_sdf`,
+  `kosul.yaml`'da `ruzgar_olcek` (etkin) var. `v5.2-ruzgar-kalibrasyon`.
+
+**K5 rüzgârlı, 6 bölüm** (W4 _r2p5, etkin 0.075; basamak 1.2 ve 2.0 m/s,
+yani A = 0.6 ve 1.0, ×3): 6/6 tamam, her biri ~136 s duvar.
+- **Eğim:** 6 bölümün hepsinde toplam eğim 2.6-2.8°. Roll/pitch dağılımı
+  başlığa göre değişiyor.
+- **Yatay sapma:** p95 0.06-0.07 m.
+
+| Genlik | Hız kaynağı | Basamak | K ortanca | Ölü zaman θ | t90 | Eğim sınırı ortanca (yukarı / aşağı) |
+|---|---|---|---|---|---|---|
+| 0.6 rüzgârlı | vz_gercek | 56 | 0.994 | 0.060 s | 0.30 s | 6.01 (6.04 / 5.34) m/s² |
+| 0.6 rüzgârsız | vz_gercek | 55 | 0.992 | 0.040 s | 0.28 s | 6.13 (6.16 / 5.41) m/s² |
+| 1.0 rüzgârlı | vz_gercek | 56 | 0.992 | 0.060 s | 0.36 s | 7.24 (6.12 / 7.83) m/s² |
+| 1.0 rüzgârsız | vz_gercek | 54 | 0.997 | 0.060 s | 0.36 s | 6.67 (6.24 / 7.86) m/s² |
+
+- **2.5 m/s yan rüzgâr dikey tesisi değiştirmiyor:** K, θ ve t90 ölçüm
+  çözünürlüğü (20 ms) içinde aynı. Beklenen sonuç: yatay kuvvet dikey
+  ekseni ancak eğimin kosinüsüyle (cos 2.7° = 0.999) etkiler.
+- **Rüzgârın dikey veriye görünür etkisi yok.** Rüzgârlı veri RL tarafında
+  yatay bozucu olarak işe yarar.
+
+## Adım 5 — K4 (12 bölüm, 40 m, W3)
+
+12/12 başarılı. Duvar süresi ortanca 118 s, toplam 23.5 dk. Temas 0.30 m/s.
+EKF vz hata RMS 0.02-0.13 m/s.
+
+| | Değer |
+|---|---|
+| Tur sırası | tek tohumda basamak, çift tohumda çoklu-sinüs önce (6 / 6) |
+| Turlar | her biri ~20 s (bir bölümde ikinci tur 19.7 s'de devre ulaştı) |
+| VALIDATE | 39.7-50.8 s; sonra 0.3 m/s ile 0-10.8 s, devir 2.35-2.49 m |
+| v_ref aralığı | 0.30-1.50 m/s, kırpmasız |
+| vz_gercek − v_ref RMS | 0.16-0.23 m/s (basamaklarda iç döngünün geçici yanıtı dahil) |
+
+## Adım 6 — Aşama 5 bozucular (20 bölüm, W3)
+
+20/20 başarılı. Toplam duvar süresi ~27 dk. EKF vz hata RMS 0.02-0.04 m/s.
+
+| Bozucu | Politika | Bölüm | Başarılı | HOLD / ABORT | Aday kaybı | VALIDATE | ort \|ρ_bozuk − ρ_temiz\| | Ek gecikme p50 | Temas |
+|---|---|---|---|---|---|---|---|---|---|
+| sınır 2 px | K2 0.35 / K1 1.0 | 2 / 2 | 2 / 2 | 0 / 0 | 0 | 9.6 / 13.8 s | 0.000 | 1 ms | 0.30 m/s |
+| çevir 0.02 | K2 0.35 / K1 1.0 | 2 / 2 | 2 / 2 | 0 / 0 | 0 | 9.7 / 13.4 s | 0.011-0.012 | 1 ms | 0.30-0.31 m/s |
+| kayıp 0.05 | K2 0.35 / K1 1.0 | 2 / 2 | 2 / 2 | 0 / 0 | 0 | 9.5 / 13.6 s | 0.019-0.020 | 1 ms | 0.30 m/s |
+| gecikme 0.2 s | K2 0.35 / K1 1.0 | 2 / 2 | 2 / 2 | 0 / 0 | 0 | 9.6 / 13.6 s | 0.000 | 203 ms | 0.30-0.31 m/s |
+| tekrar 2 | K2 0.35 / K1 1.0 | 2 / 2 | 2 / 2 | 0 / 0 | 0 | 9.6 / 13.5 s | 0.010-0.011 | 1 ms | 0.30 m/s |
+
+- **Bu kollarda iniş hızını politika veriyor** (kâhin ya da sabit), ρ değil.
+  Bozucu yalnız aday seçimini ve kaydedilen ρ'yu etkiliyor.
+- **Aday seçimi beş bozucuda da ayakta kaldı.**
+- **Asıl çıktı yan yana kaydedilen `rho_temiz` / `rho_bozuk`,
+  `view_bounded_bozuk`, `t_alma_bozuk`.** Kontrolcü bunlarla çevrimdışı
+  bozulmuş ölçüme karşı denenebilir.
+- **Sınır titremesi ortalama ρ'yu değiştirmiyor** (simetrik). Etkisi tek tek
+  karelerde.
+
+## Adım 7 — K3 rastgele politika (80 bölüm)
+
+80/80 başarılı (W8 t3 tekrarıyla birlikte). Toplam duvar süresi 109 dk,
+bölüm başına ~80 s. Kapsam: W2-W8 ×4 tohum (28) + 30 ada 1. tohumla + 22 ada
+2. tohumla (52). EKF vz hata RMS 0.02-0.03 m/s.
+
+- **Politika tohumu her bölümde ayrı:** sabit dünyada `<dünya no><tohum>`
+  (21-84), adada `<ada no><tohum>` (20131-20452). İlk liste 30 adaya aynı
+  rastgele diziyi veriyordu; uçurulmadan düzeltildi.
+- **Temas:** W5'teki 4 bölüm 0.49-0.50 m/s. Diğer 76 bölümün 73'ü
+  0.29-0.32 m/s, 3'ü **sert temas** (aşağıda).
+
+**Sert temaslar — mevcut modun davranışı, veri araçlarının değil:**
+
+| Bölüm | COMMIT (gerçek / EKF) | COMMIT'te vz | Temas |
+|---|---|---|---|
+| k3_parca_veri_ada_t2024_t2 | 13.6 / 13.5 m | 1.33-1.36 m/s, sabit | 1.33 m/s |
+| k3_parca_veri_ada_t2029_t1 | 14.6 / 14.6 m | 1.27-1.31 m/s, sabit | 1.27 m/s |
+| k3_carpan_veri_ada_t2029_t2 | 6.8 / 6.7 m | 1.10-1.14 m/s, sabit | 1.10 m/s |
+
+- **COMMIT yüksekte girildi.** Mod aday 3 kez kaybolunca "committing anyway"
+  ile giriyor (t2024_t2'de günlükte açıkça yazıyor). Diğer ikisinde geçiş
+  gerekçesinin üstüne COMMIT'in kendi mesajı yazıldığı için gerekçe kayıtta
+  görünmüyor.
+- **Hız neden sabit kalıyor:** COMMIT'te `onCandidate` hemen dönüyor
+  (`emergency_landing_mode.hpp:622-623`), `_area_ratio` ve `_view_bounded`
+  son değerinde donuyor. `descentSpeed` (`:593-618`) `view_bounded` doğruysa
+  alan yasasını donmuş ρ ile çalıştırıyor:
+  `ceiling·(1 − ρ_donmuş)`, irtifadan bağımsız sabit. Yere kadar
+  1.1-1.3 m/s.
+- **Karşı örnek:** aynı şekilde yüksekte giren diğer 6 bölümde (4'ü Kol 0
+  kör iniş, 2'si K3) `view_bounded` yanlıştı. İrtifa yasası çalıştı, hız
+  1.5'ten 0.3'e indi, temas 0.30 m/s.
+- **218 bölümde 9 erken COMMIT (> 3 m), 3'ü sert.** Başarı ölçütü hız
+  içermediği için üçü de "başarılı" sayıldı.
+- **Mevcut koda dokunmadım.** Öneri (onayınla): COMMIT'te alan yasasını
+  irtifa yasasıyla sınırlamak, `min(alan, irtifa)`, ya da donmuş ρ yerine
+  yalnız irtifa yasası. Bu senin kontrolcü tasarımının konusu.
+
+## Yeniden uçurulacaklar (adımların sonunda)
+
+| Bölüm | Sebep |
+|---|---|
+| `k1_v0.4_veri_w4_t1` | PX4 açılmadı |
+| `k2_d0.35_veri_w4_t1` | mod komutu etki etmedi, loiter'da kaldı |
+| `k3_parca_veri_w8_t3` | 0.52 m'lik sınıf sınırı nesnesinin üstünde doğdu (aşağıda) |
+
+**W8 tohum 3, nesnenin üstünde doğuş:**
+- `baslangic.py` hedef merkezden 0-4 m ofset çekiyor. W8'de merkezdeki
+  2×2 m nesne bu dairenin içinde: tohum 3 (−0.37, −0.96) noktasına, nesnenin
+  üstüne düştü.
+- EKF orijini ve dinlenme yüksekliği nesnenin tepesinde kaldı, bütün
+  `h_gercek_*` 0.5 m kaydı. COMMIT, EKF kuralıyla gerçek 2.62 m'de geldi,
+  Gazebo devri 2.5 m'den önce. Araç adaya (geçerli bir noktaya) yumuşak indi,
+  ama temas 0.03 m eşiğinin altına hiç inmedi; özet başarısız / "bilinmiyor"
+  oldu.
+- **Düzeltme:** başlangıç hedef dışındaki ya da yükseltilmiş bir yüzeyin
+  üstüne düşerse ofset aynı akıştan yeniden çekiliyor. W5'te 10×10
+  platformun köşesi 7.07 m; 6.5-8 m ofset köşeye düşebilir, o da kapsanıyor.
+- **Tarama:** W1-W8 ve 45 ada dünyasının hepsi, tohum 1-4. Etkilenen tek çift
+  W8 tohum 3'tü.
+
+**Tekrarlar (03:04-03:08):** üçü de başarılı, temas 0.30 m/s. İlk denemeleri
+`_karantina/2026-10-04_basarisiz/` altında.
+
+## Veri seti (Aşama 6, `tools/veri/birlestir.py`)
+
+**218 bölüm, `~/eland_veri/tum_ozet.csv`.** Başarılı 195. Kalan 23'ün hepsi
+beklenen:
+- 19'u K5 / K5r tanımlama (inmiyor),
+- 4'ü negatif örnek (W1 ×3, ada t2012).
+
+Ayrıca 6 bölüm "başarılı" sayılıyor ama sert temas:
+- W5 Kol 0 ×3, 1.47 m/s,
+- K3 ×3, 1.10-1.33 m/s.
+
+Bölme anahtar düzeyinde (85 anahtar): train 62 / val 10 / test 13 (%73 / %12 /
+%15). Bölüm düzeyinde 140 / 31 / 47 (%64 / %14 / %22). Fark, anahtarların
+bölüm sayılarının eşit olmamasından: bir ada ya da bir dünya+tohum bütünüyle
+tek bölmeye gidiyor.
+
+| Kol | train | val | test |
+|---|---|---|---|
+| Kol 0 | 19 | 5 | 7 |
+| K1 | 16 | 4 | 12 |
+| K2 | 12 | 3 | 9 |
+| K3 | 64 | 6 | 10 |
+| K4 | 9 | 3 | 0 |
+| K5 (rüzgârsız) | 8 | 0 | 4 |
+| K5r (rüzgârlı + eş) | 2 | 0 | 5 |
+| Aşama 5 | 10 | 10 | 0 |
+
+- **K4'te ve Aşama 5'te test yok.** Tek dünya (W3) ve az tohum var; anahtar
+  dünya+tohum olduğu için bu kollar 2-12 anahtara düşüyor.
+- **Aynı (dünya, tohum) farklı kollarda hep aynı bölmede.** Aynı başlangıç
+  koşulu bölmeler arasında sızmıyor. Bilinçli bir seçim.
+- **Kol bazında dengeli test istenirse** kol katmanlı bir bölme eklenebilir,
+  ama o zaman aynı başlangıç farklı bölmelere düşer.
+
+Birleşik dosyalar `_bolme/<bölme>/birlesik_<bölme>.mat`: train 36.9 MB,
+val 8.9 MB, test 12.8 MB.
+  Diğer bütün başlangıçlar aynı kaldı (uçurulmuş bölümlerin `dogus` alanıyla
+  karşılaştırıldı).
