@@ -1443,3 +1443,17 @@ koşuyla gösterilsin.
   yeniden gönderildi, mod ikinci denemede seçildi. Bekleme modu ~7 s
   geciktirdi.
 - **Açıkta:** ilk komut tuttu, ek gecikme yok.
+
+**Karar** (diğer sohbet, ek maddeye onay):
+- **Bundan sonraki toplu koşu listeleri:** her `kosu.sh` satırı
+  `RUN_SIM_MOD_TEKRAR=2` ile başlar.
+- **`run_sim.sh`'nin varsayılanı kapalı kalır,** değiştirilmez.
+- **Sonraki raporda** `run_sim.log`'lardan kaç koşuda deneme > 1 olduğu ve bu
+  koşuların sonucu ayrıca sayılır. Kod değişikliği gerekmiyor.
+  - Satırlar: `[run_sim]   mod secilmedi (nav_state X, deneme k)` ve
+    `[run_sim]   mod secildi (nav_state 23, deneme k)`.
+  - Deneme > 1 olan koşular: `grep -l 'deneme [2-9])' <kok>/*/*/*/run_sim.log`.
+    Bu, yeniden denemede seçilenleri de hiç seçilemeyenleri de bulur.
+  - Hiç seçilemeyende yalnız `mod secilmedi` satırları var, son deneme N + 1.
+  - Sınama koşusunda denendi: `sinama` eşleşti, `acik` ve `kapali`
+    eşleşmedi.
