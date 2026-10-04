@@ -136,7 +136,7 @@ detector_node:
     # rho and view_bounded at mask rate (~10 Hz) on rho_topic, one
     # eland_msgs/GoruntuKapsami per mask with the mask's capture stamp. The
     # candidate keeps carrying them at decision rate (~1.8 Hz) either way.
-    # Nothing subscribes to it yet.
+    # Nothing in the flight stack subscribes to it yet (the data recorder does).
     publish_rho: false
     rho_topic: "/eland/rho"
 
