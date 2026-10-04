@@ -48,6 +48,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import basari  # noqa: E402
 import dunya as dunya_mod  # noqa: E402
 import ozellik  # noqa: E402
 
@@ -595,6 +596,8 @@ def build(node, a):
             oz['basari_olcutu'] = 'landed + kor degil + temas noktasi hedef yuzeyde'
     oz['temas_yeri_uygun'] = yer_ok
     oz['basarili'] = bool(inis and not oz['kor_inis'] and bool(yer_ok))
+    # and two levels of it by touchdown speed, < 0.5 and < 1.0 m/s
+    oz.update(basari.temas_seviyeleri(oz))
     oz['sureklilik'] = [
         continuity('vehicle_local_position', lp[:, 0] if len(lp) else []),
         continuity('vehicle_attitude', att[:, 0] if len(att) else []),

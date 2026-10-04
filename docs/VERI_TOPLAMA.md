@@ -1184,3 +1184,114 @@ Doğrulama:
   karşılaştırılacak.
 - **Ayrıca:** sert temas yaşayan 3 K3 bölümü her iki ayarla yeniden
   uçurulacak.
+
+---
+
+# Tur 4 — Tur 3 sonucuna kararlar (2026-10-04)
+
+**Kararlar** (diğer sohbet):
+1. Mod `/eland/rho`'yu şimdilik kullanmıyor. Tasarım Simulink'te
+   doğrulanınca ayrı madde gelecek. **Yapılan bir şey yok.**
+2. `commit_irtifa_yasasi` varsayılanı `true` (yaml'da); `false` karşılaştırma
+   için kalıyor. Yeniden doğrulama: Kol 0, W2-W6 ve adalar, ≥ 20 bölüm; temas
+   hızı ortanca / en büyük / sert temas sayısı (≥ 0.5 ve ≥ 1.0 m/s), açık ve
+   kapalı yan yana.
+3. W5 kapsam dışı değil; tasarlanacak gözlemcinin test senaryosu olacak.
+   **Yapılan bir şey yok.**
+4. Başarı ölçütüne temas hızı: 0.5 ve 1.0 m/s iki seviye, ortanca ve en büyük
+   hızla birlikte. Mevcut 218 bölüm yeniden puanlanacak, yeni koşu yok.
+
+Kurallar aynı: onaylı, parametreli; varsayılan davranış değişiyorsa açıkça
+yazılacak.
+
+## Madde 4 — temas hızıyla yeniden puanlama (tamam)
+
+**Varsayılan değişmedi.** `basarili` aynı anlamda kaldı (landed + kör değil +
+temas yeri uygun). Yanına iki alan eklendi:
+- `basarili_v10`: başarılı **ve** temas hızı < 1.0 m/s.
+- `basarili_v05`: başarılı **ve** temas hızı < 0.5 m/s.
+
+Temas hızı yoksa ikisi de false. "Sert temas" = hız ≥ seviye. Eşikler tek
+yerde: `tools/veri/basari.py`.
+
+**Değişen dosyalar** (yalnız veri araçları, uçuş yığınına dokunulmadı):
+- `tools/veri/basari.py` (yeni): iki seviye ve `temas_seviyeleri()`.
+- `kaydedici.py`: yeni bölümler iki alanı `basarili`'nin hemen ardından
+  kendisi yazıyor.
+- `ozet_yenile.py`: başarıyı yeniden hesapladığı yerde iki alanı da.
+- `birlestir.py`: `tum_ozet.csv` ve `birlesik_*.mat`'e iki sütun, değerler
+  `basari.py`'den.
+- `temas_puanla.py` (yeni): bölümlerin `ep_ozet.json`'una iki alanı yazıyor,
+  raporu çıkarıyor (`~/eland_veri/_tur4/temas_puanla.md`).
+- `data_dictionary.md`.
+
+**Doğrulama:**
+- **Yedek:** önce `~/eland_veri/_tur4/ep_ozet_yedek_tur4oncesi.tar.gz` (218
+  `ep_ozet.json`) ve `tum_ozet_tur4oncesi.csv` alındı.
+- **`ep_ozet.json`:** yedekle karşılaştırıldı. 218 dosyaya yalnız
+  `basarili_v05` / `basarili_v10` eklendi, eski alanlarda 0 fark.
+- **`birlestir.py` yeniden:** 218 satır, aynı bölümler, eski sütunlarda 0
+  fark. Bölme aynı (train 140 / val 31 / test 47). `birlesik_test.mat`'in `ep`
+  yapısında iki alan var (`scipy.io.loadmat` ile okundu).
+- **`kaydedici.py`:** Tur 4'ün ilk doğrulama koşusu
+  (`kapali/kol0_veri_w2_t1`) iki alanı kendisi yazdı.
+- **Örnek MATLAB seti** (`_ornek_matlab`, Tur 3 E) yeniden üretilmedi, bu
+  alanlar onda yok.
+
+**Sonuç: 195 başarılı bölümün 189'u 1.0 seviyesini, 183'ü 0.5 seviyesini
+geçiyor.**
+
+| | Bölüm | Başarılı (eski) | Başarılı, v < 1.0 | Başarılı, v < 0.5 | Temas ortanca | En büyük | v ≥ 0.5 | v ≥ 1.0 |
+|---|---|---|---|---|---|---|---|---|
+| Toplam | 218 | 195 | 189 | 183 | 0.30 m/s | 1.48 m/s | 12 | 6 |
+| K5/K5r ve negatifler hariç | 195 | 195 | 189 | 183 | 0.30 | 1.48 | 12 | 6 |
+
+Kol başına:
+
+| Kol | Bölüm | Başarılı (eski) | v < 1.0 | v < 0.5 | Ortanca | En büyük | v ≥ 0.5 | v ≥ 1.0 |
+|---|---|---|---|---|---|---|---|---|
+| kol0 | 31 | 27 | 24 | 24 | 0.30 | 1.48 | 3 | 3 |
+| k1_v0.4 / v0.7 / v1.0 / v1.5 | 8 + 8 + 8 + 8 | 8 her biri | 8 her biri | 7 her biri | 0.30-0.31 | 0.50-0.51 | 1 her biri | 0 |
+| k2_d0.2 / d0.35 | 8 + 8 | 8 her biri | 8 her biri | 7 her biri | 0.30 | 0.50 | 1 her biri | 0 |
+| k2_d0.5 | 8 | 8 | 8 | 8 | 0.30 | 0.49 | 0 | 0 |
+| k3_carpan | 40 | 40 | 39 | 39 | 0.31 | 1.10 | 1 | 1 |
+| k3_parca | 40 | 40 | 38 | 38 | 0.30 | 1.33 | 2 | 2 |
+| k4 | 12 | 12 | 12 | 12 | 0.30 | 0.31 | 0 | 0 |
+| a5_k1v1.0, a5_k2d0.35 | 10 + 10 | 10 her biri | 10 her biri | 10 her biri | 0.30 | 0.31 | 0 | 0 |
+| k5 / k5r (6 kol) | 19 | 0 | 0 | 0 | — (inmiyor) | — | 0 | 0 |
+
+Kol 0'da W1 ×3 ve t2012 negatif örnek (başarısızlık beklenen). Diğer Kol 0
+dünyalarında temas 0.29-0.31 m/s, W5 hariç.
+
+**Seviyelerin düşürdüğü 12 bölüm:**
+
+| Bölüm | Temas hızı | v < 1.0 | v < 0.5 |
+|---|---|---|---|
+| kol0_veri_w5_t3 / t1 / t2 | 1.479 / 1.472 / 1.467 m/s | hayır | hayır |
+| k3_parca_veri_ada_t2024_t2 | 1.333 | hayır | hayır |
+| k3_parca_veri_ada_t2029_t1 | 1.273 | hayır | hayır |
+| k3_carpan_veri_ada_t2029_t2 | 1.096 | hayır | hayır |
+| k1_v0.4_veri_w5_t1 | 0.507 | evet | hayır |
+| k2_d0.2_veri_w5_t2, k2_d0.35_veri_w5_t1 | 0.504, 0.504 | evet | hayır |
+| k1_v0.7_veri_w5_t1 | 0.503 | evet | hayır |
+| k1_v1.0_veri_w5_t2 | 0.502 | evet | hayır |
+| k1_v1.5_veri_w5_t2 | 0.501 | evet | hayır |
+
+- **v ≥ 1.0 (6):** Tur 2'de "başarılı sayılan sert temas" diye bildirilen
+  altı bölüm.
+  - Kol 0 W5 ×3: COMMIT'e hiç girilmedi (EKF yüksekliği platformun ~4 m
+    üstünde kalıyor).
+  - K3 ×3: erken COMMIT (Gazebo hedef yüksekliği 6.8 / 13.6 / 14.6 m'de).
+    Tur 3'te B ile yeniden uçurulanlar bunlar.
+- **0.5 ≤ v < 1.0 (6): hepsi K1/K2'nin W5 bölümleri, ve bu seviye orada
+  gürültüyle bölüyor.**
+  - Veri kipindeki 18 W5 bölümü (K1, K2, K3) `--devir-yok --son-hiz 0.5`
+    ile uçtu: politika sona kadar 0.5 m/s istiyor.
+  - Temas hızları 0.476-0.507 m/s. 6'sı 0.500'ün üstünde, 12'si altında.
+  - Yani bu bölümlerde 0.5 seviyesini geçmek ya da kalmak ±0.01 m/s'lik
+    farka bağlı.
+- **Dağılım üç kümeli:**
+  - ~0.30 m/s: modun alt sınırı `descent_min_mps`.
+  - 0.48-0.51 m/s: W5 veri kipi.
+  - 1.10-1.48 m/s: sert temaslar.
+  - 0.51 ile 1.0 m/s arasında temas yok.

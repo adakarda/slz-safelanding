@@ -28,14 +28,19 @@ import hashlib
 import json
 import os
 import re
+import sys
 
 import numpy as np
 import scipy.io
 import yaml
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import basari  # noqa: E402
+
 SKIP = {'dogrulama', 'dunyalar', '_bolme'}
 OZET_COLS = ['ep_id', 'kol', 'dunya', 'tohum', 'bolme', 'negatif_ornek', 'model',
-             'ruzgar_mps', 'politika', 'bozucu', 'basarili', 'temas_yeri_uygun',
+             'ruzgar_mps', 'politika', 'bozucu', 'basarili', 'basarili_v05',
+             'basarili_v10', 'temas_yeri_uygun',
              'kor_inis', 'inis_suresi_mod_landed_s', 'alcalma_suresi_validate_landed_s',
              't_temas_gercek', 'temas_dikey_hiz_gercek_hesap_mps',
              'ground_contact_gecikmesi_s', 'landed_gecikmesi_s', 'commit_h_ekf_m',
@@ -101,6 +106,9 @@ def main():
             'ruzgar_mps': ks.get('ruzgar_mps', 0.0),
             'politika': ks.get('politika', ''), 'bozucu': ks.get('bozucu', ''),
             'yol': ep_dir,
+            # from basarili and the touchdown speed, whether or not the
+            # episode's ep_ozet.json was rescored
+            **basari.temas_seviyeleri(oz),
         }
         for k in OZET_COLS:
             if k not in row:

@@ -126,6 +126,7 @@ merkezi arası; yalnız hedefli dünyalarda).
 | abort_sayisi, hold_sayisi, abort_hold_nedenleri, kor_inis | |
 | aday_kayip_* | mod etkinken 3 s'den uzun geçerli adaysız aralıklar |
 | basarili, basari_olcutu, temas_yeri_uygun | landed + kör değil + temas yeri uygun (hedefli dünyada hedef yüzey, açık alanda temastan önceki maskede merkez inilebilir) |
+| basarili_v10, basarili_v05 | `basarili` **ve** temas hızı < 1.0 / < 0.5 m/s (Tur 4, `basari.py`); temas hızı yoksa ikisi de false. `basarili`'nin anlamı değişmedi. 2026-10-04'ten önceki 218 bölüme `temas_puanla.py` sonradan ekledi, o bölümlerin `ep.mat`'indeki `ozet_json`'da yoklar |
 | z_dinlenme_m, z_dinlenme_kaynak | model orijininin yerde dururkenki yüksekliği |
 | yerel_dunya_ofset_en_m | dünya (doğu, kuzey) = ofset + yerel (doğu, kuzey); bölümün ortancası |
 | sureklilik | kanal başına mesaj sayısı, hız, en uzun boşluk, jitter, kayıp tahmini |
@@ -203,3 +204,8 @@ içindir**), `bozucu`, `ek_parametreler`, `git`, `px4_parametreleri`.
 | `_ruzgar_kalibrasyon/` | rüzgâr ölçeği denemeleri (1.0, ~0, SDF 0.075), `BENIOKU.md` ile |
 | `_duman/` | uçurulmamış kolların duman testleri |
 | `_bolme/` | `birlestir.py`'nin train / val / test bağlantıları ve birleşik `.mat` |
+| `_tur3/` | Tur 3 çevrimdışı çözümlemeleri (C, D) ve A/B doğrulama tablosu |
+| `_tur3_dogrulama/` | Tur 3 A/B doğrulama koşuları (ayar başına alt klasör) |
+| `_ornek_matlab/` (+ `.zip`) | Tur 3 E: seçilmiş bölümlerin tek dosyalık `.mat` örnekleri ve sözlükleri |
+| `_tur4/` | Tur 4: temas hızıyla yeniden puanlama raporu, öncesinin yedeği (`ep_ozet_yedek_tur4oncesi.tar.gz`, `tum_ozet_tur4oncesi.csv`) |
+| `_tur4_dogrulama/` | Tur 4: `commit_irtifa_yasasi` açık / kapalı Kol 0 koşuları |

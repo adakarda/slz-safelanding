@@ -19,6 +19,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import basari  # noqa: E402
 import dunya as dunya_mod  # noqa: E402
 from dogrula import load_csv  # noqa: E402
 
@@ -78,6 +79,7 @@ def main():
         oz.update(new)
         oz['basarili'] = bool(oz.get('t_px4_landed') is not None and not oz.get('kor_inis')
                               and bool(oz.get('temas_yeri_uygun')))
+        oz.update(basari.temas_seviyeleri(oz))
         oz['ozet_yenilendi'] = 'ozet_yenile.py: temas capasi min(t_validate, t_commit)'
         json.dump(oz, open(p, 'w'), indent=1, ensure_ascii=False)
         v = new.get('temas_dikey_hiz_gercek_hesap_mps')
