@@ -233,7 +233,7 @@ COMMIT yükseklikleri Gazebo'nun hedef yüzeye göre yüksekliği.
 - **40 bölüm.** Bölüm başına 74-85 s (ölçülen, ilk 8), yani yaklaşık 55 dk
   (_tahmin).
 - **Bitince ayrı bir sonuç metniyle** göndereceğim
-  (`docs/VERI_TOPLAMA_GERI_BILDIRIM_TUR4_SONUC.md`). İçinde:
+  (`docs/geri_bildirim/VERI_TOPLAMA_GERI_BILDIRIM_TUR4_SONUC.md`). İçinde:
   - Ayar ve dünya başına temas ortanca / en büyük, v ≥ 0.5 ve v ≥ 1.0 sayısı,
     açık / kapalı yan yana.
   - Başarı: eski ölçüt ve iki seviye.

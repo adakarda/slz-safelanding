@@ -15,7 +15,7 @@
 >
 > Bu metin Tur 3'ün tamamını tek yerde topluyor: ne yapıldı, nasıl
 > doğrulandı, ne ölçülemedi, kod, dosya ve etiket dizini. Kısa sonuç raporu
-> ayrıca `docs/VERI_TOPLAMA_GERI_BILDIRIM_TUR3_SONUC.md`'de; bu metin onun
+> ayrıca `docs/geri_bildirim/VERI_TOPLAMA_GERI_BILDIRIM_TUR3_SONUC.md`'de; bu metin onun
 > ayrıntılı hâli.
 >
 > - **Tarih:** 2026-10-04.
@@ -337,7 +337,7 @@ dünya ve tohum:
 
 ## 6. Çevrimdışı kısım (C, D, E) — kısa
 
-Ayrıntı `docs/VERI_TOPLAMA_GERI_BILDIRIM_TUR3.md` ve `docs/VERI_TOPLAMA.md`
+Ayrıntı `docs/geri_bildirim/VERI_TOPLAMA_GERI_BILDIRIM_TUR3.md` ve `docs/VERI_TOPLAMA.md`
 "Tur 3".
 
 - **C — bozucular uygulanmış.** VALIDATE'te `rho_bozuk − rho_temiz`:
@@ -391,7 +391,7 @@ Ayrıntı `docs/VERI_TOPLAMA_GERI_BILDIRIM_TUR3.md` ve `docs/VERI_TOPLAMA.md`
 **Belgeler:**
 - `docs/KONTROLCU_TASARIM_BRIEF.md`: brif.
 - `docs/VERI_TOPLAMA.md`: canlı rapor, bütün tablolar.
-- `docs/VERI_TOPLAMA_GERI_BILDIRIM_TUR2.md`: veri, tesis, kollar.
+- `docs/geri_bildirim/VERI_TOPLAMA_GERI_BILDIRIM_TUR2.md`: veri, tesis, kollar.
 - `tools/veri/data_dictionary.md`: sütun sözlüğü (`rho_yayini.csv` dahil).
 
 ---

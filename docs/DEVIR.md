@@ -7,6 +7,21 @@ yapıldığını anlayabilmek ve Claude Code ile geliştirmeye devam edebilmek.
 Depo: `git@github.com:adakarda/slz-safelanding.git`
 Ana dal: `main` · Yan dal: `rgb-akis-denemesi` (yarım iş, §13.2)
 
+> **2026-10-05 notu — güncel giriş noktaları:**
+> - [`../README.md`](../README.md): durum ve çalıştırma.
+> - [`../AGENTS.md`](../AGENTS.md): çalışma kuralları.
+> - [`README.md`](README.md): doküman haritası.
+> - [`KONTROLCU_OLCUMLERI.md`](KONTROLCU_OLCUMLERI.md): güncel kontrol
+>   ölçümleri.
+>
+> Bu dosyanın mimari, karar mantığı ve tuzaklar kısmı geçerli. **Eskiyen
+> sayılar:**
+> - kamera 5 Hz değil 10 Hz (`v4.2`);
+> - tesis ölü zamanı 0.3 s değil 0.04-0.08 s (`v4.8`);
+> - §15'teki "ölü zaman ≈ 0.3 s" beklentisi eski yöntemden.
+>
+> 2026-10-03 sonrası iş (veri toplama, Tur 1-4) `VERI_TOPLAMA.md`'de.
+
 ---
 
 ## 1. Proje nedir
@@ -334,6 +349,9 @@ türetir, çünkü dünya üreteci de aynı YAML'ı okuyor ve eksik anahtarla ko
 
 ## 9. Dokümanlar haritası
 
+Güncel ve eksiksiz harita: [`README.md`](README.md) (bu klasörde). Aşağıdaki
+tablo 2026-09'daki hâli.
+
 | Dosya | İçerik |
 |---|---|
 | `docs/OZET.md` | Bir sayfalık özet — ilk okunacak |
@@ -528,7 +546,10 @@ sınıf, en küçük nesne. Değerlendirmeyi asimetrik kur — sınıf başına
 
 Bu proje Claude Code ile geliştirildi. Verimli devam etmek için:
 
-**İlk oturumda okutulacaklar:** `docs/DEVIR.md` (bu dosya), `docs/OZET.md`,
+**2026-10-05'ten beri:** Claude Code depo kökündeki `CLAUDE.md`'yi (o da
+`AGENTS.md`'yi) kendisi okur; ilk okuma listesi `docs/README.md` §1'de.
+
+**İlk oturumda okutulacaklar (eski liste):** `docs/DEVIR.md` (bu dosya), `docs/OZET.md`,
 `docs/TEZ_NOTLARI.md`. `docs/DURUM.md` uzun; ilgili bölümü işaret et.
 
 **İşe yarayan alışkanlıklar:**

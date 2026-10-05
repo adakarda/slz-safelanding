@@ -485,7 +485,7 @@ python3 tools/veri/ornek_mat.py --cikti ~/eland_veri/_ornek_matlab \
 **İlgili belgeler:**
 - [`docs/VERI_TOPLAMA.md`](https://github.com/adakarda/slz-safelanding/blob/main/docs/VERI_TOPLAMA.md):
   "Tur 3" bölümü, bütün tablolar.
-- [`docs/VERI_TOPLAMA_GERI_BILDIRIM_TUR2.md`](https://github.com/adakarda/slz-safelanding/blob/main/docs/VERI_TOPLAMA_GERI_BILDIRIM_TUR2.md):
+- [`docs/geri_bildirim/VERI_TOPLAMA_GERI_BILDIRIM_TUR2.md`](https://github.com/adakarda/slz-safelanding/blob/main/docs/geri_bildirim/VERI_TOPLAMA_GERI_BILDIRIM_TUR2.md):
   veri ve tesis özeti.
 - [`docs/KONTROLCU_TASARIM_BRIEF.md`](https://github.com/adakarda/slz-safelanding/blob/main/docs/KONTROLCU_TASARIM_BRIEF.md):
   kontrolcü brifi.

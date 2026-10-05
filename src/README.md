@@ -6,6 +6,10 @@ noktası seçen ve oraya PID kontrollü inen, PX4'e kayıtlı bir ROS 2 uçuş m
 Tasarım kararları, ölçümler ve bilinen sınırlar: `docs/PLAN.md` ve
 `docs/CHECKLIST.md`. Bu dosya yalnızca çalıştırma talimatı.
 
+**Bütün dokümanların haritası:** `docs/README.md`. **Kontrol ölçümleri:**
+`docs/KONTROLCU_OLCUMLERI.md`. **Çalışma kuralları:** depo kökündeki
+`AGENTS.md`.
+
 ---
 
 ## Paketler

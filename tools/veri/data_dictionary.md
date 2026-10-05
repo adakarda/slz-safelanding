@@ -219,6 +219,7 @@ Bölüm başına bir satır, `ep_ozet.json` ve `kosul.yaml`'dan; sütunlar
 | `_karantina/2026-10-04_basarisiz/` | sim açılmayan / mod komutu kaybolan iki bölümün ilk denemesi |
 | `_ruzgar_kalibrasyon/` | rüzgâr ölçeği denemeleri (1.0, ~0, SDF 0.075), `BENIOKU.md` ile |
 | `_duman/` | uçurulmamış kolların duman testleri |
+| `_duman_2026-10-05/` | doküman düzenlemesinden (`v6.7`) sonra simülasyonun çalıştığını gösteren tek koşu (Kol 0 W2 t1, `RUN_SIM_MOD_TEKRAR=2`) |
 | `_bolme/` | `birlestir.py`'nin train / val / test bağlantıları ve birleşik `.mat` |
 | `_tur3/` | Tur 3 çevrimdışı çözümlemeleri (C, D) ve A/B doğrulama tablosu |
 | `_tur3_dogrulama/` | Tur 3 A/B doğrulama koşuları (ayar başına alt klasör) |
