@@ -52,7 +52,7 @@ Tezin iki ana hattı:
 | Uçtan uca acil iniş (simülasyon) | çalışıyor; 10 rastgele dünyada 10/10 iniş, RMS dikey takip 0.19 m/s |
 | Dikey hız iç döngüsü (PI + ileri besleme) | çalışıyor; RMS takip hatası 0.32 → 0.20 m/s |
 | Veri toplama hattı ve veri seti | **218 bölüm**, indir: Release [`v6.8-veri-seti`](https://github.com/adakarda/slz-safelanding/releases/tag/v6.8-veri-seti), açıklama [`docs/VERI_SETI.md`](docs/VERI_SETI.md). Araçlar `tools/veri/` |
-| Görüntü-tabanlı dikey kontrolcü | **tasarımda.** Proje sahibi ayrı bir sohbette (Simulink) tasarlıyor. Gözlemcili dış çevrim Simulink'te nominal çalışıyor (2026-10-05); mod kodunda henüz yok. Durum ve kararlar [`docs/KONTROLCU_TASARIM_DURUMU.md`](docs/KONTROLCU_TASARIM_DURUMU.md); ölçümler [`docs/KONTROLCU_OLCUMLERI.md`](docs/KONTROLCU_OLCUMLERI.md) |
+| Görüntü-tabanlı dikey kontrolcü | **tasarımda.** Proje sahibi ayrı bir sohbette (Simulink) tasarlıyor. Durum ve kararlar [`docs/KONTROLCU_TASARIM_DURUMU.md`](docs/KONTROLCU_TASARIM_DURUMU.md); ölçümler [`docs/KONTROLCU_OLCUMLERI.md`](docs/KONTROLCU_OLCUMLERI.md) |
 | Mod `/eland/rho` (ρ, 10 Hz) kullanımı | yayın hazır (varsayılan kapalı); modda kullanımı tasarım doğrulanınca |
 | Yükseltilmiş hedef (W5) | bilinen sınır: EKF irtifası hedefin ~4 m üstünde, temas ~1.5 m/s; gözlemci tasarlanacak |
 | Gerçek segmentasyon modeli | ertelendi; maske şu an Gazebo'nun kusursuz etiketi |
