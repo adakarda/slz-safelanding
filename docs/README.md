@@ -48,8 +48,9 @@ Yeni gelen biri (insan ya da AI ajanı):
 
 | Dosya | Ne | Güncel mi |
 |---|---|---|
-| [`KONTROLCU_TASARIM_DURUMU.md`](KONTROLCU_TASARIM_DURUMU.md) | **kontrolcü işi nerede:** kim tasarlıyor, Tur 1-4 kararları, kodda bugün hangi parametre ne, açık işler, katkı | güncel (2026-10-08) |
+| [`KONTROLCU_TASARIM_DURUMU.md`](KONTROLCU_TASARIM_DURUMU.md) | **kontrolcü işi nerede:** kim tasarlıyor, Tur 1-4 kararları, kodda bugün hangi parametre ne, Simulink durumu ve ölçümlerle karşılaştırması (§6), açık işler, katkı | güncel (2026-10-08) |
 | [`KONTROLCU_OLCUMLERI.md`](KONTROLCU_OLCUMLERI.md) | **kontrolcü için ölçülmüş her şey tek yerde:** tesis, iç döngü, alçalma ve COMMIT yasaları, sinyal hızları ve gecikmeler, ρ, EKF, temas hızı, bozucular, reddedilenler | güncel (2026-10-05) |
+| [`kararlar/`](kararlar/) | diğer sohbetin karar paketleri. İlki [`KARAR_PAKETI_01.md`](kararlar/KARAR_PAKETI_01.md) (2026-10-08, taslak). Diğer sohbet doğrudan buraya push ediyor | her paket geldiği günkü hâliyle |
 | [`KONTROLCU_TASARIM_BRIEF.md`](KONTROLCU_TASARIM_BRIEF.md) | görüntü-tabanlı dikey iniş kontrolcüsü tasarım brifi; tasarımı yapan sohbet asistanına verilmek için yazıldı (§14 açılış mesajı, §12 beklenen çıktı biçimi) | 2026-10-02; §7 tesis 2026-10-03'te güncellendi |
 | [`TEZ_NOTLARI.md`](TEZ_NOTLARI.md) | teze/postere girecek savunulabilir sayılar ve gerekçeler | §2 kontrol, §3 karar döngüsü, §4 yöntem |
 
