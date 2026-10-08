@@ -13,14 +13,17 @@
 Yeni gelen biri (insan ya da AI ajanı):
 
 1. [`../README.md`](../README.md): proje ne, şu an nerede, nasıl çalıştırılır.
-2. [`../AGENTS.md`](../AGENTS.md): çalışma kuralları. Ajanlar için zorunlu,
+2. [`YENI_KATILAN.md`](YENI_KATILAN.md): rolüne göre başlangıç, AI ajanıyla
+   çalışma, katkı akışı.
+3. [`../AGENTS.md`](../AGENTS.md): çalışma kuralları. Ajanlar için zorunlu,
    insanlar için de geçerli.
-3. Bu dosya: konuna göre aşağıdan seç.
+4. Bu dosya: konuna göre aşağıdan seç.
 
 | Konu | Önce | Sonra |
 |---|---|---|
-| Dikey iniş kontrolcüsü | [`KONTROLCU_OLCUMLERI.md`](KONTROLCU_OLCUMLERI.md) | [`KONTROLCU_TASARIM_BRIEF.md`](KONTROLCU_TASARIM_BRIEF.md), [`TEZ_NOTLARI.md`](TEZ_NOTLARI.md) §2 |
-| Veri toplama (MATLAB/Simulink, RL) | [`VERI_TOPLAMA.md`](VERI_TOPLAMA.md) (en son tur en altta) | [`../tools/veri/README.md`](../tools/veri/README.md), [`../tools/veri/data_dictionary.md`](../tools/veri/data_dictionary.md) |
+| Dikey iniş kontrolcüsü | [`KONTROLCU_TASARIM_DURUMU.md`](KONTROLCU_TASARIM_DURUMU.md), [`KONTROLCU_OLCUMLERI.md`](KONTROLCU_OLCUMLERI.md) | [`KONTROLCU_TASARIM_BRIEF.md`](KONTROLCU_TASARIM_BRIEF.md), [`TEZ_NOTLARI.md`](TEZ_NOTLARI.md) §2 |
+| Veri setini kullanmak (MATLAB/Simulink, Python, RL) | [`VERI_SETI.md`](VERI_SETI.md) (indirme Release'ten) | [`../tools/veri/data_dictionary.md`](../tools/veri/data_dictionary.md) |
+| Veri toplamak / nasıl toplandı | [`VERI_TOPLAMA.md`](VERI_TOPLAMA.md) (en son tur en altta) | [`../tools/veri/README.md`](../tools/veri/README.md) |
 | Sistemi baştan anlamak | [`DEVIR.md`](DEVIR.md) | [`../src/README.md`](../src/README.md) |
 | Ne yapıldı, ne bekliyor | [`YAPILACAKLAR.md`](YAPILACAKLAR.md) | `VERI_TOPLAMA.md`'nin son "Tur" bölümü |
 | Algı, karar, harita, engeller | [`DURUM.md`](DURUM.md) (dizin §3) | [`TEZ_NOTLARI.md`](TEZ_NOTLARI.md) §3 |
@@ -36,14 +39,16 @@ Yeni gelen biri (insan ya da AI ajanı):
 |---|---|---|
 | [`../README.md`](../README.md) | proje özeti, durum, çalıştırma, depo haritası | güncel |
 | [`../AGENTS.md`](../AGENTS.md) | AI ajanları (ve insanlar) için çalışma kuralları, komutlar, tuzaklar | güncel |
+| [`YENI_KATILAN.md`](YENI_KATILAN.md) | yeni katılan için: rolüne göre başlangıç, AI ajanıyla çalışma, katkı akışı, sık sorulanlar | güncel (2026-10-08) |
 | [`DEVIR.md`](DEVIR.md) | tam devir: mimari, dört test, sınıflar, kontrol, kurulum, tuzaklar, Claude Code ile çalışma | 2026-09; mimari ve tuzaklar geçerli. **Bazı sayılar eski:** kamera 5 Hz yazıyor, artık 10 Hz; tesis ölü zamanı 0.3 s yazıyor, artık 0.04-0.08 s. Güncel sayılar `KONTROLCU_OLCUMLERI.md`'de |
-| [`YAPILACAKLAR.md`](YAPILACAKLAR.md) | isterler ↔ yapılanlar, açık maddeler, karar bekleyenler | 2026-09-26 itibarıyla. Sonrası (veri toplama, Tur 1-4) `VERI_TOPLAMA.md`'de |
+| [`YAPILACAKLAR.md`](YAPILACAKLAR.md) | isterler ↔ yapılanlar, açık maddeler, karar bekleyenler | başında 2026-10-08 güncel durum bölümü; asıl değerlendirme 2026-09-26 |
 | [`OZET.md`](OZET.md) | 2026-09-03/04 oturumunun bir sayfalık özeti | tarihsel |
 
 ### Kontrol
 
 | Dosya | Ne | Güncel mi |
 |---|---|---|
+| [`KONTROLCU_TASARIM_DURUMU.md`](KONTROLCU_TASARIM_DURUMU.md) | **kontrolcü işi nerede:** kim tasarlıyor, Tur 1-4 kararları, kodda bugün hangi parametre ne, açık işler, katkı | güncel (2026-10-08) |
 | [`KONTROLCU_OLCUMLERI.md`](KONTROLCU_OLCUMLERI.md) | **kontrolcü için ölçülmüş her şey tek yerde:** tesis, iç döngü, alçalma ve COMMIT yasaları, sinyal hızları ve gecikmeler, ρ, EKF, temas hızı, bozucular, reddedilenler | güncel (2026-10-05) |
 | [`KONTROLCU_TASARIM_BRIEF.md`](KONTROLCU_TASARIM_BRIEF.md) | görüntü-tabanlı dikey iniş kontrolcüsü tasarım brifi; tasarımı yapan sohbet asistanına verilmek için yazıldı (§14 açılış mesajı, §12 beklenen çıktı biçimi) | 2026-10-02; §7 tesis 2026-10-03'te güncellendi |
 | [`TEZ_NOTLARI.md`](TEZ_NOTLARI.md) | teze/postere girecek savunulabilir sayılar ve gerekçeler | §2 kontrol, §3 karar döngüsü, §4 yöntem |
@@ -70,9 +75,17 @@ Veri toplama dönemi (2026-10-03 sonrası) burada değil, `VERI_TOPLAMA.md`'de.
 | §23 | rastgele doğuş, HUD hızı, izleyici penceresi |
 | §24 | WSL saati, kapanış hijyeni, HUD 10 Hz (§24.3 gecikme tablosu), koridor genişliği |
 
+### Veri seti — `VERI_SETI.md`
+
+[`VERI_SETI.md`](VERI_SETI.md): 218 bölümlük veri setinin kullanım kılavuzu.
+- **İndirme:** GitHub Release `v6.8-veri-seti`.
+- **İçerik:** dosya yapısı, MATLAB ve Python'da okuma, yanlış sonuca götüren
+  tuzaklar.
+
 ### Veri toplama — `VERI_TOPLAMA.md`
 
-Kontrolcü tasarımı (MATLAB/Simulink) ve RL için kayıtlı iniş verisi.
+Kontrolcü tasarımı (MATLAB/Simulink) ve RL için kayıtlı iniş verisinin nasıl
+toplandığı.
 
 | Bölüm | Konu |
 |---|---|
@@ -84,7 +97,9 @@ Kontrolcü tasarımı (MATLAB/Simulink) ve RL için kayıtlı iniş verisi.
 
 - Veri dosyalarının sütunları:
   [`../tools/veri/data_dictionary.md`](../tools/veri/data_dictionary.md).
-- **Veri GitHub'da değil;** proje sahibinin makinesinde (`~/eland_veri/`).
+- **Veri deponun içinde değil,** Release'te. Dokümanlardaki `~/eland_veri/...`
+  yolları proje sahibinin makinesindeki kök; Release'teki tam arşiv ev
+  dizinine açılınca aynısı oluşur.
 
 ### Diğer sohbetle yazışma — `geri_bildirim/`
 

@@ -1,5 +1,40 @@
 # Yapılacaklar — İster ↔ Yapılan Karşılaştırması
 
+## Güncel durum — 2026-10-08 (önce bunu oku)
+
+Aşağıdaki asıl değerlendirme **2026-09-26** tarihli (`v4.3`). O tarihten
+sonra iş veri toplama ve kontrolcü tasarımına kaydı.
+
+**26 Eylül'den sonra yapılanlar** (`v4.4` → `v6.8`):
+- **Kontrolcü tasarım brifi** (`v4.4`).
+- **Veri toplama, Tur 1-4:**
+  - kaydedici, ada dünyaları, rüzgârlı model;
+  - **218 bölümlük veri seti**, GitHub Release `v6.8-veri-seti`
+    ([`VERI_SETI.md`](VERI_SETI.md)).
+- **Tesis yeniden ölçüldü:** ölü zaman 0.28 değil 0.04-0.08 s.
+- **Mod tarafında yapılanlar:**
+  - `/eland/rho` yayını (varsayılan kapalı);
+  - COMMIT irtifa yasası (varsayılan açık);
+  - temas hızlı başarı ölçütü (birincil `basarili_v10`).
+- **Çalıştırma betiği:** `run_sim.sh` temizliği ve mod seçme yeniden denemesi.
+- **Dokümanlar:** `README.md`, `AGENTS.md`,
+  [`README.md`](README.md) (harita),
+  [`KONTROLCU_OLCUMLERI.md`](KONTROLCU_OLCUMLERI.md).
+
+**Şu an açık olanlar:**
+
+| Hat | İş | Durum |
+|---|---|---|
+| 2 — görüntü-tabanlı iniş | kontrolcünün tasarımı (§4'teki "kapsama-tabanlı PID" kararı) | proje sahibi ayrı sohbette Simulink ile tasarlıyor; veri ve ölçümler hazır. Durum: [`KONTROLCU_TASARIM_DURUMU.md`](KONTROLCU_TASARIM_DURUMU.md) |
+| 2 | modun `/eland/rho`'yu kullanması | tasarım doğrulanınca tarif gelecek |
+| 2 | W5 / yükseltilmiş hedef için gözlemci | tasarlanacak |
+| 2 | §5.2'deki "`ρ̇/ρ = 2D` köprüsünü ölç" | statik ilişki ρ = A/(4.22·h²) ölçüldü ve tutuyor (Tur 3 D); türev ilişkisi gürültülü veride sınanmadı |
+| 2 | iç döngü kazançlarının yeni θ ile türetimi | açık |
+| 1 — segmentasyon | §5.1 | ertelendi; eğitimin durumu bu depodan doğrulanamıyor |
+| — | §3'teki açık kusurlar, §5.3-5.5 | 2026-09-26'daki hâliyle geçerli |
+
+---
+
 Değerlendirme tarihi: 2026-09-26 · Kod: `main` @ `v4.3-koridor-olcum`
 
 > **Son güncelleme (v4.1-v4.3, akşam):** manuel kontroldeki failsafe WSL saat

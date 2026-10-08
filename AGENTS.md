@@ -20,9 +20,14 @@ Claude Code, Codex, Cursor, Copilot ya da başka bir ajanla bu depoda
   - Kapalı çevrim dikey hız kontrolüyle iner.
 - **Şu anki ana iş:** görüntü-tabanlı dikey iniş kontrolcüsü.
   - Proje sahibi bunu ayrı bir sohbette (MATLAB/Simulink) tasarlıyor.
-  - Bu depo ona ölçüm ve kayıtlı veri sağlıyor (`tools/veri/`,
-    218 bölüm).
-  - O sohbetin kararları `docs/VERI_TOPLAMA.md`'de "Tur N" bölümlerinde.
+  - Bu depo ona ölçüm ve kayıtlı veri sağlıyor (`tools/veri/`, 218 bölüm).
+  - Veri GitHub Release `v6.8-veri-seti`'te (`docs/VERI_SETI.md`).
+  - O sohbetin kararları `docs/VERI_TOPLAMA.md`'de "Tur N" bölümlerinde;
+    özeti `docs/KONTROLCU_TASARIM_DURUMU.md`'de.
+  - Simulink modeli depoda değil.
+- **Bilgi kaynağı:** projeye katılanlar için tek kaynak GitHub. Yeni bir
+  karar, ölçüm ya da durum değişikliği depoya yazılmadıkça başkası onu
+  bilemez.
 - **Proje sahibi:** @adakarda.
 
 ## 2. Önce ne oku
@@ -31,10 +36,14 @@ Claude Code, Codex, Cursor, Copilot ya da başka bir ajanla bu depoda
 2. `docs/README.md`: bütün dokümanların haritası. Uzun dosyalar için bölüm
    dizini var.
 3. Göreve göre:
-   - **kontrol:** `docs/KONTROLCU_OLCUMLERI.md`;
-   - **veri:** `docs/VERI_TOPLAMA.md` (son tur en altta) ve
+   - **kontrol:** `docs/KONTROLCU_TASARIM_DURUMU.md`, sonra
+     `docs/KONTROLCU_OLCUMLERI.md`;
+   - **veri setini kullanmak:** `docs/VERI_SETI.md`;
+   - **veri toplamak:** `docs/VERI_TOPLAMA.md` (son tur en altta) ve
      `tools/veri/README.md`;
    - **sistem:** `docs/DEVIR.md`.
+
+Bir insanı yönlendiriyorsan: `docs/YENI_KATILAN.md`.
 
 **`docs/DURUM.md` (~1800 satır) ve `docs/VERI_TOPLAMA.md` (~1500 satır)
 baştan sona okunmaz.** Dizinden bölümü bul, ara (grep), sadece o kısmı oku.
@@ -103,7 +112,7 @@ baştan sona okunmaz.** Dizinden bölümü bul, ara (grep), sadece o kısmı oku
 |---|---|
 | Çalışma alanı | `~/ros2_ws` (WSL2 Ubuntu). Windows'tan `\\wsl.localhost\ubuntu\home\<kullanıcı>\ros2_ws` |
 | PX4 | `~/PX4-Autopilot`, commit `f63b0d6b6f` (`v1.17.0-alpha1-1670`). `px4_msgs` ve `px4-ros2-interface-lib` `dependencies.repos`'ta sabit; üçü birlikte yükseltilir, ayrı ayrı değil |
-| Veri | `~/eland_veri/` (GitHub'da değil) |
+| Veri | `~/eland_veri/` (proje sahibinin makinesi). Depoda değil; GitHub Release `v6.8-veri-seti`'te. Tam arşiv (`eland_veri_bolumler_*.zip`) ev dizinine açılınca aynı yol oluşur |
 
 ```bash
 # derleme
@@ -202,7 +211,9 @@ PYTHONPATH=/usr/lib/python3/dist-packages python3 tools/veri/birlestir.py
 ## 7. Nereye ne yazılır
 
 Tablo: `docs/README.md` §3. Kısaca:
+- kontrolcü işinin durumu ya da yeni karar → `docs/KONTROLCU_TASARIM_DURUMU.md`;
 - kontrolcü ölçümü → `docs/KONTROLCU_OLCUMLERI.md`;
+- yeni veri sürümü → yeni Release etiketi ve `docs/VERI_SETI.md`;
 - veri işi → `docs/VERI_TOPLAMA.md` yeni tur;
 - sistem işi → `docs/DURUM.md` yeni bölüm;
 - yeni araç → `tools/README.md` ya da `tools/veri/README.md`;

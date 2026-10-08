@@ -10,9 +10,15 @@
 > - Descends onto it with a closed-loop vertical-speed controller.
 >
 > A vision-based vertical descent controller is being designed (MATLAB/
-> Simulink) from a 218-episode recorded dataset. Docs are in Turkish; start
-> with [`AGENTS.md`](AGENTS.md) (working rules) and
-> [`docs/README.md`](docs/README.md) (map of all documents).
+> Simulink) from a 218-episode recorded dataset, downloadable from the
+> [`v6.8-veri-seti` release](https://github.com/adakarda/slz-safelanding/releases/tag/v6.8-veri-seti).
+> Docs are in Turkish; start with [`AGENTS.md`](AGENTS.md) (working rules)
+> and [`docs/README.md`](docs/README.md) (map of all documents).
+
+**Projeye yeni katıldıysan:** [`docs/YENI_KATILAN.md`](docs/YENI_KATILAN.md).
+Rolüne göre nereden başlayacağını, veriyi nereden indireceğini ve AI ajanınla
+nasıl çalışacağını anlatır. Bu projede bilgi kaynağı GitHub: dokümanlar,
+kod, sürüm etiketleri ve veri seti Release'i.
 
 ---
 
@@ -45,16 +51,19 @@ Tezin iki ana hattı:
 |---|---|
 | Uçtan uca acil iniş (simülasyon) | çalışıyor; 10 rastgele dünyada 10/10 iniş, RMS dikey takip 0.19 m/s |
 | Dikey hız iç döngüsü (PI + ileri besleme) | çalışıyor; RMS takip hatası 0.32 → 0.20 m/s |
-| Veri toplama hattı ve veri seti | **218 bölüm**; kayıt, dünyalar, kollar, `.mat` çıktı (`tools/veri/`) |
-| Görüntü-tabanlı dikey kontrolcü | **tasarımda.** Proje sahibi ayrı bir sohbette (Simulink) tasarlıyor; ölçümler [`docs/KONTROLCU_OLCUMLERI.md`](docs/KONTROLCU_OLCUMLERI.md) |
+| Veri toplama hattı ve veri seti | **218 bölüm**, indir: Release [`v6.8-veri-seti`](https://github.com/adakarda/slz-safelanding/releases/tag/v6.8-veri-seti), açıklama [`docs/VERI_SETI.md`](docs/VERI_SETI.md). Araçlar `tools/veri/` |
+| Görüntü-tabanlı dikey kontrolcü | **tasarımda.** Proje sahibi ayrı bir sohbette (Simulink) tasarlıyor. Durum ve kararlar [`docs/KONTROLCU_TASARIM_DURUMU.md`](docs/KONTROLCU_TASARIM_DURUMU.md); ölçümler [`docs/KONTROLCU_OLCUMLERI.md`](docs/KONTROLCU_OLCUMLERI.md) |
 | Mod `/eland/rho` (ρ, 10 Hz) kullanımı | yayın hazır (varsayılan kapalı); modda kullanımı tasarım doğrulanınca |
 | Yükseltilmiş hedef (W5) | bilinen sınır: EKF irtifası hedefin ~4 m üstünde, temas ~1.5 m/s; gözlemci tasarlanacak |
 | Gerçek segmentasyon modeli | ertelendi; maske şu an Gazebo'nun kusursuz etiketi |
 
-- **Son sürüm:** `v6.6-veri-geri-bildirim-tur4-ek`.
+- **Son sürüm:** `v6.8-veri-seti` (veri seti Release'i ve yeni katılan
+  dokümanları).
 - **Çalışan sürüm yedeği:** etiket `yedek-calisan-2026-10-05`.
-- **Ayrıntılı durum ve açık işler:** [`docs/YAPILACAKLAR.md`](docs/YAPILACAKLAR.md)
-  ve [`docs/VERI_TOPLAMA.md`](docs/VERI_TOPLAMA.md)'nin son "Tur" bölümü.
+- **Ayrıntılı durum ve açık işler:**
+  - [`docs/YAPILACAKLAR.md`](docs/YAPILACAKLAR.md), başındaki güncel durum
+    bölümü;
+  - [`docs/KONTROLCU_TASARIM_DURUMU.md`](docs/KONTROLCU_TASARIM_DURUMU.md).
 
 ## Mimari
 
@@ -77,6 +86,14 @@ Gazebo segmentasyon kamerası (320×240, 10 Hz, gövdeye sabit)
   [`src/README.md`](src/README.md).
 
 ## Hızlı başlangıç
+
+**Yalnız veriyle çalışacaksan** (MATLAB/Simulink, Python): simülasyon kurmana
+gerek yok.
+- Veriyi [`v6.8-veri-seti`](https://github.com/adakarda/slz-safelanding/releases/tag/v6.8-veri-seti)
+  Release'inden indir; `eland_veri_matlab_2026-10-04.zip` yeterli.
+- Okuma örnekleri ve tuzaklar: [`docs/VERI_SETI.md`](docs/VERI_SETI.md).
+
+**Simülasyonu çalıştıracaksan:**
 
 **Gereksinimler:**
 - Ubuntu (bu proje WSL2'de), ROS 2 Jazzy, Gazebo Harmonic (gz-sim 8),
@@ -134,15 +151,20 @@ src/
 tools/                 ölçüm ve analiz araçları          -> tools/README.md
   veri/                veri toplama ve veri seti          -> tools/veri/README.md
 docs/                  dokümanlar                         -> docs/README.md
+  YENI_KATILAN.md          yeni katılan için başlangıç
+  KONTROLCU_TASARIM_DURUMU.md  kontrolcü işi nerede, kararlar, sıradaki
   KONTROLCU_OLCUMLERI.md   kontrolcü için ölçülmüş her şey
+  VERI_SETI.md             veri seti: indirme, yapı, okuma, tuzaklar
   geri_bildirim/       kontrolcüyü tasarlayan sohbete giden promptlar
 ```
 
 - **Depoda olmayanlar** (`.gitignore`): `build/`, `install/`, `log/`,
   `src/px4_msgs/`, `src/px4-ros2-interface-lib/`.
-- **Veri ve PX4 depo dışında,** proje sahibinin makinesinde:
-  - `~/eland_veri/` (veri seti),
-  - `~/PX4-Autopilot`.
+- **Veri seti GitHub Release'inde** (`v6.8-veri-seti`), deponun içinde değil.
+  Proje sahibinin makinesinde `~/eland_veri/`; tam arşiv ev dizinine
+  açılınca aynı yol oluşur.
+- **PX4-Autopilot depo dışında:** `~/PX4-Autopilot`, commit `f63b0d6b6f`.
+- **Simulink modeli proje sahibinde,** depoda değil.
 
 ## Dokümanlar
 
@@ -150,6 +172,9 @@ Harita: [`docs/README.md`](docs/README.md).
 
 | Ne arıyorsun | Dosya |
 |---|---|
+| Nereden başlarım | [`docs/YENI_KATILAN.md`](docs/YENI_KATILAN.md) |
+| Kontrolcü işi ne durumda, ne kararlaştırıldı | [`docs/KONTROLCU_TASARIM_DURUMU.md`](docs/KONTROLCU_TASARIM_DURUMU.md) |
+| Veri seti: indirme, yapı, MATLAB'da okuma | [`docs/VERI_SETI.md`](docs/VERI_SETI.md) |
 | Kontrolcü için ölçümler (tesis, gecikmeler, ρ, EKF, temas hızı) | [`docs/KONTROLCU_OLCUMLERI.md`](docs/KONTROLCU_OLCUMLERI.md) |
 | Kontrolcü tasarım brifi | [`docs/KONTROLCU_TASARIM_BRIEF.md`](docs/KONTROLCU_TASARIM_BRIEF.md) |
 | Projeyi baştan devralmak | [`docs/DEVIR.md`](docs/DEVIR.md) |
@@ -195,13 +220,15 @@ mesajı neyin neden yapıldığını söyler. Tamamı:
 | `v6.3-tur4-kararlar` | birincil ölçüt `basarili_v10`, `run_sim` temizliği |
 | `v6.5-mod-secim-tekrar` | mod seçme kontrolü ve yeniden deneme (varsayılan kapalı) |
 | `yedek-calisan-2026-10-05` | doküman düzenlemesinden önceki çalışan sürüm (yedek; aynı adlı dal da var) |
+| `v6.7-dokuman-duzeni` | README, AGENTS/CLAUDE, doküman haritası, kontrolcü ölçümleri tek dosyada |
+| `v6.8-veri-seti` | veri seti Release'i (218 bölüm), yeni katılan ve kontrolcü durum dokümanları |
 
 Geri dönmek için: `git checkout <etiket>`.
 
 ## Katkı
 
-- **Yeni katılanlar:** önce [`AGENTS.md`](AGENTS.md) ve
-  [`docs/README.md`](docs/README.md).
+- **Yeni katılanlar:** önce [`docs/YENI_KATILAN.md`](docs/YENI_KATILAN.md),
+  sonra [`AGENTS.md`](AGENTS.md) ve [`docs/README.md`](docs/README.md).
 - **Önerilen akış:** kendi dalında çalış, değişikliği PR ile öner.
 - **Mevcut uçuş davranışını değiştiren her şey** proje sahibinin onayıyla.
 - **Proje sahibi:** [@adakarda](https://github.com/adakarda).

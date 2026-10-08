@@ -770,8 +770,13 @@ Kaynak: `docs/VERI_TOPLAMA.md` "Adım 4" (`v5.2-ruzgar-kalibrasyon`).
 
 ## 10. Veri ve yeniden üretme
 
-Veri GitHub'da değil: proje sahibinin makinesinde `~/eland_veri/` (218
-bölümlük veri seti, doğrulama koşuları, raporlar).
+- **218 bölümlük veri seti:** GitHub Release
+  [`v6.8-veri-seti`](https://github.com/adakarda/slz-safelanding/releases/tag/v6.8-veri-seti).
+  Kullanımı [`VERI_SETI.md`](VERI_SETI.md).
+- **Bu dosyadaki doğrulama koşuları ve ara raporlar** (`_tur3_dogrulama/`,
+  `_tur4_dogrulama/`, `_tur3/`, `_tur4/`) Release'te değil; proje sahibinin
+  makinesinde `~/eland_veri/` altında. Sayıları bu dosyada ve kaynak
+  dokümanlarda.
 
 | Tablo | Betik |
 |---|---|

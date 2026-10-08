@@ -98,7 +98,13 @@ PYTHONPATH=/usr/lib/python3/dist-packages python3 tools/veri/birlestir.py
 
 ---
 
-## Veri kökü (`~/eland_veri/`, GitHub'da değil)
+## Veri kökü (`~/eland_veri/`)
+
+- **Veri setinin kendisi deponun içinde değil,** GitHub Release
+  [`v6.8-veri-seti`](https://github.com/adakarda/slz-safelanding/releases/tag/v6.8-veri-seti)'te
+  ([`../../docs/VERI_SETI.md`](../../docs/VERI_SETI.md)).
+- **Tam arşiv** (`eland_veri_bolumler_2026-10-04.zip`) ev dizinine açılınca bu
+  düzen oluşur. Alt çizgili klasörler arşivde yok.
 
 ```
 <kol>/<dunya>/<ep_id>/      bölüm klasörleri (veri seti; kol: kol0, k1_v1.0, k2_d0.35, k3_*, k4, k5_A*, ...)

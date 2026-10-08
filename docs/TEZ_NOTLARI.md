@@ -452,9 +452,16 @@ bileşenine göre boyutlandır."*
 - **Tek koşu kanıt değildir:** aynı ayarla aday sıçraması koşudan koşuya 1 ile 7
   arasında değişti. Kapalı çevrim ölçümleri sabit senaryoda ve aynı fazda
   (VALIDATE + COMMIT) alınmıştır.
-- **Ölçüm araçları depoda:** `tools/descent_probe.py` (dikey hız izleme),
-  `tools/measure_tracking.py` (hareketli engel izleme), `tools/make_params.py`
-  (koşu başına parametre türevi).
-- **Bilinen açıklar:** araç hız kestirimi gerçeğin ~%52'si (LSQ penceresi rota
-  dönüşlerini içeriyor); segmentasyon hâlâ Gazebo etiket kamerasından geliyor,
-  tahmin modeli veri kümesi hazır olduğunda eklenecek.
+- **Ölçüm araçları depoda:**
+  - `tools/run_scorer.py`: uçuş puanlama ve dikey hız takibi; eski
+    `descent_probe.py`'nin yerine geçti, `v2.8`.
+  - `tools/measure_tracking.py`: hareketli engel izleme.
+  - `tools/make_params.py`: koşu başına parametre türevi.
+  - Dizin: `tools/README.md`.
+- **Bilinen açıklar:**
+  - **Araç hız kestirimi** harita içinde gerçeğin ~%70-80'i.
+    - Eski "~%52" bir ölçüm hatasıydı (`DURUM.md` §23.3).
+    - ~10 puanı rota dönüşlerinin yapaylığı.
+    - Harita kenarında %20-45.
+  - **Segmentasyon** hâlâ Gazebo etiket kamerasından geliyor; tahmin modeli
+    veri kümesi hazır olduğunda eklenecek.
