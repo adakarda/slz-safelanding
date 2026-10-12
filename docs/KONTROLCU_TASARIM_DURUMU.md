@@ -80,6 +80,7 @@ Ayrıntılar: [`VERI_TOPLAMA.md`](VERI_TOPLAMA.md), aynı adlı bölümler.
 | `veri_toplama_kipi` | false (yalnız C++'ta) | veri kipi: VALIDATE referansı `/eland/veri/v_ref`'ten, Gazebo hedef yüksekliği < 2.5 m'de devir | `v5.0` |
 | `ident_enabled` | false (yalnız C++'ta) | tesis tanımlama kipi: kare dalga, açık çevrim, iniş yok | `v2.9` |
 | `RUN_SIM_MOD_TEKRAR` (ortam) | yok = kapalı | `run_sim.sh` modu seçti mi kontrol eder, gerekirse yeniden gönderir | `v6.5` |
+| `RUN_SIM_YUKSEKLIK` (ortam) | yok = kapalı | `p_kestirici` düğümü: hedef yüzeyin yüksekliği (P) ve bölge alanı, `1/√ρ`–`h_ekf` doğrusundan; `/eland/yukseklik_kestirimi`, HUD'da dördüncü sütun, kaydedicide `p_kestirimi.csv`. **Salt okunur: mod kullanmıyor** | `p-kestirici` dalı |
 
 ## 5. Açık / sırada
 

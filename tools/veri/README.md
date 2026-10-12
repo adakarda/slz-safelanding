@@ -93,6 +93,7 @@ PYTHONPATH=/usr/lib/python3/dist-packages python3 tools/veri/birlestir.py
 | `zaman_hizasi.py` | Bir `ep.mat`'ın zaman hizası ve yapısı, MATLAB'ın göreceği gibi |
 | `ornek_mat.py` | Küçük, temsilî MATLAB seti (bölüm başına bir `.mat` + kısa sözlük) |
 | `egiklik_rho.py` | Eğiklik ve ρ: ölçülen ρ ile geometriden hesaplanan ρ (Tur 3 D) |
+| `p_kestirimi.py` | Hedef yüzey yüksekliği (P) ve bölge alanı, `1/√ρ`–`h_ekf` doğrusundan, kayıtlı bölümlerde; gerçek değer ve harita alanıyla karşılaştırma, `--grafik` ile bölüm başına `p_kestirimi.png`. Canlı karşılığı `p_kestirici` düğümü (`RUN_SIM_YUKSEKLIK=1`) |
 | `bozucu_dogrula.py` | Bozucular gerçekten uygulandı mı, sayılarla (Tur 3 C) |
 | `tur3_dogrula.py`, `tur4_dogrula.py` | Tur 3 A/B ve Tur 4 madde 2 doğrulama tabloları |
 

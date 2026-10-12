@@ -96,6 +96,36 @@ Görüntü: 320×240, yatay FOV 99.7°, üstü = aracın burnu. Ham maskeler
 | view_bounded | 0/1 | aynı |
 
 `ep_ozet.json`'da `rho_yayini_sayisi`: alınan mesaj sayısı (kapalıyken 0).
+
+## p_kestirimi.csv — `/eland/yukseklik_kestirimi` mesajı başına (yalnız `RUN_SIM_YUKSEKLIK=1` iken)
+
+`eland_msgs/YukseklikKestirimi`, `p_kestirici` düğümünden (2026-10-12'den).
+Bölgenin büyümesinden hedef yüzeyin EKF çerçevesindeki yüksekliği (P) ve
+bölgenin alanı: `1/√ρ = k·(h_ekf − P)` doğrusu, `A = 4.216/k²`
+(`src/eland_mapping/eland_mapping/p_hesap.py`). Salt okunur: mod kullanmıyor.
+Kapalıyken dosya yazılmaz.
+
+| Sütun | Birim | Not |
+|---|---|---|
+| t_alma, t_yakalama | s | kaydediciye ulaştığı sim zamanı; maskenin yakalama damgası |
+| durum | 0-3 | 0 veri yok, 1 toplanıyor (güvenilmez), 2 geçerli, 3 donmuş (bölge kadrajdan çıktı, son geçerli tutuluyor) |
+| rho, view_bounded | — | bu kare |
+| kullanildi | 0/1 | bu kare doğruya girdi mi (iniş sırasında, kadrajda, eğiklik < 5°, 0.003 < ρ < 0.98) |
+| egiklik_deg | ° | gövde eğikliği |
+| h_ekf_m | m | yakalama anındaki EKF yüksekliği (alma anındakinden 0.02 s gecikmeyle geri taşınmış) |
+| v_asagi_mps | m/s | EKF dikey hızı, aşağı + |
+| kare_sayisi, kullanilan_kare | — | bu inişte toplanan kare; sağlam uydurmanın tuttuğu |
+| pencere_m | m | toplanan karelerin h_ekf aralığı |
+| p_m, p_sigma_m | m | yüzeyin EKF çerçevesinde yüksekliği ve 1σ. Düz zeminde ~−0.1…−0.2 (kamera montajı), W5'te ~+3.8 |
+| alan_m2 | m² | doğrunun eğiminden bölge alanı |
+| artik_rms | 1/√ρ | uydurma artığı |
+| h_hedef_m | m | `h_ekf − p_m`: kameranın yüzeye uzaklığı |
+| alan_harita_m2 | m² | o anki `LandingCandidate.area_m2` (haritadan; yükseltilmiş hedefte büyük çıkar) |
+| iraksama_1ps | 1/s | son 5 kullanılan karede `½·d(ln ρ)/dt` |
+| temas_suresi_s | s | `h_hedef / v_asagi` |
+
+`ep_ozet.json`'da `p_kestirimi`: son geçerli kestirim (yalnız düğüm çalıştıysa).
+Çevrimdışı karşılaştırma ve şekil: `tools/veri/p_kestirimi.py`.
 `DUGUM_BILGI=1` ile koşulan bölümlerde `dugum_bilgi.txt`: bölüm ortasında
 `ros2 topic info /eland/rho -v` ve `ros2 node info /detector_node`.
 

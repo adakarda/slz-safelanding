@@ -524,6 +524,74 @@ Kaynak: `docs/VERI_TOPLAMA.md` "Adım 6" ve "Tur 3 / C";
 
 Kaynak: `docs/KONTROLCU_TASARIM_BRIEF.md` §5; `docs/DEVIR.md` §13.2.
 
+### 4.7 Hedef yüzeyin yüksekliği, bölgenin büyümesinden (2026-10-12, ölçülen)
+
+**Yöntem (_hesap):** bölge kadraja sığarken `ρ = A/(4.216·d²)` ve
+`d = h_ekf − P`. Birleşince `1/√ρ = √(4.216/A)·(h_ekf − P)`: bir doğru.
+- Sıfırı kestiği yer P: yüzeyin EKF çerçevesindeki yüksekliği.
+- Eğimi bölge alanını verir: `A = 4.216/k²`.
+- EKF'nin mutlak yüksekliği gerekmez, yalnız yer değiştirmesi. Harita alanı
+  da gerekmez. Harita alanı aynı mutlak yükseklikle yansıtılıyor; onunla
+  hesaplanan yükseklik yine h_ekf çıkar (döngüsel).
+
+**Kod:**
+- Hesap: `src/eland_mapping/eland_mapping/p_hesap.py`.
+- Canlı: `p_kestirici` düğümü, `RUN_SIM_YUKSEKLIK=1` ile açılır. Salt
+  okunur; mod kullanmıyor.
+- Çevrimdışı: `tools/veri/p_kestirimi.py`.
+
+**Çevrimdışı, 218 bölümlük veri setinden** (VALIDATE → temas, kadrajda,
+eğiklik < 5°):
+- "Doğru P" = aynı karelerde `h_ekf − h_kamera_gercek` ortancası.
+- Güven kuralı: pencere ≥ 2 m, σ ≤ 0.5 m, ≥ 10 kare (canlı düğümün kuralı).
+
+| Dünya | Doğru çıkan / bölüm | Güven kuralından geçen | \|P hatası\| ort / en büyük | Hata yönü |
+|---|---|---|---|---|
+| W2 (6×6) | 21/21 | 21 | 0.06 / 0.28 m | −0.28 … +0.11 |
+| W3 (10×10) | 53/53 | 53 | 0.20 / 1.06 m | çoğu eksi |
+| W4 (20×20) | 9/21 | 8 | 0.80 / 1.80 m | eksi |
+| **W5 (4 m platform)** | **11/21** | **9** | **0.27 / 0.44 m** | eksi |
+| W6 (L) | 7/7 | 6 | 0.11 / 0.22 m | eksi |
+| W7 (daire) | 4/4 | 4 | 0.13 / 0.17 m | eksi |
+| W8 (ortası dolu) | 4/4 | 4 | 0.36 / 0.53 m | eksi |
+
+- **W5'te bulunan P:** +3.38…+3.85 m. Doğru değer +3.76…+3.93 m.
+- **Alan:** kestirim 102–112 m², gerçek 100 m².
+  - Harita alanı W5'te 169–181 m²: gerçeğin ~1.75 katı. Yukarıdaki döngüsellik
+    ölçülerek görüldü.
+  - Düz dünyalarda harita alanı doğru: W2 36, W3 100, W4 400 m².
+- **Doğru çıkmayanlar:** bölge hiç kadraja girmedi. Başlangıç, hedefin
+  `kenar/1.78` m üstünden alçaktı. W4'te bu sınır 11.2 m, W5'te platformun
+  5.6 m üstü.
+- **Kısa pencere bozuyor:** W5'te 1.3 ve 1.5 m'lik pencereler +0.74 ve +1.19 m
+  hata verdi. Güven kuralı bu yüzden 2 m.
+- **Hata çoğunlukla eksi:** P biraz alçak çıkıyor, yani yükseklik fazla
+  görülüyor. Bu, sert temas yönü.
+  - En büyük sapma W4'te −1.80 m; pencere kısa (2.5–3.5 m).
+  - Sebebi ölçülmedi. Olası sebep (_tahmin): bölge kenarındaki piksellerin
+    sayımı, küçük bölgede (yüksekte) oranı daha çok etkiliyor.
+
+**Canlı, `p_kestirici` ile** (kol0, tohum 1, kod değişmeden; mod kestirimi
+kullanmıyor):
+
+| Dünya | Pencere / kare | P (canlı) | Hata (çevrimdışı doğruya göre) | Alan / harita alanı | Temas |
+|---|---|---|---|---|---|
+| W5 | 3.0 m / 30 | +3.60 ± 0.03 m | −0.20 m | 106 / 178 m² | 1.49 m/s (mod h_ekf ile indi) |
+| W3 | 10.4 m / 88 | −0.28 ± 0.02 m | −0.14 m | 102 / 98 m² | 0.30 m/s |
+
+**Kapalıyken:** `RUN_SIM_YUKSEKLIK` verilmeden açık alan tohum 1 koşuldu.
+- 2026-10-08 koşusuyla `run_sim.log` (sayılar silinince) aynı.
+- Dosyalar ve `ep_ozet` anahtarları aynı.
+- Temas 0.305 → 0.302 m/s.
+
+**Maliyet** (W5, HUD görüntü üretiyor ama pencere açık değil, birer uçuş):
+- HUD çizimi p50 9.5–10.0 ms (kapalı) ve 5.6–6.1 ms (açık, 4 sütun).
+  Koşudan koşuya fark sütunun maliyetinden büyük; yavaşlama görülmedi.
+- `p_kestirici` tek çekirdeğin ~%10'u.
+- Dedektör %8.6 → %8.1 (`publish_rho` açık).
+
+Kaynak: `~/eland_veri/_p_kestirici_2026-10-12/`; `tools/veri/p_kestirimi.py`.
+
 ---
 
 ## 5. Durum kestirimi (EKF) doğruluğu
@@ -760,9 +828,11 @@ Kaynak: `docs/VERI_TOPLAMA.md` "Adım 4" (`v5.2-ruzgar-kalibrasyon`).
 - **ρ̇/ρ = 2D** gürültülü veride sınanmadı (§4.4).
 - **Mod `/eland/rho`'yu henüz kullanmıyor.** Tasarım Simulink'te
   doğrulanınca ayrı madde gelecek.
-- **W5:** hedef yüzeye göre yükseklik kestirimi (gözlemci) yok (§5.4).
-- **Gerçek bir mod komutu kaybında yeniden denemenin işe yaradığı** henüz
-  görülmedi. Yalnız ilk komut bilerek atlanarak sınandı (`v6.5`).
+- **W5:** hedef yüzeye göre yükseklik artık kestiriliyor (§4.7), ama mod
+  kullanmıyor; iniş hâlâ h_ekf ile (§5.4).
+- **Yeniden deneme:** gerçek bir mod komutu kaybında ilk kez 2026-10-12'de
+  işe yaradı. W5 koşusunda ilk denemede nav_state 4 kaldı, ikincide 23 oldu.
+  `v6.5`'te yalnız ilk komut bilerek atlanarak sınanmıştı.
 - **Gazebo penceresi açıkken** 10 Hz kameranın gerçek zaman oranı ölçülmedi
   (`DURUM.md` #30).
 
@@ -784,6 +854,7 @@ Kaynak: `docs/VERI_TOPLAMA.md` "Adım 4" (`v5.2-ruzgar-kalibrasyon`).
 | Toplu adım raporu | `tools/veri/adim_ozet.py GUNLUK` |
 | Temas puanlaması | `tools/veri/temas_puanla.py` |
 | ρ ve eğiklik | `tools/veri/egiklik_rho.py` |
+| Hedef yüzey yüksekliği (P) ve alan | `tools/veri/p_kestirimi.py` |
 | Bozucu doğrulaması | `tools/veri/bozucu_dogrula.py` |
 | Tur 3 / Tur 4 doğrulama | `tools/veri/tur3_dogrula.py`, `tools/veri/tur4_dogrula.py` |
 | Uçuş puanlama (veri kaydedicisi öncesi) | `tools/run_scorer.py`, `tools/batch_run.sh` |

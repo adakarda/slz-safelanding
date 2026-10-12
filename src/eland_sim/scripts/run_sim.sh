@@ -98,6 +98,10 @@ Environment:
                      more times. Unset or 0: send once, no check.
   RUN_SIM_MOD_SINAMA=1  with RUN_SIM_MOD_TEKRAR: skip the first send, to
                      exercise the retry (testing only)
+  RUN_SIM_YUKSEKLIK=1  start p_kestirici (target surface height and region
+                     area from the safe region's growth, read-only) and
+                     switch detector_node.publish_rho on for it; the HUD
+                     gets a fourth column. Unset: none of this runs.
 EOF
 }
 
@@ -253,6 +257,8 @@ cleanup() {
 	pkill -x mapping_node 2>/dev/null
 	pkill -x perception_node 2>/dev/null
 	pkill -x image_bridge 2>/dev/null
+	# Only exists with RUN_SIM_YUKSEKLIK=1; a no-op otherwise.
+	pkill -x p_kestirici 2>/dev/null
 	# tracker_node and obstacle_driver too: they outlived script-stopped runs
 	# and piled up (64 pairs over one batch, 2026-10-03) until the EKF
 	# vertical velocity drifted. RUN_SIM_ESKI_TEMIZLIK=1 leaves them running,
@@ -461,6 +467,25 @@ done
 ros2 topic list 2>/dev/null | grep -q vehicle_local_position ||
 	fail "PX4 topic'leri gorunmedi, bak: $LOG_DIR/agent.log"
 echo "[run_sim]   kopru kuruldu"
+
+# --------------------------------------------------------- height estimate
+# RUN_SIM_YUKSEKLIK=1: the launch gets p_kestirici, and the parameter file it
+# gets is a copy of the one it would have had with detector_node.publish_rho
+# switched on, because /eland/rho is p_kestirici's input. Unset, nothing here
+# runs and the launch line below is the same as before.
+if [ "${RUN_SIM_YUKSEKLIK:-0}" = 1 ]; then
+	YK_BASE="${PARAMS_FILE_PATH:-$WS_DIR/install/eland_sim/share/eland_sim/config/eland_params.yaml}"
+	YK_PARAMS="$LOG_DIR/params_yukseklik.yaml"
+	python3 - "$YK_BASE" "$YK_PARAMS" <<'PY' || fail "RUN_SIM_YUKSEKLIK: parametre dosyasi yazilamadi"
+import sys, yaml
+doc = yaml.safe_load(open(sys.argv[1], encoding='utf-8'))
+doc.setdefault('detector_node', {}).setdefault('ros__parameters', {})['publish_rho'] = True
+yaml.safe_dump(doc, open(sys.argv[2], 'w', encoding='utf-8'), sort_keys=False)
+PY
+	PARAMS_ARG="params_file:=$YK_PARAMS"
+	EXTRA_LAUNCH_ARGS="$EXTRA_LAUNCH_ARGS p_kestirici:=true"
+	echo "[run_sim]   yukseklik kestirimi acik: p_kestirici + publish_rho ($YK_PARAMS)"
+fi
 
 # --------------------------------------------------------------- pipeline
 echo "[run_sim] algi zinciri + ucus modu baslatiliyor..."

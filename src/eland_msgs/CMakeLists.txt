@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/DynamicObstacle.msg"
   "msg/DynamicObstacleArray.msg"
   "msg/GoruntuKapsami.msg"
+  "msg/YukseklikKestirimi.msg"
   DEPENDENCIES std_msgs geometry_msgs
 )
 

@@ -48,6 +48,15 @@ from sensor_msgs.msg import Image
 from eland_common import classes, px4_topics
 from eland_common.qos import DECISION_QOS, PX4_QOS, SENSOR_QOS
 from eland_msgs.msg import DynamicObstacleArray, LandingCandidate, LandingState
+try:  # p_kestirici's message; absent in builds before it
+    from eland_msgs.msg import YukseklikKestirimi
+except ImportError:
+    YukseklikKestirimi = None
+
+#: How long the fourth column stays after the last estimate, seconds.
+ESTIMATE_TIMEOUT_S = 3.0
+#: Footprint area over height squared, 99.7 deg 4:3 camera (p_hesap.AYAK_IZI).
+FOOTPRINT_K = 4.216
 
 STATE_NAMES = {
     LandingState.SEARCH: 'SEARCH',
@@ -115,6 +124,14 @@ class HudNode(Node):
         self.declare_parameter('hud_topic', '/eland/hud')
         self.declare_parameter(
             'vehicle_local_position_topic', px4_topics.VEHICLE_LOCAL_POSITION)
+        # Fourth column: p_kestirici's surface height estimate. Drawn only
+        # while that node publishes (run_sim.sh RUN_SIM_YUKSEKLIK=1); without
+        # it the HUD is the same three columns as before.
+        self.declare_parameter('height_estimate_topic', '/eland/yukseklik_kestirimi')
+        self.declare_parameter('height_column_width_px', 340)
+        # Display-only copies, for "what the law would command" in that column.
+        self.declare_parameter('descent_altitude_gain', 0.35)
+        self.declare_parameter('landing_altitude', 2.0)
 
         self.map_px = int(self.get_parameter('map_size_px').value)
         self.panel_px = int(self.get_parameter('panel_width_px').value)
@@ -161,6 +178,13 @@ class HudNode(Node):
         self.pos_enu = None
         self.vel_enu = None
         self.altitude = 0.0
+        self.height_px = int(self.get_parameter('height_column_width_px').value)
+        self.k_alt = float(self.get_parameter('descent_altitude_gain').value)
+        self.h_commit = float(self.get_parameter('landing_altitude').value)
+        self.est = None
+        self._est_rx = None
+        self._est_pts = []      # (h_ekf, 1/sqrt(rho)) of the frames in the fit
+        self._est_n = 0
 
         self.hud_pub = self.create_publisher(
             Image, self.get_parameter('hud_topic').value, SENSOR_QOS)
@@ -187,6 +211,11 @@ class HudNode(Node):
             VehicleLocalPosition,
             self.get_parameter('vehicle_local_position_topic').value,
             self.on_local_position, PX4_QOS)
+        if YukseklikKestirimi is not None:
+            self.create_subscription(
+                YukseklikKestirimi,
+                self.get_parameter('height_estimate_topic').value,
+                self.on_estimate, SENSOR_QOS)
 
         rate = float(self.get_parameter('rate_hz').value)
         # The timer only fills the gaps between maps (the aircraft marker and
@@ -243,6 +272,18 @@ class HudNode(Node):
     def on_state(self, msg: LandingState) -> None:
         self.state = msg
 
+    def on_estimate(self, msg) -> None:
+        # A smaller frame count than last time means p_kestirici started over
+        # (new descent or another site): the plotted points start over too.
+        if msg.kare_sayisi < self._est_n or msg.durum == YukseklikKestirimi.VERI_YOK:
+            self._est_pts = []
+        self._est_n = msg.kare_sayisi
+        if msg.kullanildi and msg.rho > 0 and math.isfinite(msg.h_ekf_m):
+            self._est_pts.append((msg.h_ekf_m, 1.0 / math.sqrt(msg.rho)))
+            del self._est_pts[:-600]
+        self.est = msg
+        self._est_rx = time.monotonic()
+
     def on_local_position(self, msg: VehicleLocalPosition) -> None:
         self.pos_enu = (float(msg.y), float(msg.x), float(-msg.z))
         self.vel_enu = (float(msg.vy), float(msg.vx), float(-msg.vz))
@@ -279,6 +320,9 @@ class HudNode(Node):
         columns = [panel, text]
         if self.show_camera:
             columns.append(self.draw_camera(panel.shape[0]))
+        if (self.est is not None and self._est_rx is not None
+                and t0 - self._est_rx < ESTIMATE_TIMEOUT_S):
+            columns.append(self.draw_height(panel.shape[0]))
         hud = np.hstack(columns)
 
         out = self.bridge.cv2_to_imgmsg(np.ascontiguousarray(hud), encoding='bgr8')
@@ -464,6 +508,111 @@ class HudNode(Node):
                  (120, 140, 240) if touches else (140, 235, 140))
         line('left map = 40 m fused memory,', (150, 150, 150), 0.36, 15)
         line('not the camera view', (150, 150, 150), 0.36, 15)
+        return img
+
+    def draw_height(self, height: int) -> np.ndarray:
+        """p_kestirici's estimate: the line, the surface it implies, the law.
+
+        The plot is the estimate itself: each frame in the fit is a point
+        (h_ekf, 1/sqrt(rho)); the line through them crosses zero at the
+        surface height P in the EKF frame (yellow ring). On flat ground that
+        is near 0; over W5's platform near +4 m. Below the plot, what the
+        descent law commands on h_ekf -- what it does today -- next to what it
+        would command on the estimated distance to the surface. The mode does
+        not use the estimate; this column only shows it.
+        """
+        w = self.height_px
+        img = np.full((height, w, 3), 24, dtype=np.uint8)
+        e = self.est
+        names = {0: ('NO DATA', (140, 140, 140)),
+                 1: ('COLLECTING', (80, 200, 250)),
+                 2: ('VALID', (140, 235, 140)),
+                 3: ('HELD (region out of view)', (240, 200, 90))}
+        st_name, st_col = names.get(e.durum, ('?', (200, 200, 200)))
+        cv2.putText(img, 'SURFACE HEIGHT  (region growth)', (12, 26), FONT, 0.5,
+                    (130, 190, 240), 1, cv2.LINE_AA)
+        cv2.putText(img, st_name, (12, 48), FONT, 0.5, st_col, 1, cv2.LINE_AA)
+
+        # -- plot ---------------------------------------------------------
+        x0, y0, pw, ph = 40, 60, w - 52, 170
+        cv2.rectangle(img, (x0, y0), (x0 + pw, y0 + ph), (70, 70, 70), 1)
+        pts = self._est_pts
+        p_ok = math.isfinite(e.p_m) and math.isfinite(e.alan_m2) and e.alan_m2 > 0
+        hs = [p[0] for p in pts] + ([e.h_ekf_m] if math.isfinite(e.h_ekf_m) else [])
+        ys = [p[1] for p in pts]
+        h_lo = min([0.0] + ([e.p_m - 1.0] if p_ok else []))
+        h_hi = max(hs + [h_lo + 5.0]) + 1.0
+        y_hi = max(ys + [1.0]) * 1.15
+
+        def px(h, yv):
+            return (int(round(x0 + (h - h_lo) / (h_hi - h_lo) * pw)),
+                    int(round(y0 + ph - yv / y_hi * ph)))
+
+        for tick in range(int(math.ceil(h_lo / 5.0)) * 5, int(h_hi) + 1, 5):
+            tx, _ = px(tick, 0)
+            cv2.line(img, (tx, y0 + ph), (tx, y0 + ph + 4), (110, 110, 110), 1)
+            cv2.putText(img, f'{tick}', (tx - 6, y0 + ph + 16), FONT, 0.34,
+                        (150, 150, 150), 1, cv2.LINE_AA)
+        cv2.putText(img, '1/sqrt(rho)', (4, y0 - 4), FONT, 0.34, (150, 150, 150),
+                    1, cv2.LINE_AA)
+        cv2.putText(img, 'h_ekf [m]', (x0 + pw - 62, y0 + ph + 30), FONT, 0.34,
+                    (150, 150, 150), 1, cv2.LINE_AA)
+        for h, yv in pts:
+            cv2.circle(img, px(h, yv), 2, (200, 190, 90), -1)
+        if p_ok:
+            k = math.sqrt(FOOTPRINT_K / e.alan_m2)
+            h_end = max(hs) if hs else e.p_m + 5.0
+            cv2.line(img, px(e.p_m, 0.0), px(h_end, k * (h_end - e.p_m)),
+                     (235, 235, 235), 1, cv2.LINE_AA)
+            cv2.circle(img, px(e.p_m, 0.0), 6, (0, 220, 255), 2)
+        if math.isfinite(e.h_ekf_m):
+            hx, _ = px(e.h_ekf_m, 0.0)
+            for yy in range(y0, y0 + ph, 8):
+                cv2.line(img, (hx, yy), (hx, yy + 4), (255, 255, 0), 1)
+
+        # -- numbers ------------------------------------------------------
+        y = [y0 + ph + 48]
+
+        def line(text, color=(220, 220, 220), scale=0.40, gap=16):
+            cv2.putText(img, text, (12, y[0]), FONT, scale, color, 1, cv2.LINE_AA)
+            y[0] += gap
+
+        def f(v, fmt):
+            return format(v, fmt) if math.isfinite(v) else '   --'
+
+        line(f'rho now     {e.rho:6.3f}   in view {"yes" if e.view_bounded else "no"}',
+             (200, 200, 200))
+        line(f'tilt        {e.egiklik_deg:5.1f} deg  used {"yes" if e.kullanildi else "no"}',
+             (200, 200, 200))
+        line(f'frames      {e.kare_sayisi:4d} over {e.pencere_m:4.1f} m '
+             f'(kept {e.kullanilan_kare})', (200, 200, 200))
+        line(f'P surface   {f(e.p_m, "+6.2f")} m  +-{f(e.p_sigma_m, ".2f")}',
+             (0, 220, 255))
+        line(f'A region    {f(e.alan_m2, "6.0f")} m2  map {f(e.alan_harita_m2, ".0f")}',
+             (220, 220, 220))
+        line(f'h_ekf       {f(e.h_ekf_m, "6.2f")} m  (from take-off)', (255, 255, 0))
+        line(f'to surface  {f(e.h_hedef_m, "6.2f")} m  (h_ekf - P)', (140, 235, 140))
+
+        ceiling = (self.state.descent_ceiling_mps if self.state is not None
+                   and self.state.descent_ceiling_mps > 0 else self.v_max)
+
+        def law(hv):
+            return min(ceiling, max(self.v_min, self.k_alt * hv))
+
+        y[0] += 4
+        line('altitude law  0.35*h, today on h_ekf:', (150, 150, 150), 0.36, 15)
+        if math.isfinite(e.h_ekf_m):
+            commit_now = 'yes' if e.h_ekf_m <= self.h_commit else 'no'
+            line(f'on h_ekf     {law(e.h_ekf_m):4.2f} m/s  COMMIT {commit_now}',
+                 (200, 200, 200))
+        if math.isfinite(e.h_hedef_m):
+            commit_est = 'yes' if e.h_hedef_m <= self.h_commit else 'no'
+            line(f'on surface   {law(e.h_hedef_m):4.2f} m/s  COMMIT {commit_est}',
+                 (140, 235, 140))
+        y[0] += 4
+        line(f'v down      {e.v_asagi_mps:+5.2f} m/s (EKF)', (200, 200, 200))
+        line(f'divergence  {f(e.iraksama_1ps, "5.2f")} 1/s  (v/d)', (200, 200, 200))
+        line(f'to contact  {f(e.temas_suresi_s, "5.1f")} s', (200, 200, 200))
         return img
 
     def draw_map(self) -> np.ndarray:

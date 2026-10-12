@@ -113,6 +113,13 @@ def generate_launch_description() -> LaunchDescription:
                         'run; the person actor keeps walking either way, '
                         'because Gazebo owns its script.'),
         DeclareLaunchArgument(
+            'p_kestirici', default_value='false',
+            description='Start p_kestirici: estimates the target surface '
+                        'height from the safe region\'s growth and publishes '
+                        'it on /eland/yukseklik_kestirimi. Read-only; needs '
+                        'detector_node.publish_rho on (run_sim.sh does both '
+                        'with RUN_SIM_YUKSEKLIK=1).'),
+        DeclareLaunchArgument(
             'log_level', default_value='info',
             description='ROS log level for all pipeline nodes.'),
     ]
@@ -164,6 +171,15 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[params], output='screen', arguments=log_args,
         additional_env=compat_env,
         condition=IfCondition(LaunchConfiguration('obstacles')),
+    )
+
+    # 2c. Surface height estimate. Off by default; it only reads, and nothing
+    #     downstream depends on it except the HUD's extra column.
+    p_kestirici = Node(
+        package='eland_mapping', executable='p_kestirici', name='p_kestirici',
+        parameters=[params], output='screen', arguments=log_args,
+        additional_env=compat_env,
+        condition=IfCondition(LaunchConfiguration('p_kestirici')),
     )
 
     hud = Node(
@@ -227,4 +243,5 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         args + [labels_bridge, colored_bridge] + pipeline_nodes
-        + [obstacle_driver, hud, hud_view, station, mode_node, rviz_tf, rviz])
+        + [obstacle_driver, p_kestirici, hud, hud_view, station, mode_node,
+           rviz_tf, rviz])

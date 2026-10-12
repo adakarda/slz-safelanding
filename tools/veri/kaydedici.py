@@ -35,6 +35,16 @@ try:  # detector_node's mask-rate rho (publish_rho); absent in older builds
     from eland_msgs.msg import GoruntuKapsami
 except ImportError:
     GoruntuKapsami = None
+try:  # p_kestirici's surface height estimate (RUN_SIM_YUKSEKLIK=1)
+    from eland_msgs.msg import YukseklikKestirimi
+except ImportError:
+    YukseklikKestirimi = None
+
+#: p_kestirimi.csv columns after t_alma, t_yakalama: YukseklikKestirimi fields.
+PK_ALANLAR = ('durum', 'rho', 'view_bounded', 'kullanildi', 'egiklik_deg',
+              'h_ekf_m', 'v_asagi_mps', 'kare_sayisi', 'kullanilan_kare',
+              'pencere_m', 'p_m', 'p_sigma_m', 'alan_m2', 'artik_rms',
+              'h_hedef_m', 'alan_harita_m2', 'iraksama_1ps', 'temas_suresi_s')
 from px4_msgs.msg import (TrajectorySetpoint, VehicleAttitude,
                           VehicleLandDetected, VehicleLocalPosition,
                           VehicleStatus)
@@ -92,7 +102,8 @@ class Kaydedici(Node):
         self.a = a
         self.clock = None             # (sim_s, monotonic)
         self.ev = {k: [] for k in ('lp', 'att', 'land', 'status', 'sp',
-                                   'state', 'cand', 'gt', 'clock', 'vdis', 'rho')}
+                                   'state', 'cand', 'gt', 'clock', 'vdis', 'rho',
+                                   'pk')}
         self.masks = []               # (t_yakalama, t_alma, array)
         self.masks_bozuk = []
         self.t_start_mono = time.monotonic()
@@ -135,6 +146,14 @@ class Kaydedici(Node):
             sub(GoruntuKapsami, '/eland/rho',
                 lambda m: self.ev['rho'].append((self.t_gz(), stamp_s(m.header.stamp),
                                                  float(m.rho), float(m.view_bounded))),
+                BEST_EFFORT)
+        # p_kestirici, only running with RUN_SIM_YUKSEKLIK=1: receive time,
+        # capture stamp, then the message's fields (PK_ALANLAR).
+        if YukseklikKestirimi is not None:
+            sub(YukseklikKestirimi, '/eland/yukseklik_kestirimi',
+                lambda m: self.ev['pk'].append(
+                    (self.t_gz(), stamp_s(m.header.stamp))
+                    + tuple(float(getattr(m, k)) for k in PK_ALANLAR)),
                 BEST_EFFORT)
         self.create_timer(0.5, self.check_stop)
 
@@ -469,6 +488,11 @@ def build(node, a):
                   ['t_alma', 't_yakalama', 'rho', 'view_bounded'],
                   {'t_alma': r[:, 0], 't_yakalama': r[:, 1], 'rho': r[:, 2],
                    'view_bounded': r[:, 3]})
+    if ev['pk']:
+        r = np.array(ev['pk'], dtype=float)
+        pk_cols = ['t_alma', 't_yakalama'] + list(PK_ALANLAR)
+        write_csv(os.path.join(out, 'p_kestirimi.csv'), pk_cols,
+                  {c: r[:, i] for i, c in enumerate(pk_cols)})
     if masks and a.maske_kaydet:
         np.savez_compressed(os.path.join(out, 'maskeler.npz'),
                             maskeler=np.stack([m for _, _, m in masks]),
@@ -616,6 +640,17 @@ def build(node, a):
     oz['clock_geri_gitme'] = int((np.diff(clk) < 0).sum()) if len(clk) > 1 else 0
     # messages received on /eland/rho (0 when detector_node.publish_rho is off)
     oz['rho_yayini_sayisi'] = len(ev['rho'])
+    # p_kestirici's last word, only when it ran (RUN_SIM_YUKSEKLIK=1).
+    if ev['pk']:
+        r = np.array(ev['pk'], dtype=float)
+        ip = 2 + PK_ALANLAR.index('p_m')
+        son = r[np.isfinite(r[:, ip])][-1:] if np.isfinite(r[:, ip]).any() else r[-1:]
+        g = {k: float(son[0, 2 + i]) for i, k in enumerate(PK_ALANLAR)}
+        oz['p_kestirimi'] = dict(mesaj=len(r), son_durum=int(g['durum']),
+                                 p_m=g['p_m'], p_sigma_m=g['p_sigma_m'],
+                                 alan_m2=g['alan_m2'], pencere_m=g['pencere_m'],
+                                 kare=int(g['kare_sayisi']),
+                                 alan_harita_m2=g['alan_harita_m2'])
     with open(os.path.join(out, 'ep_ozet.json'), 'w') as f:
         json.dump(oz, f, indent=2, ensure_ascii=False, default=float)
 

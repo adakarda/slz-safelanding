@@ -122,6 +122,7 @@ colcon build --packages-select eland_mode        # yalnız bir paket
 # simülasyon
 ./src/eland_sim/scripts/dene.sh otomatik         # kipler: hud, otomatik, toplu, ruzgar, tanim, olcum
 ./src/eland_sim/scripts/run_sim.sh --headless --auto [--params DOSYA] [--world veri_w3]
+RUN_SIM_YUKSEKLIK=1 ./src/eland_sim/scripts/run_sim.sh --world veri_w5 --auto  # + hedef yüzey yüksekliği kestirimi, HUD'da 4. sütun (salt okunur)
 python3 tools/make_params.py /tmp/p.yaml node.param=değer     # koşu başına parametre dosyası
 
 # veri
