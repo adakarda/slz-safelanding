@@ -20,6 +20,11 @@
 #   BASLANGIC_IRTIFA=A  take off to A m instead of the world's / seed's value
 #   DUGUM_BILGI=1       save `ros2 topic info /eland/rho` and `ros2 node info
 #                       /detector_node` from mid-episode (dugum_bilgi.txt)
+#   RUN_SIM_INIS_YASASI=1  run_sim.sh starts the height sources for the
+#                       descent law (see there); here tools/veri/sim_olay.py
+#                       logs them into the episode (gozlemci.csv,
+#                       yasa_durumu.csv, olay.csv). The law: extra parameter
+#                       emergency_landing_mode.inis_yasasi=...
 #
 # Refuses to start while another simulation is running: run_sim.sh kills any
 # PX4/gz it finds and its cleanup kills every pipeline node by name, so
@@ -159,6 +164,12 @@ if [ -n "${POLITIKA:-}" ]; then
 		--gz-world "$GZ_WORLD" --model "${MODEL}_0" >"$OUT/politika.log" 2>&1 &
 	POL=$!
 fi
+OLAY=""
+if [ "${RUN_SIM_INIS_YASASI:-0}" = 1 ]; then
+	VERI_KOSU_ISARET="$ISARET" python3 "$WS_DIR/tools/veri/sim_olay.py" --cikti "$OUT" \
+		--gz-world "$GZ_WORLD" >"$OUT/sim_olay.log" 2>&1 &
+	OLAY=$!
+fi
 BOZ=""
 if [ -n "${BOZUCU:-}" ]; then
 	# shellcheck disable=SC2086
@@ -194,6 +205,7 @@ done
 		esac
 	fi
 	echo "bozucu: '${BOZUCU:-}'"
+	echo "inis_yasasi_secimi: '${RUN_SIM_INIS_YASASI:-0}'"
 	echo "ek_parametreler: '$EXTRA_PARAMS'"
 	echo "params_dosyasi: $OUT/params.yaml"
 	echo "git: $(git -C "$WS_DIR" describe --tags --always --dirty 2>/dev/null)"
@@ -235,6 +247,7 @@ bekle() {
 bekle "$REC" $((${KAYIT_SURE:-240} + 60))
 [ -n "$POL" ] && kill -TERM "$POL" 2>/dev/null
 [ -n "$BOZ" ] && kill -TERM "$BOZ" 2>/dev/null
+[ -n "$OLAY" ] && kill -TERM "$OLAY" 2>/dev/null
 kill -TERM "$RUN" 2>/dev/null
 bekle "$RUN" 40
 cp "$LOG" "$OUT/run_sim.log" 2>/dev/null

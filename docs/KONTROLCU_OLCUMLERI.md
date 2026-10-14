@@ -392,6 +392,22 @@ Kaynak: `docs/VERI_TOPLAMA.md` "Aşama 1".
 
 Kaynak: `docs/KONTROLCU_TASARIM_BRIEF.md` §8.
 
+### 3.6 Saatler: hangi girdi hangi saatte (2026-10-15)
+
+| Girdi / düğüm | Saat | Not |
+|---|---|---|
+| Maske ve `/eland/rho` damgası | Gazebo sim zamanı | görüntü köprüsü Gazebo damgasını taşır; kare aralığı tam 100 ms (ölçülen, kaydedici) |
+| PX4 mesajları (EKF h, vz, eğiklik) | PX4 zamanı (SITL'de sim'e kilitli) | düğümler damgayı değil, alındıkları andaki son değeri kullanır |
+| `yukseklik_gozlemci` | sim zamanı: `use_sim_time`, `/clock` ← `/world/<w>/clock` köprüsü (250 Hz, ölçülen) | kareyi yakalama damgasındaki tahminle karşılaştırır; EKF vz'yi kendi saatinde örnekler |
+| `eland_mode` | duvar saati | aday zaman aşımı, `h_hat_bayat_s`; PX4 komutları px4_ros2'nin zaman eşlemesiyle |
+| Algı zinciri, HUD | duvar saati | değişmedi |
+| `kaydedici.py`, `sim_olay.py`, `gercek_yukseklik.py` | Gazebo saati (gz-transport) | `t_gz` sütunu |
+| RTF | `yukseklik_gozlemci`: sim s / duvar s, ~2 s | `gozlemci.csv`'de her satırda, `olay.csv`'de her 5 s |
+
+- Gözlemci sim saatsiz de çalışır: damga ile düğüm saati 5 s'den çok ayrılırsa
+  damgayı bırakır, kareyi geliş anındaki tahminle karşılaştırır ve bunu bir
+  kez yazar (`damga_kullaniliyor` 0). Bu durumda gecikme telafisi yoktur.
+
 ---
 
 ## 4. ρ (kapsama oranı)

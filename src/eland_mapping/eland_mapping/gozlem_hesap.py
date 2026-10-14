@@ -21,7 +21,7 @@ Outside ``view_bounded`` the relation does not hold: measured on 62 episodes,
 a region running off the frame edge reads 10-29% below A/(K h^2) while
 rho < 0.75. Those frames are gated out, never fitted.
 
-Two estimators share one interface:
+Three estimators share one interface:
 
 ``Sabit``   the fixed-gain observer (owner's design, 2026-10-14)
 
@@ -35,6 +35,9 @@ Two estimators share one interface:
 
 ``Kalman``  the same model, the gain taken from a 2x2 covariance: large while
             little is known, shrinking as frames arrive.
+
+``Dogrudan`` the baseline: each usable frame replaces x^ by (c0 - ln rho)/2
+            with c0 from the map's area, frozen. No filtering.
 
 A frame is compared with x^ as it was at the frame's capture stamp (a short
 history), and the correction is added to the current state. Ignoring the stamp
@@ -286,3 +289,37 @@ class Kalman(_Taban):
     def sigma_h(self):
         """1-sigma of h^, m (first order)."""
         return self.h * math.sqrt(max(self.pxx, 0.0))
+
+
+class Dogrudan(_Taban):
+    """The baseline: height from one frame and a frozen area, no filtering.
+
+        h = sqrt(A0 / (K rho)),    i.e.  x = (c0 - ln rho) / 2
+
+    c0 = ln(A0 / K) from the candidate's area_m2 at VALIDATE entry and never
+    corrected. Between usable frames, and once the region fills the view, it
+    carries on with the descent like the observers. Same gates, except |nu|:
+    there is no model to call a frame an outlier against.
+
+    Over a raised target A0 comes from the map, which is projected with the
+    EKF height (area_m2 grows with h_ekf^2), so this hands back roughly the
+    EKF's own error. It is here to show that, not to land on.
+    """
+
+    def olcum(self, t_yakalama, rho, view_bounded, egiklik=None, damga_kullan=True):
+        if self.x is None:
+            return KAPI_RHO_YOK
+        kapi = self.kapilar.on_kapi(rho, view_bounded, egiklik)
+        if kapi:
+            self.kapi_sayac[kapi] += 1
+            self.son_kapi = kapi
+            self.nu = 0.0
+            return kapi
+        xp = self.x_zamaninda(t_yakalama) if damga_kullan else self.x
+        self.nu = math.log(rho) - (self.c - 2.0 * xp)
+        # The frame measured the height at capture; the descent since then
+        # (x now minus x then) carries it to the present.
+        self.x = min(max(0.5 * (self.c - math.log(rho)) + (self.x - xp), X_ALT), X_UST)
+        self.son_kapi = 0
+        self.kullanilan += 1
+        return 0

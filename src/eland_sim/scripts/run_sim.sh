@@ -102,6 +102,15 @@ Environment:
                      area from the safe region's growth, read-only) and
                      switch detector_node.publish_rho on for it; the HUD
                      gets a fourth column. Unset: none of this runs.
+  RUN_SIM_INIS_YASASI=1  height sources for the descent law: start
+                     yukseklik_gozlemci (on simulation time, /clock bridged),
+                     the ground-truth publisher for the 'kahin' law
+                     (tools/veri/gercek_yukseklik.py), and switch
+                     detector_node.publish_rho and
+                     emergency_landing_mode.inis_yasasi_secimi on. The law
+                     itself is the parameter file's inis_yasasi ("ekf" unless
+                     set; ros2 param set changes it in flight). Unset: none of
+                     this runs.
 EOF
 }
 
@@ -259,6 +268,13 @@ cleanup() {
 	pkill -x image_bridge 2>/dev/null
 	# Only exists with RUN_SIM_YUKSEKLIK=1; a no-op otherwise.
 	pkill -x p_kestirici 2>/dev/null
+	# Only with RUN_SIM_INIS_YASASI=1; no-ops otherwise. By node name, not by
+	# "yukseklik_gozlemci": kosu.sh's own command line carries that word in
+	# its parameters, and pkill -f would end the batch.
+	pkill -f "[_]_node:=yukseklik_gozlemci" 2>/dev/null
+	pkill -f "[_]_node:=clock_bridge" 2>/dev/null
+	[ -n "${KAHIN_PID:-}" ] && kill "$KAHIN_PID" 2>/dev/null
+	pkill -f "[g]ercek_yukseklik.py" 2>/dev/null
 	# tracker_node and obstacle_driver too: they outlived script-stopped runs
 	# and piled up (64 pairs over one batch, 2026-10-03) until the EKF
 	# vertical velocity drifted. RUN_SIM_ESKI_TEMIZLIK=1 leaves them running,
@@ -485,6 +501,38 @@ PY
 	PARAMS_ARG="params_file:=$YK_PARAMS"
 	EXTRA_LAUNCH_ARGS="$EXTRA_LAUNCH_ARGS p_kestirici:=true"
 	echo "[run_sim]   yukseklik kestirimi acik: p_kestirici + publish_rho ($YK_PARAMS)"
+fi
+
+# ------------------------------------------------------- descent law sources
+# RUN_SIM_INIS_YASASI=1: the launch gets yukseklik_gozlemci and the clock
+# bridge; the parameter file it gets is a copy of the one it would have had
+# (after RUN_SIM_YUKSEKLIK's, if both are set) with detector_node.publish_rho
+# and emergency_landing_mode.inis_yasasi_secimi switched on; and the
+# ground-truth publisher for the 'kahin' law starts. Unset, nothing here runs
+# and the launch line below is the same as before.
+if [ "${RUN_SIM_INIS_YASASI:-0}" = 1 ]; then
+	IY_BASE="${PARAMS_ARG#params_file:=}"
+	[ -n "$IY_BASE" ] || IY_BASE="$WS_DIR/install/eland_sim/share/eland_sim/config/eland_params.yaml"
+	IY_PARAMS="$LOG_DIR/params_inis_yasasi.yaml"
+	python3 - "$IY_BASE" "$IY_PARAMS" <<'PY' || fail "RUN_SIM_INIS_YASASI: parametre dosyasi yazilamadi"
+import sys, yaml
+doc = yaml.safe_load(open(sys.argv[1], encoding='utf-8'))
+doc.setdefault('detector_node', {}).setdefault('ros__parameters', {})['publish_rho'] = True
+doc.setdefault('emergency_landing_mode', {}).setdefault('ros__parameters', {})['inis_yasasi_secimi'] = True
+yaml.safe_dump(doc, open(sys.argv[2], 'w', encoding='utf-8'), sort_keys=False)
+PY
+	PARAMS_ARG="params_file:=$IY_PARAMS"
+	EXTRA_LAUNCH_ARGS="$EXTRA_LAUNCH_ARGS yukseklik_gozlemci:=true gz_world:=$WORLD_NAME"
+	if [ -n "${WORLD_FILE:-}" ]; then
+		IY_DUNYA="${WORLD_FILE%.sdf}.yaml"
+	else
+		IY_DUNYA="$WS_DIR/src/eland_sim/worlds/veri/acik_alan.yaml"
+	fi
+	GZ_IP=127.0.0.1 PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH:-}" \
+		python3 "$WS_DIR/tools/veri/gercek_yukseklik.py" --dunya-yaml "$IY_DUNYA" \
+		--gz-world "$WORLD_NAME" --model "${MODEL}_0" >"$LOG_DIR/gercek_yukseklik.log" 2>&1 &
+	KAHIN_PID=$!
+	echo "[run_sim]   inis yasasi secimi acik: yukseklik_gozlemci + /clock + kahin ($IY_PARAMS)"
 fi
 
 # --------------------------------------------------------------- pipeline

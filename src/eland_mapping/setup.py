@@ -23,6 +23,7 @@ setup(
             'detector_node = eland_mapping.detector_node:main',
             'tracker_node = eland_mapping.tracker_node:main',
             'p_kestirici = eland_mapping.p_kestirici:main',
+            'yukseklik_gozlemci = eland_mapping.yukseklik_gozlemci:main',
         ],
     },
 )

@@ -81,6 +81,8 @@ Ayrıntılar: [`VERI_TOPLAMA.md`](VERI_TOPLAMA.md), aynı adlı bölümler.
 | `ident_enabled` | false (yalnız C++'ta) | tesis tanımlama kipi: kare dalga, açık çevrim, iniş yok | `v2.9` |
 | `RUN_SIM_MOD_TEKRAR` (ortam) | yok = kapalı | `run_sim.sh` modu seçti mi kontrol eder, gerekirse yeniden gönderir | `v6.5` |
 | `RUN_SIM_YUKSEKLIK` (ortam) | yok = kapalı | `p_kestirici` düğümü: hedef yüzeyin yüksekliği (P) ve bölge alanı, `1/√ρ`–`h_ekf` doğrusundan; `/eland/yukseklik_kestirimi`, HUD'da dördüncü sütun, kaydedicide `p_kestirimi.csv`. **Salt okunur: mod kullanmıyor** | `p-kestirici` dalı |
+| `inis_yasasi_secimi`, `inis_yasasi`, `h_hat_bayat_s`, `yasa_gecis_s` | false, "ekf", 0.5, 1.0 | iniş yasasının ve COMMIT eşiğinin yükseklik kaynağı: ekf / gozlemci / dogrudan / kahin (yalnız sim) / lazer. COMMIT'te kilit, öncesinde 1 s harmanlama; bayat kaynakta "EKF − son fark". HOLD, ABORT, arama ve `altitude_agl` EKF'de. Kapalıyken hiçbiri tanımlanmaz | `inis-yasasi` dalı, aşama 1 |
+| `RUN_SIM_INIS_YASASI` (ortam) | yok = kapalı | `yukseklik_gozlemci` (sim saatinde, `/clock` köprüsü), kâhin yayıncısı, `publish_rho` ve `inis_yasasi_secimi` açık; `kosu.sh` ile `gozlemci.csv`, `yasa_durumu.csv`, `olay.csv` | `inis-yasasi` dalı, aşama 1 |
 
 ## 5. Açık / sırada
 

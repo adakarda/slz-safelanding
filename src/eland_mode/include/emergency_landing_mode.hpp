@@ -35,7 +35,9 @@
 
 #include <Eigen/Core>
 #include <eland_msgs/msg/landing_candidate.hpp>
+#include <eland_msgs/msg/inis_yasasi_durumu.hpp>
 #include <eland_msgs/msg/landing_state.hpp>
+#include <eland_msgs/msg/yukseklik_kaynagi.hpp>
 #include <px4_ros2/components/mode.hpp>
 #include <px4_ros2/control/setpoint_types/experimental/trajectory.hpp>
 #include <px4_ros2/control/setpoint_types/multicopter/goto.hpp>
@@ -46,8 +48,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace eland {
 
@@ -267,6 +271,10 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
     const Eigen::Vector3f pos_ned = _local_position->positionNed();
     _last_pos_ned = pos_ned;  // transition() needs it to freeze a commit target
     const float altitude_m = -pos_ned.z();
+    // What the descent law and the COMMIT threshold run on: the EKF height,
+    // unless inis_yasasi_secimi picked another source. With it off this is
+    // altitude_m itself.
+    const float law_altitude_m = lawAltitude(altitude_m);
     const bool live = candidateIsLive();
 
     // Target in NED plus the vertical speed cap applied to it. Filled by the
@@ -319,9 +327,9 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
       } break;
 
       case State::Validate: {
-        if (altitude_m <= _landing_altitude_m && !_ident_enabled) {
+        if (law_altitude_m <= _landing_altitude_m && !_ident_enabled) {
           transition(State::Commit,
-                     "at " + toStr(altitude_m) + " m, committing to touchdown");
+                     "at " + toStr(law_altitude_m) + " m, committing to touchdown");
           break;
         }
         // Data collection: the EKF height above is measured from the take-off
@@ -350,7 +358,7 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
         }
         const Eigen::Vector3f cand = candidateNed();
         target_ned = {cand.x(), cand.y(), -_landing_altitude_m};
-        max_vertical_speed = descentSpeed(altitude_m);
+        max_vertical_speed = descentSpeed(law_altitude_m);
         // Data collection: the pattern replaces the law's output as the
         // reference. The PI, its limits and the state machine are unchanged,
         // and the published reference is the one actually tracked.
@@ -478,7 +486,8 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
         // ever received, candidateNed() would read a default-constructed
         // message and fly the aircraft to the local origin instead of down.
         const float touchdown_speed =
-            _commit_irtifa_yasasi ? commitAltitudeSpeed(altitude_m) : descentSpeed(altitude_m);
+            _commit_irtifa_yasasi ? commitAltitudeSpeed(law_altitude_m)
+                                  : descentSpeed(law_altitude_m);
         px4_ros2::TrajectorySetpoint touchdown;
         touchdown.withPositionX(_commit_target_ned.x())
             .withPositionY(_commit_target_ned.y())
@@ -562,6 +571,257 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
 
     _candidate_topic = _node.declare_parameter<std::string>("candidate_topic", "/eland/candidate");
     _state_topic = _node.declare_parameter<std::string>("state_topic", "/eland/state");
+
+    // Height source of the descent law (2026-10-14). Off by default, and when
+    // off nothing below exists: no parameter, subscription, publisher or
+    // callback, and lawAltitude() hands back the EKF height untouched.
+    _yasa_secimi = _node.declare_parameter<bool>("inis_yasasi_secimi", false);
+    if (_yasa_secimi) {
+      const std::string secili = _node.declare_parameter<std::string>("inis_yasasi", "ekf");
+      if (!yasaCoz(secili, _secili)) {
+        RCLCPP_WARN(_node.get_logger(), "inis_yasasi \"%s\" bilinmiyor; ekf. Gecerli: %s",
+                    secili.c_str(), kYasalar);
+        _secili = Yasa::Ekf;
+      }
+      _aktif = _onceki = _secili;
+      _h_hat_bayat_s = declare("h_hat_bayat_s", 0.5);
+      _yasa_gecis_s = declare("yasa_gecis_s", 1.0);
+      const std::string h_hat_topic =
+          _node.declare_parameter<std::string>("h_hat_topic", "/eland/h_hat");
+      _h_hat_sub = _node.create_subscription<eland_msgs::msg::YukseklikKaynagi>(
+          h_hat_topic, rclcpp::SensorDataQoS(),
+          [this](eland_msgs::msg::YukseklikKaynagi::UniquePtr msg) {
+            _h_hat = *msg;
+            _h_hat_time = _node.get_clock()->now();
+          });
+      _yasa_pub = _node.create_publisher<eland_msgs::msg::InisYasasiDurumu>(
+          _node.declare_parameter<std::string>("yasa_durumu_topic", "/eland/inis_yasasi_durumu"),
+          rclcpp::QoS(10).reliable());
+      // Registered after the declarations: a declaration with an override
+      // would otherwise come through here too.
+      _param_cb = _node.add_on_set_parameters_callback(
+          [this](const std::vector<rclcpp::Parameter>& params) {
+            rcl_interfaces::msg::SetParametersResult sonuc;
+            sonuc.successful = true;
+            for (const auto& p : params) {
+              if (p.get_name() == "inis_yasasi") {
+                Yasa y;
+                if (p.get_type() != rclcpp::ParameterType::PARAMETER_STRING ||
+                    !yasaCoz(p.as_string(), y)) {
+                  sonuc.successful = false;
+                  sonuc.reason = std::string("inis_yasasi: ") + kYasalar;
+                } else {
+                  _secili = y;  // lawAltitude() takes it up, unless COMMIT has locked
+                }
+              } else if (p.get_name() == "yasa_gecis_s" || p.get_name() == "h_hat_bayat_s") {
+                if (p.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE || p.as_double() < 0.0) {
+                  sonuc.successful = false;
+                  sonuc.reason = p.get_name() + " >= 0 olmali";
+                } else if (p.get_name() == "yasa_gecis_s") {
+                  _yasa_gecis_s = static_cast<float>(p.as_double());
+                } else {
+                  _h_hat_bayat_s = static_cast<float>(p.as_double());
+                }
+              }
+            }
+            return sonuc;
+          });
+      RCLCPP_WARN(_node.get_logger(),
+                  "INIS YASASI SECIMI ACIK: yasa %s, kaynak %s, bayat %.2f s, gecis %.1f s",
+                  yasaAdi(_secili), h_hat_topic.c_str(), _h_hat_bayat_s, _yasa_gecis_s);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Height source of the descent law (inis_yasasi_secimi)
+  // ------------------------------------------------------------------
+  enum class Yasa { Ekf, Gozlemci, Dogrudan, Kahin, Lazer };
+  static constexpr const char* kYasalar = "ekf | gozlemci | dogrudan | kahin | lazer";
+
+  static bool yasaCoz(const std::string& ad, Yasa& y)
+  {
+    if (ad == "ekf") {
+      y = Yasa::Ekf;
+    } else if (ad == "gozlemci") {
+      y = Yasa::Gozlemci;
+    } else if (ad == "dogrudan") {
+      y = Yasa::Dogrudan;
+    } else if (ad == "kahin") {
+      y = Yasa::Kahin;
+    } else if (ad == "lazer") {
+      y = Yasa::Lazer;
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  static const char* yasaAdi(Yasa y)
+  {
+    switch (y) {
+      case Yasa::Ekf:
+        return "ekf";
+      case Yasa::Gozlemci:
+        return "gozlemci";
+      case Yasa::Dogrudan:
+        return "dogrudan";
+      case Yasa::Kahin:
+        return "kahin";
+      case Yasa::Lazer:
+        return "lazer";
+    }
+    return "?";
+  }
+
+  bool inInis(State s) const
+  {
+    return s == State::Validate || s == State::Hold || s == State::Commit;
+  }
+
+  /// The height the descent law runs on.
+  ///
+  /// Off (inis_yasasi_secimi false): altitude_m, untouched. On, outside a
+  /// descent: altitude_m too. In a descent: the active law's source from
+  /// /eland/h_hat -- the EKF's own height, the observer, the direct estimate,
+  /// the Gazebo truth (simulation only) or the rangefinder.
+  ///
+  /// The active law follows the parameter until COMMIT and locks there; a
+  /// change before that is blended over yasa_gecis_s, so the reference ramps
+  /// instead of stepping. A source that goes stale (h_hat_bayat_s) or has
+  /// nothing falls back to the EKF height minus the offset at its last fresh
+  /// sample: continuous, and still right over a raised target.
+  float lawAltitude(float altitude_m)
+  {
+    if (!_yasa_secimi) {
+      return altitude_m;
+    }
+    _son_h_ekf = altitude_m;
+    if (!inInis(_state)) {
+      _son_h_yasa = altitude_m;
+      return altitude_m;
+    }
+    const rclcpp::Time now = _node.get_clock()->now();
+    if (!_kilitli && _secili != _aktif) {
+      _onceki = _aktif;
+      _aktif = _secili;
+      _gecis_baslangic = now;
+      _gecis_suruyor = _yasa_gecis_s > 0.f;
+      _yedekte = false;
+      _yedek_fark_var = false;
+      RCLCPP_INFO(_node.get_logger(), "inis yasasi %s -> %s, %.1f s harmanlama", yasaAdi(_onceki),
+                  yasaAdi(_aktif), _yasa_gecis_s);
+    }
+    float h = kaynakYuksekligi(_aktif, altitude_m, now, true);
+    _harmanlama = 1.f;
+    if (_gecis_suruyor) {
+      const float a = std::clamp(
+          static_cast<float>((now - _gecis_baslangic).seconds()) / _yasa_gecis_s, 0.f, 1.f);
+      h = (1.f - a) * kaynakYuksekligi(_onceki, altitude_m, now, false) + a * h;
+      _harmanlama = a;
+      _gecis_suruyor = a < 1.f;
+    }
+    _son_h_yasa = h;
+    return h;
+  }
+
+  /// One source's height now, or its fallback. Only the active source
+  /// (kaydet) updates the fallback offset and reports fallback changes.
+  float kaynakYuksekligi(Yasa y, float altitude_m, const rclcpp::Time& now, bool kaydet)
+  {
+    if (y == Yasa::Ekf) {
+      if (kaydet) {
+        _yedekte = false;
+      }
+      return altitude_m;
+    }
+    const bool taze = _h_hat_time.nanoseconds() != 0 &&
+                      (now - _h_hat_time).seconds() <= _h_hat_bayat_s;
+    float h = std::numeric_limits<float>::quiet_NaN();
+    if (taze) {
+      switch (y) {
+        case Yasa::Gozlemci:
+          h = _h_hat.h_gozlemci_m;
+          break;
+        case Yasa::Dogrudan:
+          h = _h_hat.h_dogrudan_m;
+          break;
+        case Yasa::Kahin:
+          h = _h_hat.h_kahin_m;
+          break;
+        case Yasa::Lazer:
+          h = _h_hat.h_lazer_m;
+          break;
+        case Yasa::Ekf:
+          break;
+      }
+    }
+    if (std::isfinite(h)) {
+      if (kaydet) {
+        _yedek_fark = altitude_m - h;
+        _yedek_fark_var = true;
+        if (_yedekte) {
+          RCLCPP_INFO(_node.get_logger(), "inis yasasi %s: kaynak geri geldi, yedek %.1f s surdu",
+                      yasaAdi(y), (now - _yedek_baslangic).seconds());
+          _yedekte = false;
+        }
+      }
+      return h;
+    }
+    // Nothing usable. The first h_hat_bayat_s of a descent is the source
+    // starting up (the observer starts from the EKF height, so the offset is
+    // 0 and the switch-over is seamless); after that it is a fallback.
+    if (kaydet && !_yedekte &&
+        (_yedek_fark_var || (now - _inis_baslangic).seconds() > _h_hat_bayat_s)) {
+      _yedekte = true;
+      _yedek_baslangic = now;
+      _yedek_nedeni = taze ? "kaynakta deger yok" : "kaynak bayat";
+      RCLCPP_WARN(_node.get_logger(), "inis yasasi %s: %s; EKF - %.2f m ile devam", yasaAdi(y),
+                  _yedek_nedeni.c_str(), _yedek_fark_var ? _yedek_fark : 0.f);
+    }
+    return altitude_m - (_yedek_fark_var ? _yedek_fark : 0.f);
+  }
+
+  /// Law bookkeeping on a state change: a new descent takes the selected law
+  /// at once, COMMIT locks it and records the heights it was entered with.
+  void yasaGecisi(State onceki, State sonraki)
+  {
+    const rclcpp::Time now = _node.get_clock()->now();
+    if (inInis(sonraki) && !inInis(onceki)) {
+      _aktif = _onceki = _secili;
+      _gecis_suruyor = false;
+      _kilitli = false;
+      _yedekte = false;
+      _yedek_fark_var = false;
+      _inis_baslangic = now;
+      _commit_h_ekf = _commit_h_yasa = std::numeric_limits<float>::quiet_NaN();
+    }
+    if (sonraki == State::Commit) {
+      _kilitli = true;
+      _commit_h_ekf = _son_h_ekf;
+      _commit_h_yasa = _son_h_yasa;
+      RCLCPP_INFO(_node.get_logger(), "COMMIT: yasa %s kilitlendi, h_yasa %.2f m, h_ekf %.2f m",
+                  yasaAdi(_aktif), _commit_h_yasa, _commit_h_ekf);
+    } else if (!inInis(sonraki)) {
+      _kilitli = false;
+    }
+  }
+
+  void publishYasaDurumu(const rclcpp::Time& now, float altitude_m)
+  {
+    eland_msgs::msg::InisYasasiDurumu m;
+    m.header.stamp = now;
+    m.secili = yasaAdi(_secili);
+    m.aktif = yasaAdi(_aktif);
+    m.kilitli = _kilitli;
+    m.harmanlama = _harmanlama;
+    m.h_yasa_m = _son_h_yasa;
+    m.h_ekf_m = altitude_m;
+    m.yedekte = _yedekte;
+    m.yedek_nedeni = _yedekte ? _yedek_nedeni : "";
+    m.yedek_fark_m = _yedek_fark_var ? _yedek_fark : std::numeric_limits<float>::quiet_NaN();
+    m.commit_h_ekf_m = _commit_h_ekf;
+    m.commit_h_yasa_m = _commit_h_yasa;
+    _yasa_pub->publish(m);
   }
 
   /// Descent speed from the visual size of the landing site.
@@ -717,6 +977,9 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
     }
     RCLCPP_INFO(_node.get_logger(), "%s -> %s: %s", stateName(_state), stateName(next),
                 reason.c_str());
+    if (_yasa_secimi) {
+      yasaGecisi(_state, next);
+    }
     _state = next;
     _reason = reason;
     // Every entry into a descent starts the rate loop from its reference with
@@ -765,6 +1028,9 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
     msg.area_ratio = _area_ratio;
     msg.area_law_active = _area_law_active;
     _state_pub->publish(msg);
+    if (_yasa_secimi) {
+      publishYasaDurumu(now, altitude_m);
+    }
   }
 
   static const char* stateName(State s)
@@ -868,6 +1134,30 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
   rclcpp::Time _veri_vref_time{0, 0, RCL_ROS_TIME};
   rclcpp::Time _veri_h_time{0, 0, RCL_ROS_TIME};
 
+  // inis_yasasi_secimi; untouched while it is off.
+  bool _yasa_secimi{false};
+  Yasa _secili{Yasa::Ekf};
+  Yasa _aktif{Yasa::Ekf};
+  Yasa _onceki{Yasa::Ekf};
+  bool _kilitli{false};
+  bool _gecis_suruyor{false};
+  float _harmanlama{1.f};
+  float _yasa_gecis_s{1.f};
+  float _h_hat_bayat_s{0.5f};
+  bool _yedekte{false};
+  bool _yedek_fark_var{false};
+  float _yedek_fark{0.f};
+  std::string _yedek_nedeni;
+  float _son_h_ekf{std::numeric_limits<float>::quiet_NaN()};
+  float _son_h_yasa{std::numeric_limits<float>::quiet_NaN()};
+  float _commit_h_ekf{std::numeric_limits<float>::quiet_NaN()};
+  float _commit_h_yasa{std::numeric_limits<float>::quiet_NaN()};
+  eland_msgs::msg::YukseklikKaynagi _h_hat;
+  rclcpp::Time _h_hat_time{0, 0, RCL_ROS_TIME};
+  rclcpp::Time _gecis_baslangic{0, 0, RCL_ROS_TIME};
+  rclcpp::Time _yedek_baslangic{0, 0, RCL_ROS_TIME};
+  rclcpp::Time _inis_baslangic{0, 0, RCL_ROS_TIME};
+
   std::shared_ptr<px4_ros2::MulticopterGotoSetpointType> _goto_setpoint;
   std::shared_ptr<px4_ros2::TrajectorySetpointType> _trajectory_setpoint;
   std::shared_ptr<px4_ros2::OdometryLocalPosition> _local_position;
@@ -876,6 +1166,9 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
   rclcpp::Publisher<eland_msgs::msg::LandingState>::SharedPtr _state_pub;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr _veri_vref_sub;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr _veri_h_sub;
+  rclcpp::Subscription<eland_msgs::msg::YukseklikKaynagi>::SharedPtr _h_hat_sub;
+  rclcpp::Publisher<eland_msgs::msg::InisYasasiDurumu>::SharedPtr _yasa_pub;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr _param_cb;
 };
 
 }  // namespace eland

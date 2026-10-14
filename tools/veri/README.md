@@ -95,6 +95,8 @@ PYTHONPATH=/usr/lib/python3/dist-packages python3 tools/veri/birlestir.py
 | `egiklik_rho.py` | Eğiklik ve ρ: ölçülen ρ ile geometriden hesaplanan ρ (Tur 3 D) |
 | `p_kestirimi.py` | Hedef yüzey yüksekliği (P) ve bölge alanı, `1/√ρ`–`h_ekf` doğrusundan, kayıtlı bölümlerde; gerçek değer ve harita alanıyla karşılaştırma, `--grafik` ile bölüm başına `p_kestirimi.png`. Canlı karşılığı `p_kestirici` düğümü (`RUN_SIM_YUKSEKLIK=1`) |
 | `gozlemci_cevrimdisi.py` | Yükseklik gözlemcisi (sabit kazanç ve Kalman; hesap `src/eland_mapping/eland_mapping/gozlem_hesap.py`) kayıtlı ρ serilerinde, **açık çevrim**: ρ modeli, ν₀, W5 pencereli / penceresiz, Kalman σ'sı bölüm ve senaryo dışarıda bırakılarak, W3 sapmasının kaynağı, D. `model \| nu0 \| ozet \| loo \| sapma \| hepsi`, `--rapor DOSYA`. Sonuçlar `docs/KONTROLCU_OLCUMLERI.md` §4.8 |
+| `sim_olay.py` | `RUN_SIM_INIS_YASASI=1` iken `kosu.sh` başlatır: `/eland/h_hat`, `/eland/inis_yasasi_durumu` ve izlenen düğümlerin parametre değişimleri bölüm klasörüne (`gozlemci.csv`, `yasa_durumu.csv`, `olay.csv`; sözlük `data_dictionary.md`). `kaydedici.py`'ye dokunmaz |
+| `gercek_yukseklik.py` | Yalnız sim: Gazebo pozundan aracın altındaki yüzeye gerçek yükseklik, `/eland/sim/h_gercek`; modun `kahin` yasası için. `run_sim.sh` `RUN_SIM_INIS_YASASI=1` ile başlatır |
 | `bozucu_dogrula.py` | Bozucular gerçekten uygulandı mı, sayılarla (Tur 3 C) |
 | `tur3_dogrula.py`, `tur4_dogrula.py` | Tur 3 A/B ve Tur 4 madde 2 doğrulama tabloları |
 

@@ -120,6 +120,18 @@ def generate_launch_description() -> LaunchDescription:
                         'detector_node.publish_rho on (run_sim.sh does both '
                         'with RUN_SIM_YUKSEKLIK=1).'),
         DeclareLaunchArgument(
+            'yukseklik_gozlemci', default_value='false',
+            description='Start yukseklik_gozlemci (every height the mode\'s '
+                        'inis_yasasi can be switched to, on /eland/h_hat) and '
+                        'bridge Gazebo\'s clock to /clock for it: it runs on '
+                        'simulation time, the clock of the mask stamps. Needs '
+                        'detector_node.publish_rho on (run_sim.sh does all of '
+                        'it with RUN_SIM_INIS_YASASI=1).'),
+        DeclareLaunchArgument(
+            'gz_world', default_value='eland_test',
+            description='Gazebo world name; the clock bridge reads '
+                        '/world/<gz_world>/clock.'),
+        DeclareLaunchArgument(
             'log_level', default_value='info',
             description='ROS log level for all pipeline nodes.'),
     ]
@@ -180,6 +192,25 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[params], output='screen', arguments=log_args,
         additional_env=compat_env,
         condition=IfCondition(LaunchConfiguration('p_kestirici')),
+    )
+
+    # 2d. Height sources for the descent law. Off by default. The observer
+    #     compares each frame with its estimate at the frame's capture stamp,
+    #     which is simulation time, so it runs on simulation time; /clock is
+    #     bridged from Gazebo only when it runs. Nothing else here uses it.
+    clock_bridge = Node(
+        package='ros_gz_bridge', executable='parameter_bridge', name='clock_bridge',
+        arguments=[['/world/', LaunchConfiguration('gz_world'),
+                    '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock']],
+        remappings=[(['/world/', LaunchConfiguration('gz_world'), '/clock'], '/clock')],
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('yukseklik_gozlemci')),
+    )
+    yukseklik_gozlemci = Node(
+        package='eland_mapping', executable='yukseklik_gozlemci', name='yukseklik_gozlemci',
+        parameters=[params, {'use_sim_time': True}], output='screen', arguments=log_args,
+        additional_env=compat_env,
+        condition=IfCondition(LaunchConfiguration('yukseklik_gozlemci')),
     )
 
     hud = Node(
@@ -243,5 +274,5 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         args + [labels_bridge, colored_bridge] + pipeline_nodes
-        + [obstacle_driver, p_kestirici, hud, hud_view, station, mode_node,
-           rviz_tf, rviz])
+        + [obstacle_driver, p_kestirici, clock_bridge, yukseklik_gozlemci, hud,
+           hud_view, station, mode_node, rviz_tf, rviz])

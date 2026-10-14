@@ -129,6 +129,65 @@ Kapalıyken dosya yazılmaz.
 `DUGUM_BILGI=1` ile koşulan bölümlerde `dugum_bilgi.txt`: bölüm ortasında
 `ros2 topic info /eland/rho -v` ve `ros2 node info /detector_node`.
 
+## gozlemci.csv, yasa_durumu.csv, olay.csv — iniş yasası seçimi (yalnız `RUN_SIM_INIS_YASASI=1` iken)
+
+`tools/veri/sim_olay.py` yazar (2026-10-15'ten; `kaydedici.py`'ye dokunulmadı).
+Kapalıyken dosya yok. `t_gz` öteki dosyalardaki gibi Gazebo saatinden
+simülasyon zamanı. Dosyalar satır satır yazılır ve kapanışta kapatılır; son
+satır `olay.csv`'de `sim_olay, bitti`.
+
+**gozlemci.csv** — `/eland/h_hat` mesajı başına (`eland_msgs/YukseklikKaynagi`,
+`yukseklik_gozlemci`, ~50 Hz sim). Yükseklikler modun kuralıyla: araç yüzeyde
+dururken 0.
+
+| Sütun | Birim | Not |
+|---|---|---|
+| t_gz | s | |
+| rtf | — | gerçek zaman çarpanı: sim s / duvar s, ~2 s üzerinden |
+| damga_kullaniliyor | 0/1 | kare, yakalama damgasındaki tahminle karşılaştırılıyor; 0 = saatler uyuşmuyor, geliş anı kullanılıyor |
+| h_ekf_m | m | `−z`, kalkış noktasına göre |
+| h_gozlemci_m | m | gözlemci (`gozlemci_tipi`); iniş dışında boş |
+| h_dogrudan_m | m | `√(A₀/(4.216·ρ))`, A₀ VALIDATE girişinde dondurulur |
+| h_kahin_m | m | Gazebo gerçeği (`gercek_yukseklik.py`), yalnız sim |
+| h_lazer_m | m | EKF `dist_bottom`, yalnız geçerliyken (lazersiz modelde boş) |
+| gozlemci_tipi, gecerli | — | `sabit` / `kalman`; bu iniş için başlatıldı mı |
+| x_hat, c_hat, alan_m2 | —, —, m² | ln ĥ_kamera, ln(A/4.216), 4.216·e^ĉ |
+| nu | — | son karenin yeniliği (kapıdan önce elenince 0) |
+| sigma_h_m | m | Kalman 1σ (sabitte boş) |
+| iraksama_1ps, iraksama_kahin_1ps | 1/s | D = vz/h; gözlemcinin h'siyle, gerçek h ile |
+| v_asagi_mps | m/s | EKF dikey hız, aşağı + |
+| son_kapi | bit | 1 ρ yok, 2 doyum, 4 kadraj kenarı, 8 eğiklik, 16 aykırı |
+| kullanilan_kare, kapi_rho_yok, kapi_doyum, kapi_sinir, kapi_egiklik, kapi_aykiri | — | bu inişte |
+| kilitli, kilit_suresi_s | 0/1, s | art arda `kilit_kare` aykırı kare; davranış değişmez, yalnız görünür |
+
+**yasa_durumu.csv** — `/eland/inis_yasasi_durumu` mesajı başına
+(`eland_msgs/InisYasasiDurumu`, mod, ~10 Hz).
+
+| Sütun | Birim | Not |
+|---|---|---|
+| secili, aktif | — | `inis_yasasi` parametresi / bu inişin yasası |
+| kilitli | 0/1 | COMMIT: yasa artık parametreyi izlemiyor |
+| harmanlama | 0..1 | yasa değişiminin ilerlemesi (1 = bitti) |
+| h_yasa_m, h_ekf_m | m | yasanın kullandığı yükseklik; EKF |
+| yedekte, yedek_nedeni, yedek_fark_m | —, —, m | kaynak bayat ya da boş: yasa `h_ekf − yedek_fark` ile sürer |
+| commit_h_ekf_m, commit_h_yasa_m | m | COMMIT'e girerken (öncesinde boş) |
+
+**olay.csv** — `t_gz, kaynak, olay, ayrinti`, değişiklik başına bir satır.
+
+| kaynak | olay | ayrinti |
+|---|---|---|
+| parametre | düğüm adı | `ad=değer` (izlenen: `emergency_landing_mode`, `yukseklik_gozlemci`) |
+| mod | yasa | `secili=… aktif=…` |
+| mod | yedek_basladi / yedek_bitti | neden ve fark / süre |
+| mod | commit | yasa, h_yasa, h_ekf |
+| gozlemci | baslatildi | tip, h_ekf, alan |
+| gozlemci | kilit_basladi / kilit_bitti | ν / süre |
+| gozlemci | damga_birakildi | saatler uyuşmuyor |
+| zaman | rtf | her 5 s |
+| sim_olay | basladi / bitti | çıktı klasörü / dosyalar kapanırken |
+
+`kosul.yaml`: `inis_yasasi_secimi: '1'`; yasa `ek_parametreler`'de.
+
 ## karar_olaylari.csv — aday başına (~1.8 Hz)
 
 `t_alma`, `t_damga` (adayın dayandığı haritanın damgası), `gecerli`,

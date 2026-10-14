@@ -351,6 +351,48 @@ emergency_landing_mode:
     descent_kaw: 1.0
     candidate_topic: "/eland/candidate"
     state_topic: "/eland/state"
+    # Height source of the descent law (2026-10-14, inis-yasasi). Off: the
+    # law and the COMMIT threshold run on the EKF height, as always, and the
+    # three keys after it are not even declared. RUN_SIM_INIS_YASASI=1 turns
+    # it on for a run (run_sim.sh writes a copy of this file).
+    #   inis_yasasi: ekf | gozlemci | dogrudan | kahin (Gazebo truth, sim
+    #                only) | lazer (EKF dist_bottom; needs a rangefinder)
+    # Settable in flight (ros2 param set). Locks at COMMIT; a change before
+    # that is blended over yasa_gecis_s. A source older than h_hat_bayat_s
+    # falls back to h_ekf minus its last known offset (no step).
+    inis_yasasi_secimi: false
+    inis_yasasi: "ekf"
+    h_hat_bayat_s: 0.5
+    yasa_gecis_s: 1.0
+
+yukseklik_gozlemci:
+  ros__parameters:
+    # Every height the mode's inis_yasasi can use, on /eland/h_hat. Starts
+    # only with RUN_SIM_INIS_YASASI=1 (launch argument yukseklik_gozlemci),
+    # on simulation time. Estimators: src/eland_mapping/eland_mapping/
+    # gozlem_hesap.py; offline replay and the numbers behind these defaults:
+    # tools/veri/gozlemci_cevrimdisi.py, KONTROLCU_OLCUMLERI.md §4.8.
+    gozlemci_tipi: "sabit"      # sabit | kalman
+    # Owner's fixed gains. Stable iff kc < 0 and 2 kx + kc > vz/h; the node
+    # refuses kc >= 0, kx <= 0 and 2 kx + kc < 0.5, also when set in flight.
+    kx: 2.0
+    kc: -2.0
+    # Kalman: chosen leaving the scenario out, W5 (§4.8).
+    sigma_olcum: 0.05
+    sigma_x0: 0.7
+    sigma_c0: 0.7
+    # Gates, all on (2026-10-14): rho >= rho_doyum, |nu| > nu_max, region
+    # touching the frame edge, body tilt above egiklik_kapi_deg.
+    rho_doyum: 0.75
+    nu_max: 0.5
+    sinirli_kapi: true
+    egiklik_kapi_deg: 5.0
+    # Camera above the mode's altitude zero: model origin + 0.10 m, rest
+    # offset -0.013 m (measured).
+    kamera_ofseti_m: 0.09
+    # This many outlier frames in a row and the node reports itself locked
+    # (flag, log, duration); the gate and the estimate are unchanged.
+    kilit_kare: 10
 
 hud_node:
   ros__parameters:
