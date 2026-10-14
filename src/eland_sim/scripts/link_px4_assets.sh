@@ -49,5 +49,7 @@ link() {
 echo "Linking eland_sim assets into $PX4_DIR:"
 link "$PKG_DIR/models/seg_cam" "$PX4_MODELS/seg_cam"
 link "$PKG_DIR/models/x500_seg_cam_down" "$PX4_MODELS/x500_seg_cam_down"
+# Lidar twin for the 'lazer' reference law (K10, 2026-10-15); unused otherwise.
+link "$PKG_DIR/models/x500_seg_cam_lidar_down" "$PX4_MODELS/x500_seg_cam_lidar_down"
 link "$PKG_DIR/worlds/eland_test.sdf" "$PX4_WORLDS/eland_test.sdf"
 echo "Done."

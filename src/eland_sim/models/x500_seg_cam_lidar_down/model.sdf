@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  x500_seg_cam_down plus a downward single-beam lidar (2026-10-15, K10).
+
+  For the 'lazer' reference law only, reported as "lazerli arac, ideal sensor,
+  ust sinir": the image methods are the no-lidar / backup case, not a claim to
+  beat it.
+
+  The lidar link is PX4's own x500_lidar_down's, names included, because PX4's
+  Gazebo bridge subscribes to
+      /world/<world>/model/<model>/link/lidar_sensor_link/sensor/lidar/scan
+  for every model (SIM_GZ_EN_LIDAR, default 1) and turns it into
+  distance_sensor. No PX4 parameter changes. EKF2_RNG_CTRL (default 1) then
+  fuses it; with EKF2_HGT_REF = GNSS it resets the terrain state to the range
+  and dist_bottom becomes valid, while -z stays take-off referenced.
+
+  Ideal: no <noise> element, so Gazebo returns the exact range at 1 cm
+  resolution, and the bridge reports variance 0. No dropouts beyond the
+  0.1-100 m limits.
+
+  gpu_lidar is a rendering sensor: on llvmpipe it costs frame time. Check the
+  real-time factor (gozlemci.csv rtf) of the first run before any batch.
+  mapping_node projects with dist_bottom whenever it is valid, so with this
+  model the map changes too, not only the height source.
+-->
+<sdf version='1.9'>
+  <model name='x500_seg_cam_lidar_down'>
+    <self_collide>false</self_collide>
+    <include merge='true'>
+      <uri>model://x500_seg_cam_down</uri>
+    </include>
+    <joint name="lidar_sensor_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>lidar_sensor_link</child>
+    </joint>
+    <link name="lidar_sensor_link">
+      <pose relative_to="base_link">0 0 -0.05 0 1.57 0</pose>
+      <inertial>
+        <mass>0.001</mass>
+        <inertia>
+          <ixx>0.00001</ixx>
+          <iyy>0.00001</iyy>
+          <izz>0.00001</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+      <sensor name='lidar' type='gpu_lidar'>
+        <gz_frame_id>lidar_sensor_link</gz_frame_id>
+        <pose>0 0 0 3.14 0 0</pose>
+        <update_rate>50</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>0</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>0</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>100.0</max>
+            <resolution>0.01</resolution>
+          </range>
+        </ray>
+        <always_on>1</always_on>
+        <visualize>false</visualize>
+      </sensor>
+    </link>
+  </model>
+</sdf>
