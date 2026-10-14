@@ -6,7 +6,10 @@
 Writes, in DIR (kosu.sh points it at the episode folder):
 
   gozlemci.csv     every /eland/h_hat (YukseklikKaynagi): every height source,
-                   the observer's state and gates, D, the real-time factor
+                   the observer's state and gates, D, the real-time factor;
+                   t_dugum_ns = the node's own (simulation) time of the estimate
+  gozlemci_kare.csv every /eland/h_hat_kare row: what the observer consumed
+                   at a descent start and at each frame (replay, E1)
   yasa_durumu.csv  every /eland/inis_yasasi_durumu (InisYasasiDurumu): selected
                    and active law, the height the law used, fallback, COMMIT
   olay.csv         t_gz, kaynak, olay, ayrinti -- one line per change:
@@ -31,6 +34,7 @@ import time
 
 import rclpy
 from eland_msgs.msg import InisYasasiDurumu, YukseklikKaynagi
+from std_msgs.msg import Float64MultiArray
 from gz.msgs10.clock_pb2 import Clock as GzClock
 from gz.transport13 import Node as GzNode
 from rcl_interfaces.msg import ParameterEvent
@@ -51,8 +55,10 @@ def alanlar(tip):
 
 
 def deger(v):
+    # repr: the shortest text that reads back as the same double, so a replay
+    # sees exactly what the node had (E1)
     if isinstance(v, float):
-        return '' if math.isnan(v) else f'{v:.6g}'
+        return '' if math.isnan(v) else repr(v)
     if isinstance(v, bool):
         return int(v)
     return v
@@ -70,7 +76,9 @@ class SimOlay(Node):
         self.dosyalar = []
         self.kapali = False
         self.k_gozlemci, self.f_gozlemci = self._csv(a.cikti, 'gozlemci.csv',
-                                                     ['t_gz'] + alanlar(YukseklikKaynagi))
+                                                     ['t_gz', 't_dugum_ns'] + alanlar(YukseklikKaynagi))
+        self.k_kare, _ = self._csv(a.cikti, 'gozlemci_kare.csv', None)
+        self.kare_baslik = None
         self.k_yasa, self.f_yasa = self._csv(a.cikti, 'yasa_durumu.csv',
                                              ['t_gz'] + alanlar(InisYasasiDurumu))
         self.k_olay, _ = self._csv(a.cikti, 'olay.csv', ['t_gz', 'kaynak', 'olay', 'ayrinti'])
@@ -82,6 +90,7 @@ class SimOlay(Node):
         self.onceki_y = None
         self.t_rtf = 0.0
         self.create_subscription(YukseklikKaynagi, '/eland/h_hat', self.on_h, SENSOR)
+        self.create_subscription(Float64MultiArray, '/eland/h_hat_kare', self.on_kare, RELIABLE)
         self.create_subscription(InisYasasiDurumu, '/eland/inis_yasasi_durumu', self.on_yasa, RELIABLE)
         self.create_subscription(ParameterEvent, '/parameter_events', self.on_param,
                                  qos_profile_parameter_events)
@@ -91,7 +100,8 @@ class SimOlay(Node):
         f = open(os.path.join(kok, ad), 'w', newline='', buffering=1, encoding='utf-8')
         self.dosyalar.append(f)
         k = csv.writer(f)
-        k.writerow(basliklar)
+        if basliklar is not None:
+            k.writerow(basliklar)
         return k, f
 
     def kapat(self):
@@ -122,8 +132,9 @@ class SimOlay(Node):
 
     # -- inputs ------------------------------------------------------------
     def on_h(self, m):
-        self.k_gozlemci.writerow([deger(self.t_gz())] + [deger(getattr(m, k))
-                                                         for k in alanlar(YukseklikKaynagi)])
+        ns = m.header.stamp.sec * 1000000000 + m.header.stamp.nanosec
+        self.k_gozlemci.writerow([deger(self.t_gz()), ns] + [deger(getattr(m, k))
+                                                             for k in alanlar(YukseklikKaynagi)])
         o = self.onceki_h
         if o is not None:
             if m.kilitli and not o.kilitli:
@@ -140,6 +151,12 @@ class SimOlay(Node):
             self.t_rtf = t
             self.olay('zaman', 'rtf', f'{m.rtf:.3f}')
         self.onceki_h = m
+
+    def on_kare(self, m):
+        if self.kare_baslik is None:
+            self.kare_baslik = m.layout.dim[0].label.split(',') if m.layout.dim else []
+            self.k_kare.writerow(['t_gz'] + self.kare_baslik)
+        self.k_kare.writerow([deger(self.t_gz())] + [deger(float(v)) for v in m.data])
 
     def on_yasa(self, m):
         self.k_yasa.writerow([deger(self.t_gz())] + [deger(getattr(m, k))

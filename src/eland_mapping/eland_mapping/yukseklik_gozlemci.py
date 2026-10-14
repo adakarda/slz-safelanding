@@ -23,6 +23,14 @@ a frame is compared with the estimate as it was at capture (ignoring the stamp
 cost 2.4x the error with 0.2 s of delay, KONTROLCU_OLCUMLERI.md §4.8). The EKF
 values are the latest received, sampled on this clock. The real-time factor
 (simulation seconds per wall second) is published with every estimate.
+
+Replay record (2026-10-15, E1; recording only). Every input the estimators
+consume goes out on /eland/h_hat_kare (std_msgs/Float64MultiArray, layout
+KARE_ALANLARI, names in layout.dim[0].label): one row when a descent starts
+and one per /eland/rho frame, with the node time, the stamp and every value
+used. With the 50 Hz /eland/h_hat stamps and their vz, that is the whole input
+sequence: tools/veri/gozlemci_esitlik.py replays it through gozlem_hesap and
+compares with what was published.
 """
 
 import math
@@ -33,7 +41,7 @@ import rclpy
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, Float64MultiArray, MultiArrayDimension
 
 from eland_common import px4_topics
 from eland_common.qos import DECISION_QOS, PX4_QOS, SENSOR_QOS
@@ -45,6 +53,12 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition
 
 NAN = float('nan')
 INIS = (LandingState.VALIDATE, LandingState.HOLD, LandingState.COMMIT)
+# /eland/h_hat_kare row; tur 0 = descent start, 1 = /eland/rho frame. Unused
+# fields NaN. x_*, c_g after the row was applied; tick_sayisi = /eland/h_hat
+# messages published before it (orders a frame against the ticks).
+KARE_ALANLARI = ('tur', 't_dugum', 't_yakalama', 'rho', 'view_bounded', 'egiklik_deg',
+                 'v_asagi', 'h_ekf', 'h0_kamera', 'alan0', 'kapi_g', 'kapi_d', 'nu_g',
+                 'x_g', 'c_g', 'x_d', 'damga', 'tick_sayisi')
 # A capture stamp further than this from the node's clock means the two are not
 # the same clock (use_sim_time off): the stamp is then ignored, and said once.
 SAAT_UYUMSUZ_S = 5.0
@@ -104,6 +118,8 @@ class YukseklikGozlemci(Node):
         self.son = None
 
         self.pub = self.create_publisher(YukseklikKaynagi, g('cikis_topic'), SENSOR_QOS)
+        self.pub_kare = self.create_publisher(Float64MultiArray, '/eland/h_hat_kare', DECISION_QOS)
+        self.n_tick = 0
         self.create_subscription(GoruntuKapsami, g('rho_topic'), self.on_rho, SENSOR_QOS)
         self.create_subscription(VehicleLocalPosition, px4_topics.VEHICLE_LOCAL_POSITION,
                                  self.on_lp, PX4_QOS)
@@ -197,6 +213,7 @@ class YukseklikGozlemci(Node):
         self.gozlemci.baslat(t, h0, alan0)
         self.dogrudan.baslat(t, h0, alan0)
         self.aykiri_art_arda, self.t_kilit = 0, None
+        self._kare_yayinla(tur=0, t_dugum=t, h_ekf=self.h_ekf, h0_kamera=h0, alan0=alan0)
         self.get_logger().info(f'descent: {g("gozlemci_tipi")} from h_ekf {self.h_ekf:.2f} m, '
                                f'area {alan0:.0f} m2')
 
@@ -218,8 +235,12 @@ class YukseklikGozlemci(Node):
                 f'(use_sim_time / /clock?); frames are now compared with the estimate at arrival')
         k = self.gozlemci.olcum(ty, float(msg.rho), bool(msg.view_bounded), self.egiklik,
                                 damga_kullan=self.damga)
-        self.dogrudan.olcum(ty, float(msg.rho), bool(msg.view_bounded), self.egiklik,
-                            damga_kullan=self.damga)
+        kd = self.dogrudan.olcum(ty, float(msg.rho), bool(msg.view_bounded), self.egiklik,
+                                 damga_kullan=self.damga)
+        self._kare_yayinla(tur=1, t_dugum=t, t_yakalama=ty, rho=float(msg.rho),
+                           view_bounded=float(bool(msg.view_bounded)), egiklik_deg=self.egiklik,
+                           v_asagi=self.v_asagi, h_ekf=self.h_ekf, kapi_g=k, kapi_d=kd,
+                           nu_g=self.gozlemci.nu)
         if k == G.KAPI_AYKIRI:
             self.aykiri_art_arda += 1
             if (self.t_kilit is None
@@ -243,12 +264,13 @@ class YukseklikGozlemci(Node):
         return (t - t0) / (m - m0) if m - m0 > 0.5 else NAN
 
     def yayinla(self) -> None:
-        t = self._simdi()
+        simdi = self.get_clock().now()
+        t = simdi.nanoseconds * 1e-9
         if t <= 0.0:
             return
         self._ilerlet(t)
         out = YukseklikKaynagi()
-        out.header.stamp = self.get_clock().now().to_msg()
+        out.header.stamp = simdi.to_msg()   # the time propagated to, exactly
         out.rtf = float(self._rtf(t))
         out.h_ekf_m = float(self.h_ekf) if self.h_ekf is not None else NAN
         out.v_asagi_mps = float(self.v_asagi)
@@ -283,6 +305,20 @@ class YukseklikGozlemci(Node):
         out.damga_kullaniliyor = bool(self.damga)
         self.pub.publish(out)
         self.son = out
+        self.n_tick += 1
+
+    def _kare_yayinla(self, **alan) -> None:
+        g, d = self.gozlemci, self.dogrudan
+        alan.setdefault('x_g', g.x if g is not None and g.hazir else NAN)
+        alan.setdefault('c_g', g.c if g is not None and g.hazir else NAN)
+        alan.setdefault('x_d', d.x if d is not None and d.hazir else NAN)
+        alan.setdefault('damga', float(self.damga))
+        alan.setdefault('tick_sayisi', float(self.n_tick))
+        m = Float64MultiArray()
+        m.layout.dim = [MultiArrayDimension(label=','.join(KARE_ALANLARI),
+                                            size=len(KARE_ALANLARI), stride=len(KARE_ALANLARI))]
+        m.data = [float(alan.get(k, NAN)) if alan.get(k) is not None else NAN for k in KARE_ALANLARI]
+        self.pub_kare.publish(m)
 
     def rapor(self) -> None:
         m = self.son
