@@ -6,7 +6,7 @@
 > - Her sayının yanında birimi, nasıl ölçüldüğü ve kaynağı var.
 > - Kaynak dosya, bölüm ve sürüm etiketiyle verildi.
 >
-> - **Güncel:** 2026-10-05 (etiket `v6.6` sonrası).
+> - **Güncel:** 2026-10-14 (etiket `v7.1` sonrası).
 > - **Etiketler:**
 >   - **ölçülen:** simülasyonda koşuldu.
 >   - **_hesap:** geometriden ya da formülden.
@@ -44,6 +44,7 @@
 | Tipik temas hızı | 0.30 m/s (`descent_min_mps`) | ölçülen | §6 |
 | Erken COMMIT'te temas, eski / yeni yasa | 1.20 / 0.30 m/s (ortanca) | ölçülen | §6.4 |
 | W5 (yükseltilmiş hedef) temas | 1.47-1.49 m/s; EKF hedefin ~3.8-4.0 m üstünde | ölçülen | §5.4, §6.5 |
+| W5 yükseklik gözlemcisi, 2 m hatası (pencereli 11 bölüm, açık çevrim) | EKF +3.96; sabit 2/−2 +1.68; sabit 3.5/−5 +0.88; Kalman +0.23 m | ölçülen, çevrimdışı | §4.8 |
 | 2.5 m/s yan rüzgârın dikey tesise etkisi | yok (çözünürlük içinde) | ölçülen | §7.3 |
 | Yanal kuvvet bozucusu | 10 N: 4/4 iniş; 15 N: 1/4 | ölçülen | §7.1 |
 
@@ -592,6 +593,157 @@ kullanmıyor):
 
 Kaynak: `~/eland_veri/_p_kestirici_2026-10-12/`; `tools/veri/p_kestirimi.py`.
 
+### 4.8 Çevrimdışı, açık çevrim, 11 bölüm: yükseklik gözlemcisi W5'te (2026-10-14)
+
+**Açık çevrim.** Kayıtlı uçuşlarda tahmin hızı değiştirmedi, hız da
+yüksekliği değiştirmedi. İniş sonucu ölçülmedi. Aşağıdaki her tablo böyle.
+- "2 m hatası" = gerçek kamera yüksekliği 2 m'ye indiğinde ĥ − h. Gerçek:
+  `maske_olaylari.csv`'deki `h_kamera_gercek`.
+- `v_temas_hesap` = o ĥ ile `clamp(0.35·ĥ, 0.3, tavan)` temasta ne verirdi
+  (_hesap). Temasta ĥ = hata olduğundan ≈ 0.35 × hata; 0.86 m'nin altı
+  0.30 m/s tabanı.
+- W5 her zaman iki grup: **pencereli** (platform en az 10 karede kadraja
+  sığıyor, 11 bölüm) ve **penceresiz** (10 bölüm). Penceresizde hiçbir
+  görüntü yöntemi bir şey öğrenemez; bu senaryonun sınırı.
+
+**Model (_hesap):** bölge kadraja sığarken `ρ = A/(4.216·h²)`, h kameranın
+yüzeye yüksekliği. Log: `ln ρ = c − 2x`, `x = ln h`, `c = ln(A/4.216)`. Tek
+kare yalnız `c − 2x`'i görür.
+- **Sabit kazanç** (proje sahibinin tasarımı): `ν = ln ρ − (ĉ − 2x̂)`,
+  `x̂' = −vz·e^(−x̂) − Kx·ν`, `ĉ' = Kc·ν`.
+- **Kalman:** aynı model, kazanç 2×2 kovaryanstan; ölçüm `ln ρ`, H = [−2, 1].
+- **Hata dinamiği** (doğrusallaştırılmış): `[[D − 2Kx, Kx], [2Kc, −Kc]]`,
+  D = vz/h. İz D − 2Kx − Kc, determinant −Kc·D. **Kararlı:** Kc < 0 ve
+  2Kx + Kc > D.
+- **Bilgi yalnız alçalırken gelir.** İlk kareden sonra her yeni bilgi
+  alçalmanın kendisinden gelir (determinant ∝ D). Askıda (vz = 0) h ile A
+  ayrılamaz; öğrenme yok.
+- **Kapılar:** ρ ≤ 0; ρ ≥ 0.75; `view_bounded` = 0; eğiklik > 5°; |ν| > 0.5.
+  Kare, yakalama anındaki x̂ ile karşılaştırılır.
+- **Başlangıç:** x̂₀ = ln(h_ekf + 0.09) (kamera, model orijininin 0.10 m
+  üstü; dinlenme −0.013 m), ĉ₀ = ln(area_m2 / 4.216), VALIDATE girişindeki
+  adaydan.
+
+**Kod:**
+- Hesap: `src/eland_mapping/eland_mapping/gozlem_hesap.py` (saf; `Sabit`,
+  `Kalman`, `Kapilar`, `kazanc_gecerli`). **`p_hesap.py`'ye bağlı**
+  (`AYAK_IZI` = 4.216 oradan); onsuz içe aktarılmaz.
+- Çevrimdışı: `tools/veri/gozlemci_cevrimdisi.py hepsi --rapor DOSYA`
+  (`model | nu0 | ozet | loo | sapma`), ~10 s. Bu bölümdeki her sayı oradan.
+- Canlı düğüm henüz yok (aşama 1).
+
+**ρ modeli, kayıtlı temiz maske:**
+- Bölge kadraja sığarken, eğiklik < 5°, eğim −2 sabit: A_uydurma / A_gerçek
+  ortanca 1.000 (%10–90: 0.994–1.010), 59 bölüm. Model doğru.
+- Bölge kadraj kenarına taşınca model tutmuyor; `view_bounded` kapısı bu
+  yüzden zorunlu:
+
+| Grup (kadraja sığmayan kare) | ρ bandı | Kare | ln(ρ / model) ortanca | %10…%90 |
+|---|---|---|---|---|
+| düz dünyalar | 0.50–0.75 | 1007 | −0.10 | −0.45…−0.01 |
+| W5 | 0.50–0.75 | 363 | −0.35 | −0.51…−0.10 |
+| W5 | 0.00–0.50 | 432 | −0.19 | −0.42…−0.01 |
+
+**Pencereli / penceresiz, W3** (açık çevrim; 2 m hatası, m: ortanca, en
+küçük…en büyük):
+
+| Yöntem | W5 pencereli (n = 11) | v_temas_hesap ort / en büyük | W5 penceresiz (n = 10) | W3 düz (n = 15) |
+|---|---|---|---|---|
+| EKF (bugünkü girdi) | +3.96 (3.83…4.03) | 1.41 / 1.43 | +3.97 | −0.07 (−0.15…−0.02) |
+| sabit 2/−2 | +1.68 (1.41…2.56) | 0.60 / 0.91 | +3.91 | +0.12 (0.03…0.23) |
+| sabit 3.5/−5 | +0.88 (0.50…1.70) | 0.32 / 0.61 | +3.91 | +0.13 (0.04…0.39) |
+| Kalman (σ senaryo dışarıda) | +0.23 (−0.85…1.08) | 0.30 / 0.39 | — | — |
+| Kalman σ 0.05 / 0.7 / 0.7 | — | — | +3.91 | +0.15 (0.04…0.82) |
+
+**Kalman σ, dışarıda bırakarak** (W5 pencereli, n = 11, açık çevrim). Izgara
+σ_ölçüm × σ_x0 × σ_c0 = 80 nokta; eğitim amacı 2 m'deki \|hata\| ortalaması.
+Senaryo = kardeş koşular: k1 (v0.4 / 0.7 / 1.0 / 1.5), k2 (d0.2 / 0.35 / 0.5),
+k3_parca, kol0.
+
+| Senaryo dışarıda (n) | Seçilen σ | Kalman ortanca / en kötü | Kalman v_temas en kötü | Aynı bölümler, LOO en kötü | Sabit 3.5/−5 ortanca / en kötü | Sabit 3.5/−5 v_temas en kötü |
+|---|---|---|---|---|---|---|
+| k1 (4) | 0.03 / 0.5 / 0.5 | +0.50 / +0.61 | 0.30 | +0.51 | +0.89 / +1.05 | 0.39 |
+| k2 (3) | 0.05 / 0.5 / 1.0 | −0.01 / +0.23 | 0.30 | +0.25 | +0.53 / +0.67 | 0.30 |
+| k3_parca (2) | 0.05 / 0.5 / 1.0 | −0.34 / −0.85 | 0.30 | −0.85 | +0.90 / +1.10 | 0.41 |
+| kol0 (2) | 0.08 / 0.5 / 1.0 | +0.82 / +1.08 | 0.39 | +1.08 | +1.31 / +1.70 | 0.61 |
+
+| Kol (n = 11, dışarıdaki değerler) | 2 m hatası ortanca | Ortalama mutlak hata | En kötü (işaretli) | v_temas ortanca | v_temas en kötü |
+|---|---|---|---|---|---|
+| Kalman, bölüm dışarıda (LOO) | +0.25 | 0.40 | +1.08 | 0.30 | 0.39 |
+| Kalman, senaryo dışarıda (LSO) | +0.23 | 0.43 | +1.08 | 0.30 | 0.39 |
+| sabit 3.5/−5 (ayarsız) | +0.88 | 0.88 | +1.70 | 0.32 | 0.61 |
+| sabit 2/−2 (ayarsız) | +1.68 | 1.77 | +2.56 | 0.60 | 0.91 |
+
+- İyimser ölçüt (ayar ve sınama aynı 11 bölüm): ortalama mutlak hata 0.30 m.
+  LOO 0.40, LSO 0.43; aşırı uydurma belirtisi az.
+- LOO'da 11 turun 8'inde aynı σ: 0.05 / 0.7 / 0.7. **Deney kolu bu**
+  (2026-10-14 kararı).
+- En kötü iki bölüm her yöntemde aynı: kol0 t3 ve k3_parca t3. İkisinde aday
+  merkezden 4.6 m uzak, pencere kısa ve yüksekte (12 → 10 m).
+
+**ν₀ yapı gereği ≈ 0** (açık çevrim). `mapping_node`, mesafe sensörü yokken
+`altitude_agl = −z` ile, EKF çerçevesinin z = 0 düzlemine izdüşürür
+(`ground_homography`, ölçek `alt / resolution`); kamera ofseti eklemez.
+`area_m2` = bağlı güvenli hücre × 0.04 m² (`detector_node`). Harita arama
+irtifasında kurulur, VALIDATE de orada başlar. Bu yüzden `area_m2 ∝ h_ekf²`
+ve ĉ₀ − 2x̂₀'da yükseklik hatası sadeleşir.
+
+| Grup | IPM'in öngördüğü A₀/A = (h_ekf₀/h_kamera₀)² | Ölçülen A₀/A | ν₀ hesap | ν₀ ölçülen (ilk kare) | abs(ν₀) > 0.5 |
+|---|---|---|---|---|---|
+| W5 pencereli (n = 11) | 1.90 (1.75…1.96) | 1.81 (1.70…1.85) | +0.063 | +0.074 (+0.047…+0.085) | 0 / 11 |
+| W5 penceresiz (n = 10) | 2.03 | 1.88 | +0.081 | +0.047 (tek bölümde kare var) | 0 / 1 |
+| W3 düz (n = 15) | 0.995 | 1.019 | −0.012 | −0.008 (−0.016…+0.036) | 0 / 15 |
+
+- Kalan küçük ν₀: ızgara alanı IPM öngörüsünden W5'te %5 küçük, W3'te %2
+  büyük; gözlemci x̂₀'a 0.09 m kamera ofseti ekliyor, harita eklemiyor.
+- **Bağ kopunca kapı kilitler:** |ν₀| > 0.5 ise kapı her kareyi reddeder, ĥ
+  başlangıçta kalır. Gösterildi: W5'te başlangıç alanı gerçek alan verilince
+  0 kare kullanıldı, 2 m hatası +3.90. Bağı koparan durumlar:
+  - ĥ haritalamaya girerse;
+  - aşağı bakan mesafe sensörü açılırsa (`dist_bottom_valid`). Harita
+    `dist_bottom` ile izdüşürülür, `area_m2` gerçeğe yaklaşır; x̂₀ EKF'den
+    gelirse hatası kalır (EKF2_HGT_REF = GNSS: PX4 menzille yalnız arazi
+    durumunu sıfırlar). W5'te ν₀ ≈ 0…0.6 (_hesap). O durumda x̂₀ `dist_bottom`'dan,
+    ĉ₀ ilk kareden alınmalı.
+- Düğüm kilidi görünür kılacak: durum mesajında bayrak, olay günlüğünde
+  başı, sonu ve süresi (aşama 1). Kapı ve davranış değişmez.
+
+**D = vz/h, kullanılan karelerde** (gerçek h ile, açık çevrim):
+
+| Grup | D en büyük [1/s] | D %95 | 2Kx + Kc (2/−2 ve 3.5/−5) | Aşan kare |
+|---|---|---|---|---|
+| W5 pencereli (n = 11) | 0.217 | 0.195 | 2.0 | 0 / 337 |
+| W3 düz (n = 15) | 0.195 | 0.131 | 2.0 | 0 / 1319 |
+
+**W3'teki +0.12 m sapma** (sabit 2/−2, n = 15, açık çevrim):
+- Ölçüm penceresinde doğuyor: son kullanılan karede +0.14, sonra vz ile
+  ilerlerken −0.04.
+- İlerletme suçlu değil: ∫vz_ekf − Δh_gerçek +0.06 m; Δh_ekf − Δh_gerçek
+  −0.00 m; vz_ekf gecikmesi 0 ms (20 ms çözünürlük).
+- **Kaynak harita alanı:** W3'te A₀/A = 1.019 (1.007…1.032). Başlangıç alanı
+  gerçek alan olunca +0.03 m. Başlangıç yüksekliği gerçek olunca değişmiyor
+  (+0.13).
+- Denenen ve önerilmeyen: ĉ₀'ı ilk kareden almak (ν₀ = 0). W3 +0.07'ye
+  iniyor, W5 kötüleşiyor (+1.68 → +2.27).
+- Temas hızını değiştirmiyor (0.30 m/s tabanı).
+
+**Mevcut bozucular, Aşama 5 kayıtları** (W3, n = 4 / tür, sabit 2/−2, 2 m
+hatası ortanca, açık çevrim):
+
+| Bozucu | Temiz ρ | Bozuk ρ |
+|---|---|---|
+| sınır 2 | +0.14 | +0.14 |
+| çevir 0.02 | +0.13 | +0.19 |
+| kayıp 0.05 | +0.08 | +0.08 |
+| tekrar 2 (bayat, damga yeni) | +0.21 | +0.42 |
+| gecikme 0.2 s, damga kullanılır | +0.30 | +0.27 |
+| gecikme 0.2 s, damga yok sayılır | +0.30 | +0.70 |
+
+Zaman bozucuları etkili, piksel bozucuları değil.
+
+Kaynak: `~/eland_veri` (W5 21, W3 15, düz dünyalar 59, Aşama 5 W3 20 bölüm);
+`tools/veri/gozlemci_cevrimdisi.py`.
+
 ---
 
 ## 5. Durum kestirimi (EKF) doğruluğu
@@ -828,8 +980,10 @@ Kaynak: `docs/VERI_TOPLAMA.md` "Adım 4" (`v5.2-ruzgar-kalibrasyon`).
 - **ρ̇/ρ = 2D** gürültülü veride sınanmadı (§4.4).
 - **Mod `/eland/rho`'yu henüz kullanmıyor.** Tasarım Simulink'te
   doğrulanınca ayrı madde gelecek.
-- **W5:** hedef yüzeye göre yükseklik artık kestiriliyor (§4.7), ama mod
-  kullanmıyor; iniş hâlâ h_ekf ile (§5.4).
+- **W5:** hedef yüzeye göre yükseklik artık kestiriliyor (§4.7) ve
+  gözlemci çevrimdışı sınandı (§4.8, açık çevrim), ama mod kullanmıyor;
+  iniş hâlâ h_ekf ile (§5.4). Canlı gözlemci ve seçilebilir yasa
+  `inis-yasasi` dalında, aşama 1.
 - **Yeniden deneme:** gerçek bir mod komutu kaybında ilk kez 2026-10-12'de
   işe yaradı. W5 koşusunda ilk denemede nav_state 4 kaldı, ikincide 23 oldu.
   `v6.5`'te yalnız ilk komut bilerek atlanarak sınanmıştı.
@@ -855,6 +1009,7 @@ Kaynak: `docs/VERI_TOPLAMA.md` "Adım 4" (`v5.2-ruzgar-kalibrasyon`).
 | Temas puanlaması | `tools/veri/temas_puanla.py` |
 | ρ ve eğiklik | `tools/veri/egiklik_rho.py` |
 | Hedef yüzey yüksekliği (P) ve alan | `tools/veri/p_kestirimi.py` |
+| Yükseklik gözlemcisi, çevrimdışı (§4.8) | `tools/veri/gozlemci_cevrimdisi.py hepsi --rapor DOSYA` |
 | Bozucu doğrulaması | `tools/veri/bozucu_dogrula.py` |
 | Tur 3 / Tur 4 doğrulama | `tools/veri/tur3_dogrula.py`, `tools/veri/tur4_dogrula.py` |
 | Uçuş puanlama (veri kaydedicisi öncesi) | `tools/run_scorer.py`, `tools/batch_run.sh` |

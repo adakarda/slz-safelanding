@@ -94,6 +94,7 @@ PYTHONPATH=/usr/lib/python3/dist-packages python3 tools/veri/birlestir.py
 | `ornek_mat.py` | Küçük, temsilî MATLAB seti (bölüm başına bir `.mat` + kısa sözlük) |
 | `egiklik_rho.py` | Eğiklik ve ρ: ölçülen ρ ile geometriden hesaplanan ρ (Tur 3 D) |
 | `p_kestirimi.py` | Hedef yüzey yüksekliği (P) ve bölge alanı, `1/√ρ`–`h_ekf` doğrusundan, kayıtlı bölümlerde; gerçek değer ve harita alanıyla karşılaştırma, `--grafik` ile bölüm başına `p_kestirimi.png`. Canlı karşılığı `p_kestirici` düğümü (`RUN_SIM_YUKSEKLIK=1`) |
+| `gozlemci_cevrimdisi.py` | Yükseklik gözlemcisi (sabit kazanç ve Kalman; hesap `src/eland_mapping/eland_mapping/gozlem_hesap.py`) kayıtlı ρ serilerinde, **açık çevrim**: ρ modeli, ν₀, W5 pencereli / penceresiz, Kalman σ'sı bölüm ve senaryo dışarıda bırakılarak, W3 sapmasının kaynağı, D. `model \| nu0 \| ozet \| loo \| sapma \| hepsi`, `--rapor DOSYA`. Sonuçlar `docs/KONTROLCU_OLCUMLERI.md` §4.8 |
 | `bozucu_dogrula.py` | Bozucular gerçekten uygulandı mı, sayılarla (Tur 3 C) |
 | `tur3_dogrula.py`, `tur4_dogrula.py` | Tur 3 A/B ve Tur 4 madde 2 doğrulama tabloları |
 

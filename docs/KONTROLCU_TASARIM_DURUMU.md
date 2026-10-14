@@ -87,7 +87,7 @@ Ayrıntılar: [`VERI_TOPLAMA.md`](VERI_TOPLAMA.md), aynı adlı bölümler.
 | İş | Kimde | Not |
 |---|---|---|
 | Modun `/eland/rho`'yu kullanması (görüntü-tabanlı dış döngü) | diğer sohbet: tasarım Simulink'te doğrulanınca brif §12 biçiminde tarif gelecek | ölçülen: ~10 Hz, yakalamadan alınmasına p50 19.5 / p90 39.6 ms, BEST_EFFORT |
-| W5 / yükseltilmiş hedef: hedefe göre yükseklik kestirimi (gözlemci) | diğer sohbet | ölçülen: EKF temasta hedefin 3.8-4.0 m üstünde, temas 1.47-1.49 m/s |
+| W5 / yükseltilmiş hedef: hedefe göre yükseklik kestirimi (gözlemci) | diğer sohbet tasarladı; burada `inis-yasasi` dalında | ölçülen: EKF temasta hedefin 3.8-4.0 m üstünde, temas 1.47-1.49 m/s. Aşama 0 (çevrimdışı, açık çevrim): `KONTROLCU_OLCUMLERI.md` §4.8. Aşama 1: canlı düğüm ve seçilebilir iniş yasası |
 | İç döngü kazançlarının yeni θ ile IMC türetimi | açık | eski türetim θ = 0.28 s ile; yeni θ 0.04-0.08 s |
 | ρ̇/ρ = 2D'nin gürültülü veride sınanması | açık | statik ilişki ρ = A/(4.22·h²) doğrulandı (eğiklik < 5°'de RMS ≤ 0.002) |
 | Uzun sabit ıraksama örnekleri | karar bekliyor | K2'de pencereler kısa (D* = 0.5'te 0.4 s); devir irtifası düşürülebilir ya da yalnız D* = 0.2 kullanılır |
