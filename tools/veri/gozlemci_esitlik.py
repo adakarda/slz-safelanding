@@ -69,13 +69,12 @@ def main():
     # ticks in publish order; frames go between the ticks they were processed between
     tikler.sort(key=lambda r: int(r['t_dugum_ns']))
     t_tik = [int(r['t_dugum_ns']) * 1e-9 for r in tikler]
+    # Intervals between ticks longer than the 20 ms period are the node's own
+    # timing (simulation clock, executor): information, not missing rows.
     bosluk = [round((t_tik[i + 1] - t_tik[i]) * 1000) for i in range(len(t_tik) - 1)]
-    eksik = sum(1 for b in bosluk if b > 30)
-    n_tik_dugum = int(max((f(k['tick_sayisi']) for k in kareler), default=0))
-    print(f'tik satiri {len(tikler)}, kare/baslat satiri {len(kareler)}, '
-          f'20 ms\'den uzun bosluk {eksik} (en uzun {max(bosluk, default=0)} ms)')
-    if eksik:
-        print('  UYARI: eksik tik satiri var; o aralikta karsilastirma gecerli degil')
+    uzun = sum(1 for b in bosluk if b > 30)
+    print(f'tik satiri {len(tikler)}, kare/baslat satiri {len(kareler)}; 30 ms\'den uzun tik '
+          f'araligi {uzun} (en uzun {max(bosluk, default=0)} ms, dugumun kendi zamanlamasi)')
 
     # The writer may start after the node's first ticks: find the node's tick
     # number of row 0 (offset) from the frames, each of which was processed
@@ -89,6 +88,15 @@ def main():
     ofs = max(adaylar, key=adaylar.get) if adaylar else 0
     if len(adaylar) > 1:
         print(f'  tik numarasi kaymasi adaylari {adaylar} -> {ofs} (esit zamanli kareler)')
+    # Missing tick rows: each frame records how many ticks the node had
+    # published before it, so that many rows must lie before (or at) its time.
+    eksik = 0
+    for k in kareler:
+        if f(k['tur']) == 1.0:
+            n, t = int(f(k['tick_sayisi'])) - ofs, f(k['t_dugum'])
+            if not bisect.bisect_left(t_tik, t) <= n <= bisect.bisect_right(t_tik, t):
+                eksik += 1
+    print(f'  tik sayisi kayitla tutmayan kare (eksik tik satiri): {eksik}')
     olaylar = [('kare', int(f(k['tick_sayisi'])), j, k) for j, k in enumerate(kareler)]
     olaylar += [('tik', i + ofs, 0, r) for i, r in enumerate(tikler)]
     # a frame with tick_sayisi n was processed after tick n-1 and before tick n
