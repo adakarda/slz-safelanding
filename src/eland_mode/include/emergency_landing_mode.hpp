@@ -755,9 +755,15 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
           break;
       }
     }
-    if (std::isfinite(h)) {
+    if (std::isfinite(h) && std::isfinite(_h_hat.h_ekf_m)) {
+      // The sample can be up to h_hat_bayat_s old. Carry it to now with the
+      // EKF's own descent since it was taken (the message brings the EKF
+      // height of that instant): over a fraction of a second the EKF moves
+      // as the true height does, whatever its offset. Fresh and fallback are
+      // then the same expression, so losing the source cannot step h.
+      const float fark = _h_hat.h_ekf_m - h;
       if (kaydet) {
-        _yedek_fark = altitude_m - h;
+        _yedek_fark = fark;
         _yedek_fark_var = true;
         if (_yedekte) {
           RCLCPP_INFO(_node.get_logger(), "inis yasasi %s: kaynak geri geldi, yedek %.1f s surdu",
@@ -765,7 +771,7 @@ class EmergencyLandingMode : public px4_ros2::ModeBase {
           _yedekte = false;
         }
       }
-      return h;
+      return altitude_m - fark;
     }
     // Nothing usable. The first h_hat_bayat_s of a descent is the source
     // starting up (the observer starts from the EKF height, so the offset is
