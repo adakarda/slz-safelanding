@@ -94,6 +94,11 @@ class SimOlay(Node):
         self.create_subscription(InisYasasiDurumu, '/eland/inis_yasasi_durumu', self.on_yasa, RELIABLE)
         self.create_subscription(ParameterEvent, '/parameter_events', self.on_param,
                                  qos_profile_parameter_events)
+        # The clock above comes over gz transport and never wakes rclpy.spin.
+        # With the observer killed (d3a, d3b) no ROS message came either, so the
+        # SIGTERM handler never ran and the cleanup killed this process before
+        # 'bitti' (2026-10-15). A wall-clock timer wakes the executor.
+        self.create_timer(0.2, lambda: None)
         self.olay('sim_olay', 'basladi', a.cikti)
 
     def _csv(self, kok, ad, basliklar):
