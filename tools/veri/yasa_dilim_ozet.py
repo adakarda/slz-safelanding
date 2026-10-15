@@ -159,10 +159,12 @@ def main():
              and (s.get('grup_y_ekf') or s.get('grup')) == g]
         t = [s['temas'] for s in h if math.isfinite(s['temas'])]
         e2 = [s['h_hata_2m'] for s in h if math.isfinite(s.get('h_hata_2m', NAN))]
+        # no kahin height in the recording (switch off, no gozlemci.csv): no cell
+        e2_hucre = f'{statistics.median(e2):+.2f}' if e2 else '—'
         md.append(f"| {d} | {g} | {y} | {len(h)} | "
                   f"{statistics.median(t):.2f} / {max(t):.2f} | {sum(1 for s in h if s.get('basarili_v10'))}/{len(h)} | "
                   f"{sum(1 for s in h if s['commit'] == 'var')}/{len(h)} | "
-                  f"{statistics.median(e2):+.2f} | {'çalışıyor mu (n ≤ 3)' if len(h) <= 3 else ''} |"
+                  f"{e2_hucre} | {'çalışıyor mu (n ≤ 3)' if len(h) <= 3 else ''} |"
                   if t else f"| {d} | {g} | {y} | {len(h)} | — | — | — | — | |")
     eksik = [s for s in S if s.get('durum') != 'tamam']
     md.append(f'\nTamamlanmayan koşu: {len(eksik)}' + ''.join(f"\n- {s['bolum']}: {s['durum']}" for s in eksik))
