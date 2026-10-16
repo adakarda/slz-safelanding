@@ -161,3 +161,39 @@ def test_random_start_respects_min_inside():
 def test_gymnasium_api():
     from gymnasium.utils.env_checker import check_env
     check_env(LandingEnv([flat_scene(0)]), skip_render_check=True)
+
+
+def _grass_with_person():
+    sc = flat_scene(0, size=(60.0, 40.0))
+    H, W = sc.mask.shape
+    sc.mask[H // 2 - 3:H // 2 + 3, W // 2 - 3:W // 2 + 3] = 6     # a person at the origin
+    return sc
+
+
+def test_sora_distance_and_nearest_point():
+    sc = _grass_with_person()
+    assert not sc.is_sora_safe(0.0, 0.0)
+    assert not sc.is_sora_safe(2.0, 0.0)                 # grass, but 2 m from the person
+    assert sc.is_sora_safe(4.0, 0.0)
+    tx, ty, d = sc.nearest_sora_safe(0.0, 0.0)
+    assert 3.0 <= math.hypot(tx, ty) <= 3.5 and 3.0 <= d <= 3.5
+
+
+def test_sora_success_rule_and_info():
+    sc = _grass_with_person()
+    # majority rule: the 5 m view is almost all grass -> success; SORA rule: on the person -> failure
+    for rule, ok in (('majority', True), ('sora', False)):
+        env = LandingEnv([sc], EnvConfig(success_rule=rule))
+        _, info = _run(env, 9, (0.0, 0.0, 20.0, 0.0))
+        assert info['success'] is ok
+        assert info['majority_success'] and not info['sora_success']
+
+
+def test_shaping_pays_for_moving_towards_safe_ground():
+    sc = _grass_with_person()
+    env = LandingEnv([sc], EnvConfig(shaping_k=1.0, gamma=1.0))
+    env.reset(seed=0, options={'start': (0.0, 0.0, 25.0, 0.0), 'dynamics': NO_LAG})
+    gains = [env.step(1)[4]['r_shape'] for _ in range(12)]       # 1 = nose = +x, away from the person
+    assert sum(gains) > 2.0
+    env.reset(seed=0, options={'start': (0.0, 0.0, 25.0, 0.0), 'dynamics': NO_LAG})
+    assert sum(env.step(9)[4]['r_shape'] for _ in range(4)) == pytest.approx(0.0, abs=1e-9)

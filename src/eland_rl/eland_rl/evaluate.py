@@ -13,19 +13,21 @@ import csv
 
 import numpy as np
 
-from .env import EnvConfig, LandingEnv
+from .env import REWARD_PRESETS, EnvConfig, LandingEnv
 from .scenes import load_list
 
 
 def run(env, act, scene_index, k):
     obs, info = env.reset(seed=k, options={'scene_index': scene_index})
     hist = collections.Counter()
+    ret = 0.0
     while True:
         a = act(obs)
         hist[a] += 1
-        obs, _, done, trunc, info = env.step(a)
+        obs, r, done, trunc, info = env.step(a)
+        ret += r
         if done or trunc:
-            return info, hist
+            return info, hist, ret
 
 
 def main():
@@ -34,10 +36,11 @@ def main():
     ap.add_argument('--model', default=None)
     ap.add_argument('--starts', type=int, default=15)
     ap.add_argument('--binary', action='store_true')
+    ap.add_argument('--reward', default='paper', choices=sorted(REWARD_PRESETS))
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes)
-    env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary))
+    env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, **REWARD_PRESETS[a.reward]))
     rng = np.random.default_rng(12345)
     methods = {'duz_inis': lambda o: 9, 'rastgele': lambda o: int(rng.integers(10))}
     if a.model:
@@ -48,22 +51,27 @@ def main():
     for name, act in methods.items():
         for i, sc in enumerate(scenes):
             for k in range(a.starts):
-                info, h = run(env, act, i, k)
+                info, h, ret = run(env, act, i, k)
                 hists[name].update(h)
                 rows.append(dict(method=name, scene=sc.name, start=k, outcome=info['outcome'],
                                  success=int(info['success']), t=round(info['t'], 2), sora_ok=int(info['sora_ok']),
+                                 sora_success=int(info['sora_success']), majority_success=int(info['majority_success']),
+                                 ret=round(ret, 2),
                                  sora_m=round(min(info['sora_distance_m'], 999.0), 2)))
     with open(a.out, 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
-    print(f'{len(scenes)} sahne x {a.starts} baslangic; max_t 30 s; nominal dinamik')
+    print(f'{len(scenes)} sahne x {a.starts} baslangic; max_t 30 s; nominal dinamik; odul {a.reward}')
     for name in methods:
         r = [x for x in rows if x['method'] == name]
         ok = [x for x in r if x['success']]
         ts = np.array([x['t'] for x in ok])
         oc = collections.Counter(x['outcome'] for x in r)
-        print(f'{name:9s} basari {100 * len(ok) / len(r):5.1f} %  SORA uyumlu {100 * np.mean([x["sora_ok"] for x in r]):5.1f} %  '
+        print(f'{name:9s} SORA basari {100 * np.mean([x["sora_success"] for x in r]):5.1f} %  '
+              f'cogunluk basari {100 * np.mean([x["majority_success"] for x in r]):5.1f} %  '
+              f'odul {np.mean([x["ret"] for x in r]):6.1f}  '
+              f'(secili kural basari {100 * len(ok) / len(r):5.1f} %, eski SORA uyumlu {100 * np.mean([x["sora_ok"] for x in r]):5.1f} %)  '
               f'sure {ts.mean() if len(ts) else float("nan"):5.1f} +- {ts.std() if len(ts) else float("nan"):4.1f} s  '
               f'{dict(oc)}')
         for sc in scenes:

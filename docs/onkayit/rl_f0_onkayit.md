@@ -230,3 +230,40 @@ Kullanıcı isteği: politikayı şimdi eğit, komutlarını PX4'te dene. MESSI 
   - 5 m altında mod dikey olarak iner. SORA mesafesi iniş noktasından ayrıca raporlanır.
 - **Tahmin (_tahmin):** Gazebo başarısı, aynı 15 başlangıçta ortamdaki başarıdan en çok 2 koşu (~13 puan) farklı çıkar.
 - **Pilot sınırı:** eğitim sahnesinde test. Genelleme değil, aktarım ölçer.
+
+## Düzeltme 4 (2026-10-16): bizim iniş ödülü (`sora_v1`), eğitimden önce
+
+**Karar (kullanıcı):** Paper birebir kopyalanmayacak. Hedef, bize uygun bir iniş ödülü tasarlamak ve onunla eğitmek.
+
+**Gerekçe (pilot ve teşhis):**
+- Pilot politika dümdüz inişe çöktü: başarı %21.3, dümdüz inişle aynı.
+- Aynı 75 bölümde sabit pilotlarla ödül taraması yapıldı (`~/rl_inis/odul_testi.py`, `odul_varyant.py`, `odul_sora.py`). Ölçülen bulgular:
+  - Paper ödülü altında SORA'ya göre arama yapan kâhin, dümdüz inişi yalnız +1.2 puan geçiyor. Paper ödülü SORA-güvenli inişi neredeyse ödüllendirmiyor.
+  - "Alçal" ödülünü düşürmek farkı değiştirmiyor (+9.7 → +12.1).
+  - Seçilen ödülle fark +24.3. Gezgin −38, bekleyen −114, kaçak −56 puan alıyor; dümdüz iniş +12.8.
+  - SORA başarısı: dümdüz %12, kâhin %56.
+
+**`sora_v1` (env.REWARD_PRESETS):**
+
+| Bileşen | Değer |
+|---|---|
+| Başarı | 5 m'de aracın altındaki nokta landable sınıfta ve structure / water / vehicle / person'dan ≥ 3 m uzakta |
+| Bitiş | +50 / −20 |
+| Süre doldu | −50 |
+| Sahne dışı | −50 (paper −5; kaçış açığını kapatır) |
+| Şekillendirme | potansiyel −2 × min(en yakın SORA-güvenli noktaya mesafe, 20 m), γ = 0.99 (Ng vd. 1999). Gerçek durumdan hesaplanır; politika görmez. |
+| Adım | zaman −0.2, alçal +0.5, yanal −0.05, dur −0.5 |
+| Görüş terimi R_S | ağırlık 0 |
+
+**Eğitim:**
+- Ana koşu: `sora_v1`, `ent_coef` 0.01, 1M adım, tohum 0, 5 pilot sahnesi, GT girdi. Çıktı `~/rl_inis/kos/sora_v1_s0`.
+- Kontrol koşusu: `paper` ödülü, `ent_coef` 0.01, aynı ayarlar. Çıktı `~/rl_inis/kos/paper_ent_s0`. Amaç, iyileşmenin ödülden mi entropiden mi geldiğini ayırmak.
+
+**Değerlendirme:**
+- Aynı 5 sahne × 15 başlangıç, 30 s, nominal dinamik.
+- Birincil metrik: SORA başarısı. İkincil: çoğunluk başarısı (paper tanımı).
+- Bu hâlâ eğitim sahnesi testidir; genelleme MESSI verisiyle ölçülecek.
+
+**Tahminler (_tahmin):**
+- `sora_v1` RL SORA başarısı ≥ %35. Referanslar: dümdüz %12, kâhin %56.
+- Kontrol koşusunun (paper + entropi) SORA başarısı ≤ %20.

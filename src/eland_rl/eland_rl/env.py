@@ -68,9 +68,24 @@ class EnvConfig:
     robot_r: float = 0.5
     depth_norm_m: float = 40.0
     sora_m: float = 3.0
+    # Our landing reward (docs/onkayit/rl_f0_onkayit.md, amendment 4). Defaults keep the paper's.
+    success_rule: str = 'majority'  # 'majority' (paper: 5 m view) or 'sora' (point under the vehicle)
+    shaping_k: float = 0.0          # potential -k * min(d to nearest SORA-safe point, shaping_dmax)
+    shaping_dmax: float = 20.0
+    gamma: float = 0.99             # discount the potential shaping is built with (= PPO gamma)
     image_size: int = 128
     dynamics: DynamicsParams = field(default_factory=DynamicsParams)
     randomise_dynamics: bool = True
+
+
+#: Reward presets. 'paper' is Bartolomei et al. as pre-registered; 'sora_v1' is ours
+#: (amendment 4): SORA success at the point under the vehicle, potential shaping towards the
+#: nearest SORA-safe point, a smaller descend reward, no view term, leaving the scene costs as
+#: much as running out of time. Chosen by screening fixed pilots before any training.
+REWARD_PRESETS = {
+    'paper': {},
+    'sora_v1': dict(success_rule='sora', shaping_k=2.0, a_descend=0.5, w_s=0.0, out_of_bounds=-50.0),
+}
 
 
 class LandingEnv(gym.Env):
@@ -115,6 +130,15 @@ class LandingEnv(gym.Env):
         obs = np.stack([ch0, ch1.astype(np.float32)])
         return obs, sem, depth
 
+    def _potential(self, pos):
+        """Shaping potential: closer to SORA-safe ground is higher. Uses the true state, which the
+        policy never sees -- it is a training signal only (Ng, Harada, Russell 1999: potential-based
+        shaping leaves the optimal policy unchanged)."""
+        if self.cfg.shaping_k == 0.0:
+            return 0.0
+        _, _, d = self.scene.nearest_sora_safe(pos[0], pos[1], self.cfg.sora_m)
+        return -self.cfg.shaping_k * min(d, self.cfg.shaping_dmax)
+
     def _start(self, rng, options):
         cfg = self.cfg
         if options and 'start' in options:
@@ -149,6 +173,7 @@ class LandingEnv(gym.Env):
         pos, yaw = self._start(rng, options)
         self.veh = Vehicle(params, pos, yaw)
         self.steps = 0
+        self._phi = self._potential(pos)
         obs, _, _ = self._observe()
         info = {'scene': self.scene.name, 'start': (*pos, yaw),
                 'dynamics': params}
@@ -175,10 +200,18 @@ class LandingEnv(gym.Env):
             outcome, r_t_end = 'out_of_bounds', cfg.out_of_bounds
         elif d_min <= cfg.robot_r:
             outcome, r_t_end = 'collision', cfg.collision
+        landed, majority_ok, point_ok = False, False, False
+        if not self.scene.inside(pos[0], pos[1]):
+            outcome, r_t_end = 'out_of_bounds', cfg.out_of_bounds
+        elif d_min <= cfg.robot_r:
+            outcome, r_t_end = 'collision', cfg.collision
         elif pos[2] <= cfg.target_h:
+            landed = True
             now, _ = self.cam.semantic_depth(self.scene, pos, self.veh.attitude())
             majority = int(np.bincount(now.ravel(), minlength=N_CLASSES).argmax())
-            ok = bool(self._safe[majority])
+            majority_ok = bool(self._safe[majority])
+            point_ok = self.scene.is_sora_safe(pos[0], pos[1], cfg.sora_m)
+            ok = point_ok if cfg.success_rule == 'sora' else majority_ok
             outcome = 'safe_landing' if ok else 'unsafe_landing'
             r_t_end = cfg.land_good if ok else cfg.land_bad
         elif self.veh.t >= cfg.max_t - 1e-9:
@@ -186,11 +219,15 @@ class LandingEnv(gym.Env):
 
         done = outcome is not None
         r_t = 0.0 if done else cfg.r_step
-        reward = cfg.w_t * r_t + cfg.w_s * r_s + cfg.w_c * r_c + cfg.w_a * r_a + r_t_end
-        info = {'r_s': r_s, 'r_c': r_c, 'r_a': r_a}
+        phi = 0.0 if done else self._potential(pos)
+        r_shape = cfg.gamma * phi - self._phi
+        self._phi = phi
+        reward = cfg.w_t * r_t + cfg.w_s * r_s + cfg.w_c * r_c + cfg.w_a * r_a + r_shape + r_t_end
+        info = {'r_s': r_s, 'r_c': r_c, 'r_a': r_a, 'r_shape': r_shape}
         if done:
             sora = self.scene.hazard_distance(pos[0], pos[1])
             info.update(outcome=outcome, success=outcome == 'safe_landing', t=self.veh.t,
                         landing_xy=(float(pos[0]), float(pos[1])), sora_distance_m=sora,
-                        sora_ok=bool(outcome == 'safe_landing' and sora >= cfg.sora_m))
+                        sora_ok=bool(outcome == 'safe_landing' and sora >= cfg.sora_m),
+                        majority_success=landed and majority_ok, sora_success=landed and point_ok)
         return obs, float(reward), done, False, info

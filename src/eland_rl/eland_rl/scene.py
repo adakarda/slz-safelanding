@@ -110,6 +110,53 @@ class Scene:
             return 0.0
         return float(self._dist[int(fv * gh), int(fu * gw)])
 
+    def _sora_grid(self, sora_m):
+        """SORA-safe cells (landable class throughout AND >= sora_m from a hazard), and for
+        every cell the nearest SORA-safe cell and the distance to it, on the dist_cell_m grid."""
+        key = round(float(sora_m), 3)
+        cache = getattr(self, '_sora_cache', {})
+        if key not in cache:
+            self.hazard_distance(0.0, 0.0)                      # builds self._dist
+            gh, gw = self._dist.shape
+            landable = np.isin(self.mask, list(classes.DEFAULT_SAFE_CLASSES)).astype(np.float32)
+            landable = cv2.resize(landable, (gw, gh), interpolation=cv2.INTER_AREA) > 0.999
+            safe = landable & (self._dist >= sora_m)
+            if safe.any():
+                src = (~safe).astype(np.uint8)
+                dist, lab = cv2.distanceTransformWithLabels(src, cv2.DIST_L2, 5, labelType=cv2.DIST_LABEL_PIXEL)
+                ys, xs = np.nonzero(src == 0)
+                lut = np.zeros((lab.max() + 1, 2), np.int32)
+                lut[lab[ys, xs]] = np.stack([ys, xs], 1)
+                near = lut[lab]
+                dist = dist * np.float32(self.size[0] / gw)
+            else:
+                dist = np.full((gh, gw), np.inf, np.float32)
+                near = np.zeros((gh, gw, 2), np.int32)
+            cache[key] = (safe, dist, near)
+            self._sora_cache = cache
+        return cache[key]
+
+    def _cell(self, x, y, shape):
+        gh, gw = shape
+        return (int(np.clip((0.5 - y / self.size[1]) * gh, 0, gh - 1)),
+                int(np.clip((x / self.size[0] + 0.5) * gw, 0, gw - 1)))
+
+    def is_sora_safe(self, x, y, sora_m=3.0):
+        if not self.inside(x, y):
+            return False
+        safe, _, _ = self._sora_grid(sora_m)
+        return bool(safe[self._cell(x, y, safe.shape)])
+
+    def nearest_sora_safe(self, x, y, sora_m=3.0):
+        """(tx, ty, distance_m) of the nearest SORA-safe point; distance inf if the scene has none."""
+        safe, dist, near = self._sora_grid(sora_m)
+        v, u = self._cell(x, y, safe.shape)
+        gh, gw = safe.shape
+        tv, tu = near[v, u]
+        tx = ((tu + 0.5) / gw - 0.5) * self.size[0]
+        ty = (0.5 - (tv + 0.5) / gh) * self.size[1]
+        return tx, ty, float(dist[v, u])
+
     @classmethod
     def from_messi(cls, jpg_path, mask_path, size_m=None, load_photo=False, name=None):
         """A scene from a MESSI photo and its index mask (MESSI 0..15 palette)."""

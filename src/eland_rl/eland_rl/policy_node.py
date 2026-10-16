@@ -67,6 +67,7 @@ class PolicyNode(Node):
         p('v_descend', 2.0)
         p('depth_norm_m', 40.0)
         p('log_csv', '')
+        p('publish_view', True)
         g = lambda k: self.get_parameter(k).value  # noqa: E731
         from stable_baselines3 import PPO
         self.model = PPO.load(g('model_path'), device='cpu')
@@ -87,6 +88,7 @@ class PolicyNode(Node):
         rel = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
         self.pub = self.create_publisher(TwistStamped, '/eland/rl/hiz_komutu', rel)
         self.pub_a = self.create_publisher(Int8, '/eland/rl/eylem', rel)
+        self.pub_view = self.create_publisher(Image, '/eland/rl/gorus', 1) if g('publish_view') else None
         if self.source == 'topic':
             self.create_subscription(Image, g('label_topic'), self.on_label, 1)
         self.gz = GzNode()
@@ -139,6 +141,16 @@ class PolicyNode(Node):
         obs = np.stack([sem.astype(np.float32) / (N_CLASSES - 1), np.clip(d / self.dnorm, 0, 1).astype(np.float32)])
         return obs, sem
 
+    def publish_view(self, sem, a, altitude_m):
+        img = view_image(sem, a, altitude_m, float(self.safe[sem].mean()))
+        m = Image()
+        m.header.stamp = self.get_clock().now().to_msg()
+        m.height, m.width = img.shape[:2]
+        m.encoding = 'rgb8'
+        m.step = 3 * m.width
+        m.data = img.tobytes()
+        self.pub_view.publish(m)
+
     def tick(self):
         with self.lock:
             pose = self.pose
@@ -169,6 +181,8 @@ class PolicyNode(Node):
         m.twist.linear.x, m.twist.linear.y, m.twist.linear.z = vn, ve, vd
         self.pub.publish(m)
         self.pub_a.publish(Int8(data=a))
+        if self.pub_view is not None:
+            self.publish_view(sem, a, c[2])
         if self.log:
             tilt = math.degrees(math.acos(max(-1.0, min(1.0, R[2, 2]))))
             self.log.writerow([f'{time.time():.3f}', f'{t_sim:.3f}', f'{c[0]:.3f}', f'{c[1]:.3f}', f'{c[2]:.3f}',
@@ -176,6 +190,36 @@ class PolicyNode(Node):
                                int(np.bincount(sem.ravel(), minlength=N_CLASSES).argmax()),
                                f'{vn:.2f}', f'{ve:.2f}', f'{vd:.2f}', f'{ms:.2f}'])
             self.log_f.flush()
+
+
+def view_image(sem, a, altitude_m, safe_share):
+    """What the policy saw (128x128 classes, x4) and what it chose: arrow, ring or square."""
+    import cv2
+    from eland_common import classes
+    colours = np.array([classes.CLASS_COLORS[i] for i in range(N_CLASSES)], np.uint8)
+    img = cv2.resize(colours[sem], (512, 512), interpolation=cv2.INTER_NEAREST)
+    c = (256, 256)
+    white, black = (255, 255, 255), (0, 0, 0)
+    if a == 9:
+        name = 'ALCAL'
+        for col, w in ((black, 7), (white, 3)):
+            cv2.circle(img, c, 40, col, w, cv2.LINE_AA)
+            cv2.drawMarker(img, c, col, cv2.MARKER_TILTED_CROSS, 40, w, cv2.LINE_AA)
+    elif a == 0:
+        name = 'DUR'
+        for col, w in ((black, 7), (white, 3)):
+            cv2.rectangle(img, (226, 226), (286, 286), col, w, cv2.LINE_AA)
+    else:
+        th = math.radians((a - 1) * 45.0)          # from the nose (image up), counter-clockwise
+        tip = (int(256 - 150 * math.sin(th)), int(256 - 150 * math.cos(th)))
+        name = ['ILERI', 'SOL-ILERI', 'SOL', 'SOL-GERI', 'GERI', 'SAG-GERI', 'SAG', 'SAG-ILERI'][a - 1]
+        for col, w in ((black, 9), (white, 4)):
+            cv2.arrowedLine(img, c, tip, col, w, cv2.LINE_AA, tipLength=0.25)
+    bar = np.full((64, 512, 3), 24, np.uint8)
+    cv2.putText(bar, f'{a} {name}', (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 2, cv2.LINE_AA)
+    cv2.putText(bar, f'kamera {altitude_m:5.1f} m   guvenli pay {100 * safe_share:4.1f} %', (10, 54),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1, cv2.LINE_AA)
+    return np.ascontiguousarray(np.concatenate([img, bar], 0))
 
 
 def main():
