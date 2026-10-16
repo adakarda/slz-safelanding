@@ -302,3 +302,38 @@ Kullanıcı isteği: politikayı şimdi eğit, komutlarını PX4'te dene. MESSI 
 - Tohum 0 ve 1, paralel. Çıktı `~/rl_inis/kos/sora_v2_s{0,1}`.
 
 **Tahmin (_tahmin):** İki tohumun ortalama SORA başarısı ≥ %35. Referanslar: kanal pilotu %28, dümdüz %12, görüş kâhini %83. Değerlendirme Düzeltme 4'teki gibi.
+
+## Düzeltme 6 (2026-10-17): MESSI ana eğitimi, eğitimden önce
+
+**Karar (kullanıcı):** MESSI ile düzgün bir eğitim yapılacak, performans ölçülecek. Sonuç iyi değilse düzeltilip yeniden eğitilecek. Depth Anything yalnız ölçülen bir fayda getirirse eklenecek.
+
+**Veri:**
+- `messi_rl` paketi (kullanıcının arkadaşından): 716 kare, 80–120 m, GSD 1.88–2.83 cm/px.
+- Eğitim: 696 Agamim karesi (`etiket=trainval`).
+- Test: 20 IrYamim karesi (`etiket=test`). v3 bu bölgeyi görmedi.
+  - `test7`: bu 20 karenin her 3. karesi. "Path" uçuşundaki ardışık kareler örtüşüyor; seyrekleştirmenin amacı bu.
+- Maskeler SORA-7. Küçültme 4 kat, tehlike öncelikli: bir blokta person > vehicle > water > structure > terrain-hazard > unknown > safe-hard > safe-soft sırasıyla en tehlikeli sınıf kalır. Sonuç 7.5–11 cm/px.
+  - Bellek için SORA ızgarası 0.25 m. Değerlendirme de aynı ızgarayla yapılır.
+- Sahneler 4 ortama paylaştırılır (`--shard`).
+
+**Eğitim (A1):**
+- `sora_v1`, `obs sem_depth_sora`, `ent_coef` 0.01, 2M adım, tohum 0.
+- Çıktı `~/rl_inis/kos/messi_a1_s0`.
+- Bellek nedeniyle koşular tek tek yapılır.
+
+**Değerlendirme:**
+- `test` (20 × 15 = 300 bölüm), `test7` (105 bölüm) ve eğitimden 20 sahnelik bir örnek (aşırı öğrenme kontrolü).
+- 30 s sınır, nominal dinamik, argmax.
+- Yöntemler: RL, RL + kalkan (< 10 m), dümdüz iniş, kanal pilotu, görüş kâhini (üst sınır).
+- Birincil metrik SORA başarısı. Güvensiz iniş ve süre doldu ayrı raporlanır.
+
+**Tahminler (_tahmin):**
+- H6a: `test` üzerinde RL SORA başarısı ≥ 2 × dümdüz iniş.
+- H6b: RL + kalkan güvensiz iniş ≤ bölümlerin %2'si.
+- H6c: Eğitim örneği ile `test` arasındaki RL SORA başarısı farkı ≤ 10 puan.
+
+**Sonraki düzeltmeler** (her biri koşudan önce ayrı bir düzeltme olarak yazılır):
+- kalkanın eğitime katılması,
+- "tırman" eylemi,
+- daha uzun eğitim,
+- Depth Anything ile yükseklik bilgili derinlik kanalı.

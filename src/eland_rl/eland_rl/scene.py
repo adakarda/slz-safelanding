@@ -127,7 +127,7 @@ class Scene:
                 ys, xs = np.nonzero(src == 0)
                 lut = np.zeros((lab.max() + 1, 2), np.int32)
                 lut[lab[ys, xs]] = np.stack([ys, xs], 1)
-                near = lut[lab]
+                near = lut[lab].astype(np.int16 if max(gh, gw) < 32767 else np.int32)
                 dist = dist * np.float32(self.size[0] / gw)
             else:
                 dist = np.full((gh, gw), np.inf, np.float32)
@@ -156,6 +156,16 @@ class Scene:
         tx = ((tu + 0.5) / gw - 0.5) * self.size[0]
         ty = (0.5 - (tv + 0.5) / gh) * self.size[1]
         return tx, ty, float(dist[v, u])
+
+    @classmethod
+    def from_sora7(cls, mask_path, size_m, name=None, dist_cell_m=0.1):
+        """A scene from a mask already in taxonomy indices (0..6, 7 = unknown), e.g. MESSI masks_sora7."""
+        mask = cv2.imread(mask_path, cv2.IMREAD_UNCHANGED)
+        if mask is None or mask.ndim != 2:
+            raise ValueError(f'{mask_path}: not a single-channel mask')
+        mask = np.minimum(mask, classes.UNKNOWN).astype(np.uint8)
+        stem = name or mask_path.rsplit('/', 1)[-1].rsplit('.', 1)[0]
+        return cls(mask, size_m, name=stem, dist_cell_m=dist_cell_m)
 
     @classmethod
     def from_messi(cls, jpg_path, mask_path, size_m=None, load_photo=False, name=None):
