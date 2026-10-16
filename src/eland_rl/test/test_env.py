@@ -236,3 +236,16 @@ def test_predicted_semantics_and_elevation_channels():
     assert obs[2].sum() > 0 and obs[2][obs[1] > 0.5].sum() == 0   # raised pixels are never SORA-safe
     _, _, _, _, info = env.step(9)
     assert 'r_shape' in info                               # reward still from the GT world
+
+
+def test_shield_inside_the_environment():
+    sc = _grass_with_person()
+    cfg = dict(obs_mode='sem_depth_sora', success_rule='sora')
+    start = {'start': (0.0, 0.0, 8.0, 0.0), 'dynamics': NO_LAG}
+    env = LandingEnv([sc], EnvConfig(**cfg))
+    env.reset(seed=0, options=start)
+    assert not env.step(9)[4]['shielded']                      # off by default
+    env = LandingEnv([sc], EnvConfig(shield_m=10.0, **cfg))
+    env.reset(seed=0, options=start)
+    info = env.step(9)[4]                                      # descend onto the person at 8 m
+    assert info['shielded'] and info['action'] != 9

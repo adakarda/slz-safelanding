@@ -378,3 +378,27 @@ Hiçbiri sağlamazsa Depth Anything eklenmez ve bu sonuç raporlanır.
 **Tahminler (_tahmin):**
 - H7a: PA, P0'dan düşük. Segmentasyon gürültüsü zarar verir.
 - H7b: PC, karar kuralını sağlar. Yükseltilmiş yapıyı ve ağacı SORA kanalından çıkarmak, v3'ün kaçırdığı yerleri düzeltir.
+
+## Düzeltme 8 (2026-10-17): A2b — kalkan eğitimin içinde, eğitimden önce
+
+**Gerekçe:**
+- Pilot sahnelerde kalkan güvensiz inişi sıfırladı (tohum 0: 46 → 0).
+- Ama bölümlerin çoğu süre dolarak bitti (1 → 41).
+- Politika kalkansız eğitildiği için kalkanın engellediği durumlarda ne yapacağını bilmiyor.
+
+**A2b:** A1 ile aynı, tek fark `shield_m = 10`. Kalkan ortamın içinde çalışır: 10 m altında, SORA kanalı ortayı güvenli göstermiyorsa "alçal" yerine en yakın güvenli piksele kayma uygulanır. Politika bunu eğitim boyunca yaşar.
+- 2M adım, tohum 0. Çıktı `~/rl_inis/kos/messi_a2b_s0`.
+- A1 bitince otomatik başlar.
+
+**Değerlendirme:** A1 ile aynı listeler (`test`, `test7`, `train_ornek20`), kalkan açık.
+
+**Tahminler (_tahmin):**
+- H8a: `test` üzerinde A2b SORA başarısı ≥ A1'in RL + kalkan sonucu + 5 puan.
+- H8b: A2b güvensiz iniş ≤ %2.
+- H8c: A2b süre doldu oranı < A1'in RL + kalkan oranı.
+
+**Gece kuyruğu (2026-10-17):**
+1. Düzeltme 7'nin 5 kolu sırayla: P0, PA, PB, PC, PD; her biri eğitim + test.
+2. A1 bitince A2b.
+
+Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).

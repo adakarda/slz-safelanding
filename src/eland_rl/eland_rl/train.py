@@ -48,6 +48,8 @@ def main():
     ap.add_argument('--sem-source', default='gt', choices=['gt', 'pred'])
     ap.add_argument('--depth-mode', default='flat', choices=['flat', 'elev'])
     ap.add_argument('--sora-elev-tau', type=float, default=-1.0)
+    ap.add_argument('--shield-train-m', type=float, default=-1.0,
+                    help='>= 0: SORA shield inside the environment (amendment 8)')
     ap.add_argument('--shard', action='store_true', help='split the scene list over the environments')
     ap.add_argument('--ent-coef', type=float, default=0.0)
     ap.add_argument('--out', required=True)
@@ -58,7 +60,7 @@ def main():
 
     venv = SubprocVecEnv([make_env(a.scenes, r, a.seed, a.out, a.binary, a.reward, a.obs, a.envs, a.sora_cell, a.shard,
                                    dict(sem_source=a.sem_source, depth_mode=a.depth_mode,
-                                        sora_elev_tau=a.sora_elev_tau)) for r in range(a.envs)])
+                                        sora_elev_tau=a.sora_elev_tau, shield_m=a.shield_train_m)) for r in range(a.envs)])
     lr0 = a.lr
     model = PPO('MlpPolicy', venv, learning_rate=lambda progress: lr0 * progress, policy_kwargs=POLICY_KWARGS,
                 ent_coef=a.ent_coef, seed=a.seed, device=a.device, verbose=0)

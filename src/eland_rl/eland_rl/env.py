@@ -32,6 +32,7 @@ import numpy as np
 from eland_common import classes
 
 from .camera import Camera, ground_hits, sora_channel
+from .pilots import shield
 from .dynamics import DynamicsParams, Vehicle
 
 N_CLASSES = 8                       # seven taxonomy classes + UNKNOWN
@@ -79,6 +80,7 @@ class EnvConfig:
     sem_source: str = 'gt'          # 'gt' or 'pred' (the scene's v3 prediction mask)
     depth_mode: str = 'flat'        # 'flat' (ray length to the ground) or 'elev' (Depth Anything relative elevation)
     sora_elev_tau: float = -1.0     # >= 0: SORA channel also refuses pixels whose elevation exceeds it
+    shield_m: float = -1.0          # >= 0: the SORA shield acts inside the environment (amendment 8)
     dynamics: DynamicsParams = field(default_factory=DynamicsParams)
     randomise_dynamics: bool = True
 
@@ -206,6 +208,7 @@ class LandingEnv(gym.Env):
         self.steps = 0
         self._phi = self._potential(pos)
         obs, _, _ = self._observe()
+        self._last_obs = obs
         info = {'scene': self.scene.name, 'start': (*pos, yaw),
                 'dynamics': params}
         return obs, info
@@ -213,10 +216,15 @@ class LandingEnv(gym.Env):
     def step(self, action):
         cfg = self.cfg
         a = int(action)
+        shielded = False
+        if cfg.shield_m >= 0 and cfg.obs_mode == 'sem_depth_sora':
+            # amendment 8: the shield is part of the vehicle, so the policy learns with it in the loop
+            a, shielded = shield(a, self._last_obs, self.veh.delayed_pose()[0][2], cfg.shield_m)
         self.veh.step(self._v_cmd(a), cfg.step_s)
         self.steps += 1
         pos = self.veh.pos
         obs, sem, depth = self._observe()
+        self._last_obs = obs
 
         safe_share = float(self._safe[sem].mean())
         r_s = cfg.sem_good * safe_share + cfg.sem_bad * (1.0 - safe_share)
@@ -250,7 +258,7 @@ class LandingEnv(gym.Env):
         r_shape = cfg.gamma * phi - self._phi
         self._phi = phi
         reward = cfg.w_t * r_t + cfg.w_s * r_s + cfg.w_c * r_c + cfg.w_a * r_a + r_shape + r_t_end
-        info = {'r_s': r_s, 'r_c': r_c, 'r_a': r_a, 'r_shape': r_shape}
+        info = {'r_s': r_s, 'r_c': r_c, 'r_a': r_a, 'r_shape': r_shape, 'action': a, 'shielded': shielded}
         if done:
             sora = self.scene.hazard_distance(pos[0], pos[1])
             info.update(outcome=outcome, success=outcome == 'safe_landing', t=self.veh.t,

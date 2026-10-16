@@ -42,6 +42,8 @@ def main():
     ap.add_argument('--sem-source', default='gt', choices=['gt', 'pred'])
     ap.add_argument('--depth-mode', default='flat', choices=['flat', 'elev'])
     ap.add_argument('--sora-elev-tau', type=float, default=-1.0)
+    ap.add_argument('--shield-train-m', type=float, default=-1.0,
+                    help='>= 0: SORA shield inside the environment (amendment 8)')
     ap.add_argument('--shield-m', type=float, default=10.0)
     ap.add_argument('--oracle', action='store_true', help='add the view oracle (privileged GT upper bound)')
     ap.add_argument('--out', required=True)
@@ -49,6 +51,7 @@ def main():
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
     env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, obs_mode=a.obs, sem_source=a.sem_source,
                                        depth_mode=a.depth_mode, sora_elev_tau=a.sora_elev_tau,
+                                       shield_m=a.shield_train_m,
                                        **REWARD_PRESETS[a.reward]))
     rng = np.random.default_rng(12345)
     methods = {'duz_inis': lambda o: 9, 'rastgele': lambda o: int(rng.integers(10))}
