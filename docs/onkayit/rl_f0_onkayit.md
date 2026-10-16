@@ -168,3 +168,37 @@ R_C kodda var ama S1'de hep 0. Düz zeminde d_min ≥ 5 m > d*.
 2. Birim testi: aynı pozda, ortam GT karesi ile Gazebo GT karesi arasında IoU ≥ 0.95. Bu bir hedeftir.
 3. PX4 tepki ölçümü: Gazebo'da kısa uçuş. Çıktı: τ_xy, τ_z, a_max ve eğim. ölçülen.
 4. Rastgele politika ile ortam hızı ölçümü (adım/s).
+
+## Düzeltme 1 (2026-10-16, F1 ölçümlerinden sonra, hiçbir eğitimden önce)
+
+Sonuç görülmeden yazıldı. Hiçbir politika eğitilmedi.
+
+1. **Kamera formülü yanlıştı.** Yereldeki MESSI fotoları DJI FC6310R ile değil, Hasselblad L1D-20c ile çekilmiş: f = 10.26 mm, EXIF'ten ölçülen.
+   - Kural: GSD her fotonun kendi EXIF odak uzaklığı ve XMP RelativeAltitude değeri ile hesaplanır. GSD = H × 13.2 mm / (f × W). Kod: `eland_rl.scene.dji_ground_size`.
+   - Düzeltilmiş iz: 1.287 H × 0.858 H (_hesap). 80 m'de 103 × 69 m, 100 m'de 129 × 86 m.
+   - §2.1'deki "80 m → 120 × 80 m" yanlış. Eşik kuralı değişmez: metadata görüldükten sonra, eğitimden önce kesinleşir.
+2. **Dinamik modele saf komut gecikmesi ve sabit trim eğimi eklendi.**
+   - Tanılama uçuşu `~/rl_inis/tanilama/kos1`: x500_seg_cam_rgb_down, offboard hız setpoint'i. Önce basamaklar, sonra politika benzeri 160 rastgele eylem.
+   - Bütün kayda uydurulan değerler (ölçülen):
+
+     | Parametre | Değer |
+     |---|---|
+     | τ_xy | 0.50 s |
+     | a_max | 2.0 m/s² |
+     | xy komut gecikmesi | 0.24 s |
+     | τ_z | 0.15 s |
+     | z komut gecikmesi | 0.10 s |
+     | Eğim | 0.91 × atan(a/g) + 0.69° (r 0.977) |
+     | Hover trim eğimi | 0.9° |
+
+   - Ortam kodu aynı komutlarla kaydı yeniden oynattı (ölçülen):
+
+     | Bölüm | xy RMSE | z RMSE |
+     |---|---|---|
+     | Basamaklar | 0.036 m/s | 0.044 m/s |
+     | Rastgele | 0.084 m/s | 0.128 m/s |
+
+     Gecikmesiz eski varsayılan rastgele bölümde xy 0.190 m/s verdi.
+   - Rastgeleleştirmeye eklenenler: komut gecikmeleri ±%50, trim eğimi rastgele yönde 0–1.5°. Diğer aralıklar §2.4'teki gibi.
+3. **Yaw (açıklama).** Bölüm içinde sabittir. Her bölüm başında rastgele çekilir (veri artırma). Gazebo testinde yaw, başlangıç pozundan gelir.
+4. **Gözlem örneklemesi (açıklama).** 128 × 128 ışınlar, 320 × 240 etiket görüntüsünde `cv2.resize(INTER_NEAREST)` işleminin seçtiği piksellerdir. Birim testi bunu doğrular.
