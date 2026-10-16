@@ -197,3 +197,25 @@ def test_shaping_pays_for_moving_towards_safe_ground():
     assert sum(gains) > 2.0
     env.reset(seed=0, options={'start': (0.0, 0.0, 25.0, 0.0), 'dynamics': NO_LAG})
     assert sum(env.step(9)[4]['r_shape'] for _ in range(4)) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_sora_channel_keeps_three_metres_from_a_person():
+    from eland_rl.camera import sora_channel
+    sem = np.zeros((128, 128), np.uint8)
+    sem[63:65, 63:65] = 6                                  # a person in the middle
+    h = 10.0                                               # 128 px across 2*10*tan(49.85 deg) = 23.7 m
+    ch = sora_channel(sem, h)
+    px = 2 * h * math.tan(1.74 / 2) / 128                  # ~0.185 m per column
+    assert not ch[64, 64]
+    assert not ch[64, 64 + int(2.5 / px)]                  # 2.5 m to the side: too close
+    assert ch[64, 64 + int(3.6 / px)]                      # 3.6 m: clear
+    assert ch[5, 5] and ch.mean() > 0.8
+
+
+def test_three_channel_observation():
+    from gymnasium.utils.env_checker import check_env
+    env = LandingEnv([_grass_with_person()], EnvConfig(obs_mode='sem_depth_sora', success_rule='sora'))
+    obs, _ = env.reset(seed=0, options={'start': (0.0, 0.0, 10.0, 0.0), 'dynamics': NO_LAG})
+    assert obs.shape == (3, 128, 128)
+    assert obs[2, 64, 64] == 0.0 and obs[2, 5, 5] == 1.0
+    check_env(LandingEnv([flat_scene(0)], EnvConfig(obs_mode='sem_depth_sora')), skip_render_check=True)

@@ -73,6 +73,29 @@ def ground_hits(rays, cam_pos, R):
     return X, Y, t
 
 
+def sora_channel(sem, altitude_m, sora_m=3.0, safe_classes=(0, 1), hazard_classes=(3, 4, 5, 6),
+                 hfov=HFOV, aspect=(4, 3)):
+    """SORA-safe mask of a policy image: landable class AND >= sora_m from any hazard pixel.
+
+    Computed from the image alone plus the altitude, so the vehicle can compute it too
+    (segmentation + height). The 128x128 policy image is stretched from 4:3; distances
+    are measured after un-stretching it, with the nadir pixel size 2 h tan(HFOV/2) / width.
+    Hazards outside the view are not seen -- the same limit the camera has.
+    """
+    import cv2
+    n = sem.shape[1]
+    h_rows = int(round(n * aspect[1] / aspect[0]))
+    sq = cv2.resize(sem, (n, h_rows), interpolation=cv2.INTER_NEAREST)
+    hazard = np.isin(sq, hazard_classes)
+    if hazard.any():
+        dist_px = cv2.distanceTransform((~hazard).astype(np.uint8), cv2.DIST_L2, 5)
+    else:
+        dist_px = np.full(sq.shape, np.inf, np.float32)
+    px_m = 2.0 * max(altitude_m, 0.1) * math.tan(hfov / 2) / n
+    ok = np.isin(sq, safe_classes) & (dist_px * px_m >= sora_m)
+    return cv2.resize(ok.astype(np.uint8), (n, sem.shape[0]), interpolation=cv2.INTER_NEAREST).astype(bool)
+
+
 class Camera:
     """Renders what the policy sees, and the full-resolution views tests need."""
 

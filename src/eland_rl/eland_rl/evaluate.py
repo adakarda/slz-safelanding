@@ -37,10 +37,11 @@ def main():
     ap.add_argument('--starts', type=int, default=15)
     ap.add_argument('--binary', action='store_true')
     ap.add_argument('--reward', default='paper', choices=sorted(REWARD_PRESETS))
+    ap.add_argument('--obs', default='sem_depth', choices=['sem_depth', 'sem_depth_sora'])
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes)
-    env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, **REWARD_PRESETS[a.reward]))
+    env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, obs_mode=a.obs, **REWARD_PRESETS[a.reward]))
     rng = np.random.default_rng(12345)
     methods = {'duz_inis': lambda o: 9, 'rastgele': lambda o: int(rng.integers(10))}
     if a.model:

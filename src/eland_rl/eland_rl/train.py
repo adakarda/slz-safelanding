@@ -23,9 +23,9 @@ from .policy import POLICY_KWARGS
 from .scenes import load_list
 
 
-def make_env(scene_list, rank, seed, out, binary, reward):
+def make_env(scene_list, rank, seed, out, binary, reward, obs='sem_depth'):
     def _f():
-        env = LandingEnv(load_list(scene_list), EnvConfig(binary=binary, **REWARD_PRESETS[reward]))
+        env = LandingEnv(load_list(scene_list), EnvConfig(binary=binary, obs_mode=obs, **REWARD_PRESETS[reward]))
         env = Monitor(env, os.path.join(out, f'monitor_{rank}'),
                       info_keywords=('success', 'outcome', 'sora_success', 'majority_success'))
         env.reset(seed=seed + 1000 * rank)
@@ -42,6 +42,7 @@ def main():
     ap.add_argument('--lr', type=float, default=3e-4)
     ap.add_argument('--binary', action='store_true')
     ap.add_argument('--reward', default='paper', choices=sorted(REWARD_PRESETS))
+    ap.add_argument('--obs', default='sem_depth', choices=['sem_depth', 'sem_depth_sora'])
     ap.add_argument('--ent-coef', type=float, default=0.0)
     ap.add_argument('--out', required=True)
     ap.add_argument('--device', default='auto')
@@ -49,7 +50,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     json.dump(vars(a), open(os.path.join(a.out, 'args.json'), 'w'), indent=1)
 
-    venv = SubprocVecEnv([make_env(a.scenes, r, a.seed, a.out, a.binary, a.reward) for r in range(a.envs)])
+    venv = SubprocVecEnv([make_env(a.scenes, r, a.seed, a.out, a.binary, a.reward, a.obs) for r in range(a.envs)])
     lr0 = a.lr
     model = PPO('MlpPolicy', venv, learning_rate=lambda progress: lr0 * progress, policy_kwargs=POLICY_KWARGS,
                 ent_coef=a.ent_coef, seed=a.seed, device=a.device, verbose=0)

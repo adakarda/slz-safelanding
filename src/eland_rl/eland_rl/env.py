@@ -31,7 +31,7 @@ import numpy as np
 
 from eland_common import classes
 
-from .camera import Camera
+from .camera import Camera, sora_channel
 from .dynamics import DynamicsParams, Vehicle
 
 N_CLASSES = 8                       # seven taxonomy classes + UNKNOWN
@@ -74,6 +74,7 @@ class EnvConfig:
     shaping_dmax: float = 20.0
     gamma: float = 0.99             # discount the potential shaping is built with (= PPO gamma)
     image_size: int = 128
+    obs_mode: str = 'sem_depth'     # or 'sem_depth_sora': + SORA-safe mask from the image (amendment 5)
     dynamics: DynamicsParams = field(default_factory=DynamicsParams)
     randomise_dynamics: bool = True
 
@@ -99,7 +100,8 @@ class LandingEnv(gym.Env):
         self.cfg = config or EnvConfig()
         self.cam = Camera(self.cfg.image_size)
         n = self.cfg.image_size
-        self.observation_space = gym.spaces.Box(0.0, 1.0, (2, n, n), np.float32)
+        n_ch = 3 if self.cfg.obs_mode == 'sem_depth_sora' else 2
+        self.observation_space = gym.spaces.Box(0.0, 1.0, (n_ch, n, n), np.float32)
         self.action_space = gym.spaces.Discrete(10)
         ang = np.radians(np.arange(8) * 45.0)
         self._lateral = np.stack([np.cos(ang), np.sin(ang)], 1) * self.cfg.v_lateral
@@ -127,7 +129,10 @@ class LandingEnv(gym.Env):
         else:
             ch0 = sem.astype(np.float32) / (N_CLASSES - 1)
         ch1 = np.clip(np.where(np.isfinite(depth), depth, self.cfg.depth_norm_m) / self.cfg.depth_norm_m, 0, 1)
-        obs = np.stack([ch0, ch1.astype(np.float32)])
+        chans = [ch0, ch1.astype(np.float32)]
+        if self.cfg.obs_mode == 'sem_depth_sora':
+            chans.append(sora_channel(sem, pos[2], self.cfg.sora_m).astype(np.float32))
+        obs = np.stack(chans)
         return obs, sem, depth
 
     def _potential(self, pos):

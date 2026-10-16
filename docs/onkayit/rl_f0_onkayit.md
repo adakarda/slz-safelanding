@@ -267,3 +267,38 @@ Kullanıcı isteği: politikayı şimdi eğit, komutlarını PX4'te dene. MESSI 
 **Tahminler (_tahmin):**
 - `sora_v1` RL SORA başarısı ≥ %35. Referanslar: dümdüz %12, kâhin %56.
 - Kontrol koşusunun (paper + entropi) SORA başarısı ≤ %20.
+
+## Düzeltme 5 (2026-10-16): SORA kanalı (gözlem v2), eğitimden önce
+
+**Düzeltme 4 sonuçları (ölçülen, 75 bölüm, 30 s, argmax):**
+- `sora_v1` + entropi: SORA başarısı %9.3, 26 bölümde süre doldu, eylemlerin %55'i yanal. Tahmin (≥ %35) tutmadı.
+- Paper + entropi (kontrol): SORA %10.7, çoğunluk %26.7. Tahmin (≤ %20) tuttu.
+- `sora_v1` için 90 s sınır ve olasılıkla eylem seçimi en iyi durumda %14.7 veriyor.
+
+**Teşhis (sabit pilotlar, ölçülen):**
+- Görüş kâhini: yalnız kameranın gördüğü alanın gerçek SORA bilgisini biliyor. SORA başarısı %82.7. Tüm harita kâhini %56.0, dümdüz iniş %12.0.
+  - Sonuç: gereken bilgi görüşte var. Politika onu sınıf görüntüsünden okuyamıyor.
+- Kanal pilotu: yalnız araçta hesaplanabilen SORA kanalını kullanıyor.
+  - SORA başarısı %28; tutum düzeltmesiyle %32.
+  - Güvensiz iniş 0, süre doldu 54.
+- Kanalın merkez doğruluğu:
+
+  | İrtifa | Kesinlik | Duyarlılık |
+  |---|---|---|
+  | 18–30 m | %90 | %58 |
+  | 10–18 m | %100 | %86 |
+  | 5–10 m | %100 | %99 |
+
+- Eksik olan, kayma ile alçalma arasındaki denge. Bu, öğrenmenin işi.
+
+**Gözlem v2 (`obs_mode=sem_depth_sora`):**
+- Üçüncü kanal `camera.sora_channel`.
+- Piksel SORA-güvenli sayılır: landable sınıf ve görüntüdeki en yakın hazard pikseline ≥ 3 m.
+- Mesafe, 4:3 oranına geri açılmış görüntüde ve nadir piksel boyutu 2·h·tan(HFOV/2)/128 ile ölçülür.
+- Yalnız segmentasyon ve irtifadan hesaplanır, araçta da hesaplanabilir.
+
+**Eğitim:**
+- `sora_v1`, `ent_coef` 0.01, 1M adım, `obs sem_depth_sora`, 5 pilot sahnesi, GT girdi.
+- Tohum 0 ve 1, paralel. Çıktı `~/rl_inis/kos/sora_v2_s{0,1}`.
+
+**Tahmin (_tahmin):** İki tohumun ortalama SORA başarısı ≥ %35. Referanslar: kanal pilotu %28, dümdüz %12, görüş kâhini %83. Değerlendirme Düzeltme 4'teki gibi.
