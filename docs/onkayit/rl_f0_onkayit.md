@@ -337,3 +337,44 @@ Kullanıcı isteği: politikayı şimdi eğit, komutlarını PX4'te dene. MESSI 
 - "tırman" eylemi,
 - daha uzun eğitim,
 - Depth Anything ile yükseklik bilgili derinlik kanalı.
+
+## Düzeltme 7 (2026-10-17): Depth Anything deneyi, eğitimden önce
+
+**Soru:** Depth Anything V2 Small (Apache-2.0) yükseklik bilgisi, segmentasyon gürültülüyken RL'nin SORA başarısını artırıyor mu? Kullanıcı kuralı: yalnız ölçülen bir fayda varsa eklenir.
+
+**Ön ölçüm (eğitimden bağımsız, ölçülen):** 24 MESSI fotosunda göreli derinliğin AUC değeri:
+- bina / zemin: medyan 0.975 (en kötü 0.886);
+- ağaç / çim: medyan 0.82 (en kötü 0.58).
+
+**Veri:**
+- Fotosu olan 173 Agamim karesi.
+- Eğitim: 0001, 0002, 0003 ve 0006 uçuşları (133 kare). Test: 0004 uçuşunun tamamı (40 kare).
+- v3 tahmini (`pred`): v3 bu karelerin çoğunu eğitimde gördü; gürültü bu yüzden iyimser.
+- Yükseklik haritası (`elev`): Depth Anything çıktısı, her karede %5–%99.5 yüzdelikleri arasında 0–1'e ölçeklenir.
+- Eşik τ = 0.12. Yalnız eğitim uçuşlarından, Youden J ile seçildi (`esik_sec.py`): yükseltilmişi yakalama %75.2, zemini yanlış işaretleme %12.1.
+
+**Kollar.** Hepsi `sora_v1`, `ent_coef` 0.01, 1M adım, tohum 0. Ödül ve başarı her kolda GT'dendir.
+
+| Kol | Sınıflar | Kanal 2 | SORA kanalı |
+|---|---|---|---|
+| P0 | GT | düz derinlik | GT |
+| PA | v3 | düz derinlik | v3 |
+| PB | v3 | Depth Anything yüksekliği | v3 |
+| PC | v3 | düz derinlik | v3 ve yükseklik ≤ τ |
+| PD | v3 | Depth Anything yüksekliği | v3 ve yükseklik ≤ τ |
+
+**Değerlendirme:**
+- Test uçuşu: 40 kare × 15 başlangıç, 30 s, argmax.
+- Yöntemler: RL, RL + kalkan, kanal pilotu (kolun kendi SORA kanalıyla), dümdüz iniş, görüş kâhini.
+- Birincil metrik SORA başarısı, ikincil güvensiz iniş oranı.
+
+**Karar kuralı (önceden):** Depth Anything ancak şu koşulla eklenir: PB, PC ya da PD, PA'ya göre RL veya RL + kalkan için
+- SORA başarısını en az 3 puan artırmalı, ya da
+- güvensiz inişi en az %25 (göreli) azaltmalı,
+- ve bunu yaparken öteki metriği 3 puandan fazla kötüleştirmemeli.
+
+Hiçbiri sağlamazsa Depth Anything eklenmez ve bu sonuç raporlanır.
+
+**Tahminler (_tahmin):**
+- H7a: PA, P0'dan düşük. Segmentasyon gürültüsü zarar verir.
+- H7b: PC, karar kuralını sağlar. Yükseltilmiş yapıyı ve ağacı SORA kanalından çıkarmak, v3'ün kaçırdığı yerleri düzeltir.
