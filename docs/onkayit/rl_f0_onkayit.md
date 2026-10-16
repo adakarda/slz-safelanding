@@ -214,3 +214,19 @@ Kullanıcı isteği: politikayı şimdi eğit, komutlarını PX4'te dene. MESSI 
 - **Değerlendirme:** aynı 5 sahne × 15 başlangıç, 30 s, nominal dinamik (`python -m eland_rl.evaluate`). Eğitim sahnesinde test edildiği için genelleme ölçmez.
 - **Pilot beklentisi (_tahmin):** RL başarısı, düz inişten en az 20 puan yüksek.
 - **Gazebo (F4):** orto_dji0097 dünyası, eğitim sahnelerinden biri. Ayrıntılar F4 koşusundan önce yazılır.
+
+## Düzeltme 3 (2026-10-16): F4 pilot Gazebo testi, koşudan önce
+
+- **Kurulum:**
+  - Pilot politika (`~/rl_inis/kos/pilot_s0/model.zip`).
+  - Dünya orto_dji0097, model x500_seg_cam_rgb_down.
+  - Yeni `eland_rl_mode` ("RL Landing", hiçbir iç modun yerine geçmez) ve `eland_rl.policy_node`.
+- **Girdi:** `label_source=gt`. Kameranın gerçek pozundan (gz dynamic_pose) eğitimdeki izdüşüm. Derinlik düz zemin varsayımıyla aynı pozdan. Amaç yalnız PX4 tarafındaki aktarım farkını görmek; v3 girdisi sonraki adım.
+- **Başlangıçlar:** `evaluate.py` sahne 0 (DJI_0097), tohum 0–14. Aynı x, y, yaw ve kalkış irtifası kullanılır (`~/rl_inis/f4/baslangiclar.txt`).
+- **Başarı:** ortamla aynı tanım.
+  - Mod etkinleştikten sonra 30 s içinde kamera 5 m'ye iner.
+  - O andaki tam görüşün çoğunluk sınıfı safe-soft veya safe-hard olur.
+  - Bu satır politika günlüğünden okunur.
+  - 5 m altında mod dikey olarak iner. SORA mesafesi iniş noktasından ayrıca raporlanır.
+- **Tahmin (_tahmin):** Gazebo başarısı, aynı 15 başlangıçta ortamdaki başarıdan en çok 2 koşu (~13 puan) farklı çıkar.
+- **Pilot sınırı:** eğitim sahnesinde test. Genelleme değil, aktarım ölçer.
