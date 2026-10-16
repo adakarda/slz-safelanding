@@ -35,7 +35,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Int8
 
-from .camera import Camera, ground_hits, nearest_source_index
+from .camera import Camera, ground_hits, nearest_source_index, sora_channel
 from .scene import Scene
 
 N_CLASSES = 8
@@ -71,6 +71,7 @@ class PolicyNode(Node):
         g = lambda k: self.get_parameter(k).value  # noqa: E731
         from stable_baselines3 import PPO
         self.model = PPO.load(g('model_path'), device='cpu')
+        self.n_channels = int(self.model.observation_space.shape[0])
         self.source = g('label_source')
         self.offset = int(g('label_offset'))
         self.cam_off, self.ground_z = float(g('camera_offset_m')), float(g('ground_z_m'))
@@ -138,7 +139,10 @@ class PolicyNode(Node):
             sem = np.where((cls >= 0) & (cls < N_CLASSES - 1), cls, N_CLASSES - 1).astype(np.uint8)
             _, _, depth = ground_hits(self.cam.rays, c, R)
         d = np.where(np.isfinite(depth), depth, self.dnorm)
-        obs = np.stack([sem.astype(np.float32) / (N_CLASSES - 1), np.clip(d / self.dnorm, 0, 1).astype(np.float32)])
+        chans = [sem.astype(np.float32) / (N_CLASSES - 1), np.clip(d / self.dnorm, 0, 1).astype(np.float32)]
+        if self.n_channels == 3:                                   # observation v2: + SORA-safe mask
+            chans.append(sora_channel(sem, c[2]).astype(np.float32))
+        obs = np.stack(chans)
         return obs, sem
 
     def publish_view(self, sem, a, altitude_m):
