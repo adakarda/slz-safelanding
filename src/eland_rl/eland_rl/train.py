@@ -16,7 +16,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from .env import REWARD_PRESETS, EnvConfig, LandingEnv
 from .policy import POLICY_KWARGS
@@ -51,6 +51,8 @@ def main():
     ap.add_argument('--shield-train-m', type=float, default=-1.0,
                     help='>= 0: SORA shield inside the environment (amendment 8)')
     ap.add_argument('--shard', action='store_true', help='split the scene list over the environments')
+    ap.add_argument('--vec', default='subproc', choices=['subproc', 'dummy'],
+                    help='dummy: the environments share one process (same data, ~2 GB less memory)')
     ap.add_argument('--ent-coef', type=float, default=0.0)
     ap.add_argument('--out', required=True)
     ap.add_argument('--device', default='auto')
@@ -58,7 +60,8 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     json.dump(vars(a), open(os.path.join(a.out, 'args.json'), 'w'), indent=1)
 
-    venv = SubprocVecEnv([make_env(a.scenes, r, a.seed, a.out, a.binary, a.reward, a.obs, a.envs, a.sora_cell, a.shard,
+    venv_cls = DummyVecEnv if a.vec == 'dummy' else SubprocVecEnv
+    venv = venv_cls([make_env(a.scenes, r, a.seed, a.out, a.binary, a.reward, a.obs, a.envs, a.sora_cell, a.shard,
                                    dict(sem_source=a.sem_source, depth_mode=a.depth_mode,
                                         sora_elev_tau=a.sora_elev_tau, shield_m=a.shield_train_m)) for r in range(a.envs)])
     lr0 = a.lr

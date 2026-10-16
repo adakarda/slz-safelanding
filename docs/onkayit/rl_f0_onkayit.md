@@ -402,3 +402,4 @@ Hiçbiri sağlamazsa Depth Anything eklenmez ve bu sonuç raporlanır.
 2. A1 bitince A2b.
 
 Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
+- Uygulama notu (01:25): kollar `--vec dummy` ile koşar: 4 ortam tek süreçte. Algoritma ve veri aynıdır. İlk denemede (SubprocVecEnv) swap'a 1.7 GB taşıldı. P0 8k adımda durduruldu ve baştan başlatıldı.
