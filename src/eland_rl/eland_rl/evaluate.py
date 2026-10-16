@@ -39,16 +39,25 @@ def main():
     ap.add_argument('--reward', default='paper', choices=sorted(REWARD_PRESETS))
     ap.add_argument('--obs', default='sem_depth', choices=['sem_depth', 'sem_depth_sora'])
     ap.add_argument('--sora-cell', type=float, default=0.1)
+    ap.add_argument('--sem-source', default='gt', choices=['gt', 'pred'])
+    ap.add_argument('--depth-mode', default='flat', choices=['flat', 'elev'])
+    ap.add_argument('--sora-elev-tau', type=float, default=-1.0)
     ap.add_argument('--shield-m', type=float, default=10.0)
+    ap.add_argument('--oracle', action='store_true', help='add the view oracle (privileged GT upper bound)')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
-    env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, obs_mode=a.obs, **REWARD_PRESETS[a.reward]))
+    env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, obs_mode=a.obs, sem_source=a.sem_source,
+                                       depth_mode=a.depth_mode, sora_elev_tau=a.sora_elev_tau,
+                                       **REWARD_PRESETS[a.reward]))
     rng = np.random.default_rng(12345)
     methods = {'duz_inis': lambda o: 9, 'rastgele': lambda o: int(rng.integers(10))}
     if a.obs == 'sem_depth_sora':
         from .pilots import channel_pilot
         methods['kanal'] = channel_pilot
+    if a.oracle:
+        from .pilots import view_oracle
+        methods['gorus_kahini'] = lambda o: view_oracle(env)
     if a.model:
         from stable_baselines3 import PPO
         model = PPO.load(a.model, device='cpu')

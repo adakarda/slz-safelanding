@@ -65,6 +65,8 @@ class Scene:
         self.size = (float(size_m[0]), float(size_m[1]))
         self.photo = photo
         self.name = name
+        self.pred = None     # optional v3 prediction mask, same shape as mask (amendment 7)
+        self.elev = None     # optional Depth Anything relative elevation, uint8, same shape
         self.dist_cell = dist_cell_m
         self._dist = None
 
@@ -75,6 +77,16 @@ class Scene:
     def inside(self, x, y):
         hx, hy = self.half
         return (np.abs(x) < hx) & (np.abs(y) < hy)
+
+    def values_at(self, arr, x, y, fill):
+        """Values of a per-pixel map aligned with the mask (e.g. pred, elev) under world points; fill off the photo."""
+        fu = x / self.size[0] + 0.5
+        fv = 0.5 - y / self.size[1]
+        ok = (fu >= 0) & (fu < 1) & (fv >= 0) & (fv < 1)
+        out = np.full(np.shape(x), fill, arr.dtype)
+        H, W = arr.shape
+        out[ok] = arr[(fv[ok] * H).astype(np.intp), (fu[ok] * W).astype(np.intp)]
+        return out
 
     def classes_at(self, x, y):
         """Taxonomy class under world points (x, y); UNKNOWN off the photo."""

@@ -219,3 +219,20 @@ def test_three_channel_observation():
     assert obs.shape == (3, 128, 128)
     assert obs[2, 64, 64] == 0.0 and obs[2, 5, 5] == 1.0
     check_env(LandingEnv([flat_scene(0)], EnvConfig(obs_mode='sem_depth_sora')), skip_render_check=True)
+
+
+def test_predicted_semantics_and_elevation_channels():
+    sc = flat_scene(0, size=(60.0, 40.0))
+    sc.pred = np.full_like(sc.mask, 3)                     # v3 'sees' a roof everywhere
+    sc.elev = np.zeros_like(sc.mask)
+    H, W = sc.mask.shape
+    sc.elev[:, : W // 2] = 255                             # west half raised
+    start = {'start': (0.0, 0.0, 10.0, 0.0), 'dynamics': NO_LAG}
+    obs, _ = LandingEnv([sc], EnvConfig(obs_mode='sem_depth_sora', sem_source='pred')).reset(seed=0, options=start)
+    assert np.allclose(obs[0], 3 / 7) and obs[2].sum() == 0  # classes and SORA channel follow the prediction
+    env = LandingEnv([sc], EnvConfig(obs_mode='sem_depth_sora', depth_mode='elev', sora_elev_tau=0.5))
+    obs, _ = env.reset(seed=0, options=start)
+    assert 0.3 < obs[1].mean() < 0.7                       # elevation channel: half the view raised
+    assert obs[2].sum() > 0 and obs[2][obs[1] > 0.5].sum() == 0   # raised pixels are never SORA-safe
+    _, _, _, _, info = env.step(9)
+    assert 'r_shape' in info                               # reward still from the GT world

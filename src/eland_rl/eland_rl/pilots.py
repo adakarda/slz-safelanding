@@ -41,3 +41,29 @@ def shield(action, obs, height_m, below_m=10.0):
     if action == 9 and height_m < below_m and not centre_safe(obs):
         return towards_nearest_safe(obs), True
     return action, False
+
+
+def view_oracle(env):
+    """Upper bound, NOT a vehicle pilot: knows true SORA safety (GT grid) for the ground the camera
+    currently sees. Descends when the point under the vehicle is SORA-safe, else slides towards the
+    nearest SORA-safe point in view, else descends."""
+    from .camera import ground_hits
+    x, y = env.veh.pos[0], env.veh.pos[1]
+    if env.scene.is_sora_safe(x, y, env.cfg.sora_m):
+        return 9
+    pos, R = env.veh.delayed_pose()
+    X, Y, t = ground_hits(env.cam.rays, pos, R)
+    safe, _, _ = env.scene._sora_grid(env.cfg.sora_m)
+    gh, gw = safe.shape
+    ok = np.isfinite(t) & env.scene.inside(X, Y)
+    v = np.clip(((0.5 - Y / env.scene.size[1]) * gh).astype(int), 0, gh - 1)
+    u = np.clip(((X / env.scene.size[0] + 0.5) * gw).astype(int), 0, gw - 1)
+    m = ok & safe[v, u]
+    if not m.any():
+        return 9
+    d = np.hypot(X[m] - x, Y[m] - y)
+    j = int(np.argmin(d))
+    if d[j] <= 0.5:
+        return 9
+    rel = (math.degrees(math.atan2(Y[m][j] - y, X[m][j] - x)) - math.degrees(env.veh.yaw)) % 360.0
+    return 1 + int(round(rel / 45.0)) % 8

@@ -31,7 +31,7 @@ import numpy as np
 
 from eland_common import classes
 
-from .camera import Camera, sora_channel
+from .camera import Camera, ground_hits, sora_channel
 from .dynamics import DynamicsParams, Vehicle
 
 N_CLASSES = 8                       # seven taxonomy classes + UNKNOWN
@@ -75,6 +75,10 @@ class EnvConfig:
     gamma: float = 0.99             # discount the potential shaping is built with (= PPO gamma)
     image_size: int = 128
     obs_mode: str = 'sem_depth'     # or 'sem_depth_sora': + SORA-safe mask from the image (amendment 5)
+    # Amendment 7: what the observation is built from. Reward and success always use the GT mask.
+    sem_source: str = 'gt'          # 'gt' or 'pred' (the scene's v3 prediction mask)
+    depth_mode: str = 'flat'        # 'flat' (ray length to the ground) or 'elev' (Depth Anything relative elevation)
+    sora_elev_tau: float = -1.0     # >= 0: SORA channel also refuses pixels whose elevation exceeds it
     dynamics: DynamicsParams = field(default_factory=DynamicsParams)
     randomise_dynamics: bool = True
 
@@ -122,16 +126,38 @@ class LandingEnv(gym.Env):
         return np.array([c * bx - s * by, s * bx + c * by, 0.0])
 
     def _observe(self):
+        cfg, sc = self.cfg, self.scene
         pos, R = self.veh.delayed_pose()
-        sem, depth = self.cam.semantic_depth(self.scene, pos, R)
-        if self.cfg.binary:
-            ch0 = self._safe[sem].astype(np.float32)
+        elev = None
+        if cfg.sem_source == 'gt' and cfg.depth_mode == 'flat' and cfg.sora_elev_tau < 0:
+            sem, depth = self.cam.semantic_depth(sc, pos, R)
+            seen = sem
         else:
-            ch0 = sem.astype(np.float32) / (N_CLASSES - 1)
-        ch1 = np.clip(np.where(np.isfinite(depth), depth, self.cfg.depth_norm_m) / self.cfg.depth_norm_m, 0, 1)
-        chans = [ch0, ch1.astype(np.float32)]
-        if self.cfg.obs_mode == 'sem_depth_sora':
-            chans.append(sora_channel(sem, pos[2], self.cfg.sora_m).astype(np.float32))
+            X, Y, depth = ground_hits(self.cam.rays, pos, R)
+            ok = np.isfinite(depth)
+            sem = np.full(depth.shape, N_CLASSES - 1, np.uint8)
+            sem[ok] = sc.classes_at(X[ok], Y[ok])
+            seen = sem
+            if cfg.sem_source == 'pred':
+                seen = np.full(depth.shape, N_CLASSES - 1, np.uint8)
+                seen[ok] = sc.values_at(sc.pred, X[ok], Y[ok], N_CLASSES - 1)
+            if cfg.depth_mode == 'elev' or cfg.sora_elev_tau >= 0:
+                elev = np.zeros(depth.shape, np.float32)
+                elev[ok] = sc.values_at(sc.elev, X[ok], Y[ok], 0).astype(np.float32) / 255.0
+        if cfg.binary:
+            ch0 = self._safe[seen].astype(np.float32)
+        else:
+            ch0 = seen.astype(np.float32) / (N_CLASSES - 1)
+        if cfg.depth_mode == 'elev':
+            ch1 = elev
+        else:
+            ch1 = np.clip(np.where(np.isfinite(depth), depth, cfg.depth_norm_m) / cfg.depth_norm_m, 0, 1).astype(np.float32)
+        chans = [ch0, ch1]
+        if cfg.obs_mode == 'sem_depth_sora':
+            sora = sora_channel(seen, pos[2], cfg.sora_m)
+            if cfg.sora_elev_tau >= 0:
+                sora &= elev <= cfg.sora_elev_tau
+            chans.append(sora.astype(np.float32))
         obs = np.stack(chans)
         return obs, sem, depth
 
