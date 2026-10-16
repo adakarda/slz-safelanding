@@ -202,3 +202,15 @@ Sonuç görülmeden yazıldı. Hiçbir politika eğitilmedi.
    - Rastgeleleştirmeye eklenenler: komut gecikmeleri ±%50, trim eğimi rastgele yönde 0–1.5°. Diğer aralıklar §2.4'teki gibi.
 3. **Yaw (açıklama).** Bölüm içinde sabittir. Her bölüm başında rastgele çekilir (veri artırma). Gazebo testinde yaw, başlangıç pozundan gelir.
 4. **Gözlem örneklemesi (açıklama).** 128 × 128 ışınlar, 320 × 240 etiket görüntüsünde `cv2.resize(INTER_NEAREST)` işleminin seçtiği piksellerdir. Birim testi bunu doğrular.
+
+## Düzeltme 2 (2026-10-16): pilot eğitim, MESSI verisi gelmeden önce
+
+Kullanıcı isteği: politikayı şimdi eğit, komutlarını PX4'te dene. MESSI ham verisi henüz yok. Bu yüzden aşağıdaki pilot koşulur.
+
+- **Amaç:** eğitim hattının ve PX4 entegrasyonunun (F4) sınanması. Pilot sayıları tez sonucu değildir ve Tablo I karşılığına girmez.
+- **Sahneler:** yereldeki 5 foto (`~/rl_inis/sahneler_pilot.txt`). §2.1'deki "yalnız birim testi" kuralının bilinçli bir istisnası.
+  - Bu 5 foto v3 eğitiminde de kullanıldı. Nihai test setine girmezler.
+- **Eğitim:** 500k adım, tohum 0, GT girdi, §4 ayarları (`python -m eland_rl.train`).
+- **Değerlendirme:** aynı 5 sahne × 15 başlangıç, 30 s, nominal dinamik (`python -m eland_rl.evaluate`). Eğitim sahnesinde test edildiği için genelleme ölçmez.
+- **Pilot beklentisi (_tahmin):** RL başarısı, düz inişten en az 20 puan yüksek.
+- **Gazebo (F4):** orto_dji0097 dünyası, eğitim sahnelerinden biri. Ayrıntılar F4 koşusundan önce yazılır.
