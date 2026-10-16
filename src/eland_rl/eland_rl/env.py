@@ -227,10 +227,6 @@ class LandingEnv(gym.Env):
         r_a = cfg.a_descend if a == 9 else (cfg.a_halt if a == 0 else cfg.a_lateral)
 
         outcome, r_t_end = None, 0.0
-        if not self.scene.inside(pos[0], pos[1]):
-            outcome, r_t_end = 'out_of_bounds', cfg.out_of_bounds
-        elif d_min <= cfg.robot_r:
-            outcome, r_t_end = 'collision', cfg.collision
         landed, majority_ok, point_ok = False, False, False
         if not self.scene.inside(pos[0], pos[1]):
             outcome, r_t_end = 'out_of_bounds', cfg.out_of_bounds
