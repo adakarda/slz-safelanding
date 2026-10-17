@@ -529,3 +529,45 @@ Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
 - Tohum sırasıyla: önce B0, B1, B2 tohum 0; sonra tohum 1; sonra tohum 2.
 - Aynı anda en fazla 2 eğitim çalışır, Depth Anything kolları dahil. Yeni koşu ancak WSL'de en az 7 GB boş bellek varsa başlar.
 - Tahmini bitiş ertesi sabah (_hesap).
+
+## Düzeltme 10 (2026-10-17): kodlayıcı (ağ gövdesi) karşılaştırması, eğitimden önce
+
+**Gerekçe:**
+- Kullanıcı isteği (Arda): semantik maske ile derinliği ayrı kollardan beslemek ve makalenin CNN'inden farklı yapıları denemek.
+- Makalenin gövdesi Atari'nin "Nature CNN"i. CoinRun ve Procgen'de IMPALA-CNN yeni seviyelere daha iyi genelleşti (Cobbe ve ark. 2019, 2020).
+- Bizim görevde kararı güvenli alanın görüntüdeki yeri veriyor. CoordConv (Liu ve ark. 2018) bu "nerede" bilgisini kolaylaştırır.
+- Gri sınıf kodlaması (sınıf/7) sınıflar arasında sahte bir sıra ve mesafe kurar. One-hot bunu önler (görev planı, Aşama 4).
+
+**Kodlayıcılar (`policy.py`, başlıklar makaledeki gibi: actor 3×FC64, critic 2×FC32):**
+
+| Kod | Ad | Yapı | Parametre (başlıkla) |
+|---|---|---|---|
+| E0 | `paper` | Makale: gri sınıf + derinlik + maske üst üste (erken birleştirme), Nature CNN, FC128 | 1.26M |
+| E1 | `paper_onehot` | Aynı gövde, sınıflar 8 one-hot kanal | 1.27M |
+| E2 | `iki_kol` | Geç birleştirme: semantik kol (one-hot + maske, Nature CNN) ve derinlik kolu (dar Nature CNN), yükseklik ayrı bir sayı, FC128 | 1.88M |
+| E3 | `impala` | IMPALA-CNN (3 aşama, artık bloklar) + iki koordinat kanalı (CoordConv), one-hot, FC256 | 2.20M |
+
+**Aşama 1, vekil görev (ucuz ön eleme):**
+- **Görev:** Gözlemden görüş kâhininin eylemini tahmin etmek (10 sınıf). Kâhin gerçek maskeyle karar verir, kodlayıcı ise sadece gözlemi görür.
+- **Veri:**
+  - Eğitim: `train_b`'nin her 4. karesi (150 kare), 20 000 rastgele başlangıç.
+  - Doğrulama: `val_b32` (32 kare), 4 000 başlangıç.
+  - Başlangıç yüksekliği 5–30 m, `zemin_v1` hedefi.
+  - Derinlik saklarken 40/255 m'ye nicelenir.
+- **Eğitim bütçesi:** Her kodlayıcı aynı bütçeyle: 6 epok, Adam 3e-4, batch 256. Tohum 0, 1 ve 2.
+- **Ölçüt:** Doğrulamada dengeli doğruluk (sınıf başına doğruluğun ortalaması). Ayrıca düz doğruluk ve "alçal mı, alçalma mı" doğruluğu.
+- **Ne zaman:** Bellek uygun olunca kendiliğinden koşar: en az 4.5 GB boş bellek ve en çok bir eğitim çalışıyor olmalı.
+- Vekil görevde iyi çıkan her kodlayıcı PPO'da da iyi çıkmak zorunda değil. Bu yüzden ikinci aşama var.
+
+**Aşama 2, PPO doğrulaması (B deneyinden sonra, ayrıca başlatılır):**
+- Vekil görevde dengeli doğruluğu en yüksek iki kodlayıcı (E0 hariç) koşulur. Her biri 3 tohum, 1M adım.
+- Ödül, B deneyinin karar kuralıyla seçilen ödül. Liste, doğrulama ve öbür ayarlar B ile aynı.
+- Kıyas: B'nin kazanan kolu (E0, aynı 3 tohum).
+
+**Tahminler (_tahmin):**
+- **H10a:** E1, E0'dan dengeli doğrulukta en az 2 puan iyi.
+- **H10b:** E2 ≥ E1.
+- **H10c:** Vekil görevde en iyisi E3.
+- **H10d:** PPO'da en iyi kodlayıcı, doğrulamadaki zemin başarısını E0'a göre ortalamada en az 3 puan artırır, 3 tohumun en az 2'sinde aynı yönde.
+
+**K79 notu:** Tasarım kararı K79, Impoola ve benzeri "iyileştirme" mimarilerini kilitliyor. E3 (IMPALA + CoordConv) bu kilide yakın. Vekil görev, görev planının Aşama 4'ündeki küçük ölçekli testtir. E3'ün PPO aşamasına geçmesi Arda'nın veya tasarım sohbetinin onayını bekler.

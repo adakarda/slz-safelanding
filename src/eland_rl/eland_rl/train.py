@@ -21,7 +21,7 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from .env import REWARD_PRESETS, ZEMIN_REWARDS, EnvConfig, LandingEnv
-from .policy import POLICY_KWARGS
+from .policy import ENCODERS, POLICY_KWARGS, policy_kwargs
 from .scenes import load_list
 
 
@@ -74,6 +74,7 @@ def main():
     ap.add_argument('--device', default='auto')
     ap.add_argument('--resume', default='', help='checkpoint zip to continue from (e.g. after the host slept)')
     ap.add_argument('--mirror', action='store_true', help='amendment 9: mirror the scene in half the episodes')
+    ap.add_argument('--encoder', default='paper', choices=sorted(ENCODERS), help='amendment 10: policy trunk')
     ap.add_argument('--land-hard', type=float, default=None, help='zemin_v1: reward for landing on hard ground')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -97,7 +98,8 @@ def main():
     if a.resume:
         model.set_env(venv)
     else:
-        model = PPO('MlpPolicy', venv, learning_rate=schedule, policy_kwargs=POLICY_KWARGS,
+        kw = POLICY_KWARGS if a.encoder == 'paper' else policy_kwargs(a.encoder)
+        model = PPO('MlpPolicy', venv, learning_rate=schedule, policy_kwargs=kw,
                     ent_coef=a.ent_coef, seed=a.seed, device=a.device, verbose=0)
     model.set_logger(configure(log_dir, ['stdout', 'csv']))
     t0 = time.time()
