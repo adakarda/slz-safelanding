@@ -571,3 +571,9 @@ Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
 - **H10d:** PPO'da en iyi kodlayıcı, doğrulamadaki zemin başarısını E0'a göre ortalamada en az 3 puan artırır, 3 tohumun en az 2'sinde aynı yönde.
 
 **K79 notu:** Tasarım kararı K79, Impoola ve benzeri "iyileştirme" mimarilerini kilitliyor. E3 (IMPALA + CoordConv) bu kilide yakın. Vekil görev, görev planının Aşama 4'ündeki küçük ölçekli testtir. E3'ün PPO aşamasına geçmesi Arda'nın veya tasarım sohbetinin onayını bekler.
+
+**Yürütme notu (2026-10-17 22:35): PD yeniden koşulacak**
+- **Olay:** PC eğitimi bitince B kuyruğu boş yeri gördü ve B2-s0'ı başlattı. B1-s0 zaten koşuyordu. Ardından `da_kollar.sh` PD'yi bellek kontrolü yapmadan başlattı. Sonuç: aynı anda 3 eğitim, boş bellek 586 MB (ölçülen).
+- **Önlem:** Taşmayı önlemek için PD bir dakika sonra durduruldu. Kayıt noktası yoktu.
+- **Yeniden koşma:** PD aynı ayarlarla `derinlik/pd_tekrar.sh` ile yeniden koşacak. Ancak en çok bir eğitim çalışırken ve en az 5.5 GB boş bellek varken başlar.
+- Kollar arasında sıra değişti, ayarlar değişmedi.
