@@ -453,3 +453,11 @@ Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
 - Uygulanmayanlar: Aşağıdakiler öğrenmeyi veya girdiyi değiştirir. Ancak ayrı ve ön kayıtlı bir kolla denenebilirler.
   - batch 512
   - gözlemi uint8 veya float16 saklamak
+
+**Karar K73/K74 (2026-10-17 ~16:45):**
+- Kuyruk (A1, A2b) biter. Kuyruğa yeni giriş eklenmez.
+- Bütün sonuçlar **"ön sonuç, tek tohum"** etiketiyle raporlanır. ≥3 tohum kuralı bundan sonraki deneyler içindir.
+- K74 varsayılanı: Depth Anything deneyinde koşan kol (PA) biter, yeni kol başlamaz. `da_kollar.sh` döngüsü durduruldu; PA, `pa_bitir.sh` ile değerlendirilir.
+  - PB/PC/PD koşmadı. Bu yüzden düzeltme 7'nin karar kuralı (H7) şimdilik karara bağlanamaz.
+  - Depth Anything sonuçları "tahmin, göreli derinlik, metrik değil" etiketiyle raporlanır.
+- K76: v3, test uçuşu 0004'ün 13 karesiyle eğitildi. 173 RGB karesinin hiçbiri iyimserlikten arınmış değil (`docs/rl_veri/k76_v3_kullanim.md`). Tahmin maskeli değerlendirmeler "iyimser" etiketi taşır.
