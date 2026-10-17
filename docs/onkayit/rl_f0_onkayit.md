@@ -424,3 +424,15 @@ Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
 - Düzeltme 7'nin beş kolu baştan başlar. P0'ın yarım klasörü `kos/_olu/` altına taşınır.
 - A2b, A1 değerlendirmesinden sonra başlar (değişmedi).
 - Hipotezler, karar kuralları, listeler ve adım sayıları değişmedi.
+
+**İkinci kesinti (14:57, ölçülen):**
+- Sebep benim hatam. Eğitimler koşarken bir hız ölçümü başlattım. WSL belleği (12 GB) taştı.
+  - Çekirdek P0'ı öldürdü (OOM). Ardından bütün koşular durdu.
+  - WSL dağıtımı, GPU kullanan her işte yeniden çöktü. `wsl --shutdown` ile temizlendi.
+- Kalan kayıt noktaları: A1 1 000 000 adım, P0 500 000 adım. Koşular bu noktalardan aynı `--resume` yöntemiyle devam eder.
+  - A1'in 1.0M–~1.2M arası atılır.
+  - P0'ın 500k–~549k arası atılır.
+- Önlemler:
+  - Eğitim koşarken başka bir GPU veya bellek işi çalıştırılmaz.
+  - Kuyruk, bağlı bir `wsl.exe` istemcisiyle ön planda koşar (`~/rl_inis/kuyruk.sh`).
+- Hipotezler, listeler ve adım sayıları değişmedi.
