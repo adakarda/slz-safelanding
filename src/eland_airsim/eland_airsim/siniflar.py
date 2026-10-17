@@ -15,17 +15,23 @@ import numpy as np
 
 UNKNOWN = 7
 
-#: (SORA class, words). Later rows win where a name matches several (a "CarPark" is a car).
+#: (SORA class, words). Later rows win where a name matches several (a "CarPark" is a car). The words
+#: were checked against AirSimNH's 3884 object names (M0 pilot): its grass is the Landscape actor, and
+#: "Garden_Chair", "Car_Porch" (a carport) and "Pool_Table" must not take their first word's class.
 WORDS = [
-    (0, ['grass', 'lawn', 'garden', 'field', 'meadow', 'soil', 'dirt', 'turf']),
+    (0, ['grass', 'lawn', 'field', 'meadow', 'soil', 'dirt', 'turf', 'landscape']),
     (1, ['sidewalk', 'pavement', 'driveway', 'walkway', 'path', 'plaza', 'patio', 'curb', 'kerb']),
     (2, ['road', 'street', 'asphalt', 'parking', 'tree', 'bush', 'hedge', 'shrub', 'foliage', 'pine', 'oak',
-         'leaf', 'leaves', 'plant']),
+         'birch', 'fir', 'leaf', 'leaves', 'plant']),
     (3, ['house', 'building', 'roof', 'wall', 'fence', 'garage', 'shed', 'porch', 'chimney', 'pole', 'lamp',
-         'sign', 'bench', 'mailbox', 'hydrant', 'trash', 'bin', 'wire']),
+         'sign', 'bench', 'mailbox', 'hydrant', 'trash', 'bin', 'wire', 'door', 'veranda', 'banister', 'stair',
+         'steps', 'chair', 'table', 'sofa', 'rock', 'hoop', 'monument', 'power_line', 'cable', 'pipe', 'cladding',
+         'shutter', 'support', 'fireplace', 'skateboard']),
     (4, ['pool', 'water', 'pond', 'river', 'lake', 'fountain']),
-    (5, ['car', 'vehicle', 'truck', 'van', 'suv', 'bus', 'bike', 'bicycle', 'dog', 'cat', 'animal']),
+    (5, ['car', 'vehicle', 'truck', 'van', 'suv', 'bus', 'bike', 'bicycle', 'dog', 'cat', 'animal', 'deer',
+         'raccoon']),
     (6, ['person', 'human', 'pedestrian', 'character', 'mannequin', 'people']),
+    (3, ['car_porch', 'carport', 'pool_table']),
 ]
 
 

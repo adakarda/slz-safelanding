@@ -17,6 +17,15 @@ def test_rules_priority_matches_airsim_order():
     assert got == {'Lawn_3': 0, 'Road_Main': 2, 'House_A_Roof': 3, 'CarPark_Car_1': 5, 'Tree_Oak': 2}
 
 
+def test_airsimnh_names_that_fooled_the_first_rules():
+    names = ['Landscape', 'Garden_Chair_01', 'Car_Porch_Prefab', 'Pool_Table_01', 'Swimming_Pool_Floor',
+             'Fir_01', 'Fireplace_01', 'Street_Sign_02', 'DeerBothBP3', 'Car_01']
+    assert siniflar.classify_names(names) == {
+        'Landscape': 0, 'Garden_Chair_01': 3, 'Car_Porch_Prefab': 3, 'Pool_Table_01': 3,
+        'Swimming_Pool_Floor': 4, 'Fir_01': 2, 'Fireplace_01': 3, 'Street_Sign_02': 3, 'DeerBothBP3': 5,
+        'Car_01': 5}
+
+
 def test_palette_and_decode_roundtrip():
     pal = siniflar.palette()
     assert pal.shape == (256, 3) and tuple(pal[1]) == (153, 108, 6)
