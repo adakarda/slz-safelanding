@@ -461,3 +461,4 @@ Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
   - PB/PC/PD koşmadı. Bu yüzden düzeltme 7'nin karar kuralı (H7) şimdilik karara bağlanamaz.
   - Depth Anything sonuçları "tahmin, göreli derinlik, metrik değil" etiketiyle raporlanır.
 - K76: v3, test uçuşu 0004'ün 13 karesiyle eğitildi. 173 RGB karesinin hiçbiri iyimserlikten arınmış değil (`docs/rl_veri/k76_v3_kullanim.md`). Tahmin maskeli değerlendirmeler "iyimser" etiketi taşır.
+- **K74 cevabı (Arda, 2026-10-17 ~16:55): devam.** PA'nın değerlendirmesi bitince PB, PC ve PD, ön kayıttaki sırayla ve aynı ayarlarla koşar (`derinlik/da_devam.sh`). Bu yeni bir giriş değil: kuyruğun ilk planındaki kollar geri açıldı. PB, PC ve PD yeni hız yamalı kodla koşar; sonuçlar bit bit aynıdır (yukarıdaki not).
