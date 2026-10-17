@@ -50,6 +50,12 @@ for satir in "${SATIRLAR[@]}"; do
 	# and counted: "deneme" is how many it took, "coken" how many died.
 	coken=0
 	for deneme in 1 2 3; do
+		# Windows memory gate too (run_airsim.sh refuses below 2.5 GB; one Faz 3 start was lost to it)
+		while true; do
+			WB=$(powershell.exe -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024)" 2>/dev/null | tr -dc 0-9)
+			[ -z "$WB" ] || [ "$WB" -ge 2000 ] && break
+			echo "[inis] $(date +%H:%M) Windows bos bellek $WB MB < 2000, bekleniyor"; sleep 60
+		done
 		D=$KOK/k$(printf %02d $i)$([ "$deneme" -gt 1 ] && echo "_$deneme")
 		echo "[inis] $(date +%H:%M) kosu $i (deneme $deneme): baslangic ($X, $Y) $V3 ${RL[*]}"
 		bash "$WS/src/eland_airsim/scripts/run_airsim.sh" --takeoff "$IRTIFA" --trigger --no-hud \
@@ -77,7 +83,9 @@ for satir in "${SATIRLAR[@]}"; do
 		kill -TERM $R 2>/dev/null; wait $R 2>/dev/null
 		for _ in $(seq 1 30); do pgrep -x px4 >/dev/null || tasklist.exe 2>/dev/null | grep -qi AirSimNH || break; sleep 1; done
 		sleep 3
-		SONUC=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('sonuc'))" "$D/inis.json")
+		SONUC=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print('olcum_kacti' if d.get('sonuc') == 'zaman_asimi' and d.get('px4_yerde') else d.get('sonuc'))" "$D/inis.json")
+		# a landing PX4 saw but the measurement missed is a measurement failure, not a mode failure
+		[ "$SONUC" = olcum_kacti ] && { echo "   [inis] PX4 yerde ama olcum inisi kacirdi; yeniden"; continue; }
 		if [ -n "$KOPMA" ] || [ "${MOD_DUSTU:-0}" -gt 0 ] || [[ "$SONUC" =~ ^(olcum_hatasi|airsim_yok|kopma)$ ]]; then
 			coken=$((coken + 1))
 			echo "   [inis] AirSim/olcum koptu (kopru ilk uyari $([ -n "$KOPMA" ] && date -d @$KOPMA +%H:%M:%S || echo -), mod dustu $MOD_DUSTU); yeniden"

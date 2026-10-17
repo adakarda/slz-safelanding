@@ -63,8 +63,8 @@ fi
 tasklist.exe 2>/dev/null | grep -qi "$DUNYA.exe" && fail "AirSim zaten acik ($DUNYA.exe); once kapat"
 BOS_MB=$(powershell.exe -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024)" 2>/dev/null | tr -dc 0-9)
 echo "[run_airsim] Windows bos bellek: ${BOS_MB:-?} MB"
-if [ -n "$BOS_MB" ] && [ "$BOS_MB" -lt 2500 ] && [ "$ZORLA" = 0 ]; then
-	fail "Windows'ta 2.5 GB'tan az bos bellek var; egitimler bitince dene ya da --zorla"
+if [ -n "$BOS_MB" ] && [ "$BOS_MB" -lt 1800 ] && [ "$ZORLA" = 0 ]; then
+	fail "Windows bos bellegi 1.8 GB alti; egitimler bitince dene ya da --zorla"
 fi
 GW=$(ip route | awk '$1 == "default" {print $3; exit}')
 [ -n "$GW" ] || fail "Windows adresi (varsayilan ag gecidi) bulunamadi"
@@ -199,22 +199,25 @@ ros2 launch eland_sim eland_sim.launch.py hud:="$HUD" hud_view:="$HUD_VIEW" stat
 LAUNCH_PID=$!
 if [ -n "$RL_MODEL" ]; then
 	[ -f "$RL_MODEL" ] || fail "RL modeli yok: $RL_MODEL"
-	ros2 run eland_rl_mode rl_landing_mode >"$LOG_DIR/rl_mod.log" 2>&1 &
-	RLM_PID=$!
 	ETIKET_KONU=$([ "$V3" = 1 ] && echo /eland/v3/etiket || echo /camera/segmentation)
+	KALKAN_F=$(awk -v k="$KALKAN" 'BEGIN{printf "%.2f", k}')    # a ROS double, never "-1"
 	(
 		set +u
 		source "$HOME/rl_inis/ortam.sh"
 		exec "$RL_PY" -u -m eland_rl.policy_node --ros-args -p model_path:="$RL_MODEL" \
 			-p label_source:=topic -p label_topic:="$ETIKET_KONU" -p pose_source:=topic \
-			-p ground_z_m:=0.0 -p kalkan_m:="$KALKAN" -p log_csv:="$LOG_DIR/politika.csv"
+			-p ground_z_m:=0.0 -p kalkan_m:="$KALKAN_F" -p log_csv:="$LOG_DIR/politika.csv"
 	) >"$LOG_DIR/politika.log" 2>&1 &
 	POL_PID=$!
 	for _ in $(seq 1 90); do
-		grep -q "policy " "$LOG_DIR/politika.log" 2>/dev/null && grep -qi "regist" "$LOG_DIR/rl_mod.log" 2>/dev/null && break
+		grep -q "policy " "$LOG_DIR/politika.log" 2>/dev/null && break
+		kill -0 "$POL_PID" 2>/dev/null || break
 		sleep 1
 	done
-	grep -h "policy \|regist" "$LOG_DIR/politika.log" "$LOG_DIR/rl_mod.log" 2>/dev/null | cut -c1-200 | sed 's/^/[run_airsim]   /'
+	grep -q "policy " "$LOG_DIR/politika.log" || fail "politika dugumu acilmadi: $(tail -2 "$LOG_DIR/politika.log")"
+	grep -h "policy " "$LOG_DIR/politika.log" | cut -c1-220 | sed 's/^/[run_airsim]   /'
+	# rl_landing_mode is started after the takeoff (as rl_izle.sh does): started this early, while the
+	# uXRCE-DDS session was still coming up, it failed to register ("Registration failed") and aborted
 else
 	for _ in $(seq 1 60); do
 		grep -q "RegisterExtComponentReply" "$LOG_DIR/pipeline.log" 2>/dev/null && break
@@ -238,6 +241,20 @@ if [ -n "$TAKEOFF_ALT" ]; then
 		sleep 1
 	done
 	echo "[run_airsim]   irtifa $(echo "$alt" | tr -d '-') m"
+fi
+if [ -n "$RL_MODEL" ]; then
+	ros2 run eland_rl_mode rl_landing_mode >"$LOG_DIR/rl_mod.log" 2>&1 &
+	RLM_PID=$!
+	for _ in $(seq 1 60); do
+		grep -qE "RegisterExtComponentReply|Registration failed" "$LOG_DIR/rl_mod.log" 2>/dev/null && break
+		kill -0 "$RLM_PID" 2>/dev/null || break
+		sleep 1
+	done
+	if grep -q "RegisterExtComponentReply" "$LOG_DIR/rl_mod.log"; then
+		echo "[run_airsim]   RL modu PX4'e kaydedildi"
+	else
+		fail "RL modu PX4'e kaydolamadi: $(grep -v DEBUG "$LOG_DIR/rl_mod.log" | tail -2 | tr '\n' ' ')"
+	fi
 fi
 if [ "$DO_TRIGGER" = 1 ] && [ -n "$RL_MODEL" ]; then
 	echo "[run_airsim] RL Landing modu seciliyor..."

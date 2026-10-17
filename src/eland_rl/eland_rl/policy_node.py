@@ -112,7 +112,10 @@ class PolicyNode(Node):
         self.pub_a = self.create_publisher(Int8, '/eland/rl/eylem', rel)
         self.pub_view = self.create_publisher(Image, '/eland/rl/gorus', 1) if g('publish_view') else None
         if self.source == 'topic':
-            self.create_subscription(Image, g('label_topic'), self.on_label, 1)
+            # best effort, as the label publishers (v3 node, AirSim bridge) send it: a reliable subscription
+            # is incompatible with them and receives nothing (first AirSim RL run: the policy never ticked)
+            from eland_common.qos import SENSOR_QOS
+            self.create_subscription(Image, g('label_topic'), self.on_label, SENSOR_QOS)
         if g('pose_source') == 'topic':
             self.create_subscription(PoseStamped, g('pose_topic'), self.on_pose_topic, 10)
             pose_from = g('pose_topic')

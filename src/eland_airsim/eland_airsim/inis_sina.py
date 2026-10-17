@@ -74,6 +74,22 @@ def labels_under(c, camera='asagi', frac=0.3):
     return {int(k): int(v) for k, v in zip(*np.unique(mid, return_counts=True))}
 
 
+def px4_landed():
+    """PX4's own land detector (vehicle_land_detected.landed), through px4-listener; None if unreadable."""
+    import os
+    import subprocess
+    exe = os.path.expanduser('~/PX4-Autopilot/build/px4_sitl_default/bin/px4-listener')
+    try:
+        out = subprocess.run([exe, 'vehicle_land_detected'], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0] == 'landed:':
+            return parts[1] == 'True'
+    return None
+
+
 def ground_clearance(c, camera='asagi'):
     """Median depth (m) at the centre of the downward camera: ~0.1 on the ground."""
     import airsim
@@ -91,6 +107,7 @@ def follow(rpc, a):
     t0 = time.time()
     still_since = None
     last_depth = 0.0
+    last_clearance = None
     out = {'sonuc': 'zaman_asimi'}
     while time.time() - t0 < a.sure:
         k = rpc(lambda c: c.simGetGroundTruthKinematics())
@@ -114,9 +131,12 @@ def follow(rpc, a):
         settled = (t - t0 >= LANDED_HOLD_S and len(recent) > 5
                    and float(np.ptp(np.array(recent), axis=0).max()) < LANDED_SPAN_M)
         held = settled or (still_since is not None and t - still_since >= LANDED_HOLD_S)
+        # On the ground: PX4's land detector, or the camera's depth (the depth alone missed two landings:
+        # at 0.1 m above the grass the centre depth is not always below 1 m)
         if held and t - last_depth >= 1.0:
             last_depth = t
-            on_ground = rpc(ground_clearance) < 1.0
+            last_clearance = rpc(ground_clearance)
+            on_ground = px4_landed() is True or last_clearance < 1.0
         else:
             on_ground = False
         if held and on_ground:
@@ -139,6 +159,8 @@ def follow(rpc, a):
         time.sleep(0.05)
     if out['sonuc'] != 'indi':
         out['son_ned'] = [round(float(x), 2) for x in iz[-1][1]] if iz else None
+        out['son_derinlik_m'] = None if last_clearance is None else round(float(last_clearance), 2)
+        out['px4_yerde'] = px4_landed()
     return out
 
 
