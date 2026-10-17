@@ -34,8 +34,13 @@ from eland_common import classes
 from .camera import Camera, ground_hits, sora_channel
 from .pilots import shield
 from .dynamics import DynamicsParams, Vehicle
+from .scene import MirroredScene
 
 N_CLASSES = 8                       # seven taxonomy classes + UNKNOWN
+
+#: Amendment 9: terminal reward by the class landed on (taxonomy index; 7 = unknown / off the photo).
+#: Soft ground over hard ground; hazards ordered as SORA ranks the harm, the worst below a time-out.
+ZEMIN_REWARDS = {0: 50.0, 1: 30.0, 2: -40.0, 3: -60.0, 4: -70.0, 5: -90.0, 6: -100.0, 7: -50.0}
 
 
 @dataclass
@@ -83,6 +88,13 @@ class EnvConfig:
     shield_m: float = -1.0          # >= 0: the SORA shield acts inside the environment (amendment 8)
     dynamics: DynamicsParams = field(default_factory=DynamicsParams)
     randomise_dynamics: bool = True
+    # Amendment 9 ('zemin' rule): success is a landable class at the point under the vehicle with no
+    # buffer class closer than buffer_m; the terminal reward is set by the class landed on.
+    land_rewards: dict = field(default_factory=lambda: dict(ZEMIN_REWARDS))
+    buffer_classes: tuple = (6, 5)  # person, vehicle-animal; most severe first
+    buffer_m: float = 2.0
+    sora_metric: bool = True        # also judge landings by the 3 m SORA rule (a metric; one grid per scene)
+    mirror: bool = False            # each episode sees its scene mirrored with p = 0.5
 
 
 #: Reward presets. 'paper' is Bartolomei et al. as pre-registered; 'sora_v1' is ours
@@ -92,6 +104,8 @@ class EnvConfig:
 REWARD_PRESETS = {
     'paper': {},
     'sora_v1': dict(success_rule='sora', shaping_k=2.0, a_descend=0.5, w_s=0.0, out_of_bounds=-50.0),
+    # amendment 9: landable ground, soft preferred, graded hazard penalties, 2 m around people and vehicles
+    'zemin_v1': dict(success_rule='zemin', shaping_k=2.0, a_descend=0.5, w_s=0.0, out_of_bounds=-50.0),
 }
 
 
@@ -156,7 +170,11 @@ class LandingEnv(gym.Env):
             ch1 = np.clip(np.where(np.isfinite(depth), depth, cfg.depth_norm_m) / cfg.depth_norm_m, 0, 1).astype(np.float32)
         chans = [ch0, ch1]
         if cfg.obs_mode == 'sem_depth_sora':
-            sora = sora_channel(seen, pos[2], cfg.sora_m)
+            if cfg.success_rule == 'zemin':
+                # amendment 9: the channel marks the rule's own target, landable and clear of the buffer classes
+                sora = sora_channel(seen, pos[2], cfg.buffer_m, hazard_classes=cfg.buffer_classes)
+            else:
+                sora = sora_channel(seen, pos[2], cfg.sora_m)
             if cfg.sora_elev_tau >= 0:
                 sora &= elev <= cfg.sora_elev_tau
             chans.append(sora.astype(np.float32))
@@ -169,7 +187,10 @@ class LandingEnv(gym.Env):
         shaping leaves the optimal policy unchanged)."""
         if self.cfg.shaping_k == 0.0:
             return 0.0
-        _, _, d = self.scene.nearest_sora_safe(pos[0], pos[1], self.cfg.sora_m)
+        if self.cfg.success_rule == 'zemin':
+            _, _, d = self.scene.nearest_target(pos[0], pos[1], self.cfg.buffer_classes, self.cfg.buffer_m)
+        else:
+            _, _, d = self.scene.nearest_sora_safe(pos[0], pos[1], self.cfg.sora_m)
         return -self.cfg.shaping_k * min(d, self.cfg.shaping_dmax)
 
     def _start(self, rng, options):
@@ -198,6 +219,8 @@ class LandingEnv(gym.Env):
             self.scene = self.scenes[options['scene_index']]
         else:
             self.scene = self.scenes[rng.integers(len(self.scenes))]
+        if self.cfg.mirror and rng.random() < 0.5:
+            self.scene = MirroredScene(self.scene)      # amendment 9: the same ground seen in a mirror
         params = self.cfg.dynamics
         if options and 'dynamics' in options:
             params = options['dynamics']
@@ -235,7 +258,7 @@ class LandingEnv(gym.Env):
         r_a = cfg.a_descend if a == 9 else (cfg.a_halt if a == 0 else cfg.a_lateral)
 
         outcome, r_t_end = None, 0.0
-        landed, majority_ok, point_ok = False, False, False
+        landed, majority_ok, point_ok, land_cls = False, False, False, -1
         if not self.scene.inside(pos[0], pos[1]):
             outcome, r_t_end = 'out_of_bounds', cfg.out_of_bounds
         elif d_min <= cfg.robot_r:
@@ -245,10 +268,17 @@ class LandingEnv(gym.Env):
             now, _ = self.cam.semantic_depth(self.scene, pos, self.veh.attitude())
             majority = int(np.bincount(now.ravel(), minlength=N_CLASSES).argmax())
             majority_ok = bool(self._safe[majority])
-            point_ok = self.scene.is_sora_safe(pos[0], pos[1], cfg.sora_m)
-            ok = point_ok if cfg.success_rule == 'sora' else majority_ok
+            if cfg.sora_metric or cfg.success_rule == 'sora':
+                point_ok = self.scene.is_sora_safe(pos[0], pos[1], cfg.sora_m)
+            land_cls = self.scene.landing_class(pos[0], pos[1], cfg.buffer_classes, cfg.buffer_m)
+            if cfg.success_rule == 'zemin':
+                # amendment 9: the class landed on sets the reward (a buffer class counts when it is near)
+                ok = bool(self._safe[land_cls])
+                r_t_end = float(cfg.land_rewards[land_cls])
+            else:
+                ok = point_ok if cfg.success_rule == 'sora' else majority_ok
+                r_t_end = cfg.land_good if ok else cfg.land_bad
             outcome = 'safe_landing' if ok else 'unsafe_landing'
-            r_t_end = cfg.land_good if ok else cfg.land_bad
         elif self.veh.t >= cfg.max_t - 1e-9:
             outcome, r_t_end = 'timeout', cfg.timeout
 
@@ -258,11 +288,14 @@ class LandingEnv(gym.Env):
         r_shape = cfg.gamma * phi - self._phi
         self._phi = phi
         reward = cfg.w_t * r_t + cfg.w_s * r_s + cfg.w_c * r_c + cfg.w_a * r_a + r_shape + r_t_end
-        info = {'r_s': r_s, 'r_c': r_c, 'r_a': r_a, 'r_shape': r_shape, 'action': a, 'shielded': shielded}
+        info = {'r_s': r_s, 'r_c': r_c, 'r_a': r_a, 'r_shape': r_shape, 'r_end': r_t_end, 'action': a,
+                'shielded': shielded}
         if done:
-            sora = self.scene.hazard_distance(pos[0], pos[1])
+            sora = self.scene.hazard_distance(pos[0], pos[1]) if cfg.sora_metric else float('nan')
             info.update(outcome=outcome, success=outcome == 'safe_landing', t=self.veh.t,
                         landing_xy=(float(pos[0]), float(pos[1])), sora_distance_m=sora,
                         sora_ok=bool(outcome == 'safe_landing' and sora >= cfg.sora_m),
-                        majority_success=landed and majority_ok, sora_success=landed and point_ok)
+                        majority_success=landed and majority_ok, sora_success=landed and point_ok,
+                        landing_class=int(land_cls), zemin_success=bool(landed and self._safe[land_cls]),
+                        soft_landing=bool(landed and land_cls == 0))
         return obs, float(reward), done, False, info

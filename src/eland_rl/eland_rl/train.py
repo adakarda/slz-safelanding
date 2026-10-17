@@ -20,7 +20,7 @@ from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from .env import REWARD_PRESETS, EnvConfig, LandingEnv
+from .env import REWARD_PRESETS, ZEMIN_REWARDS, EnvConfig, LandingEnv
 from .policy import POLICY_KWARGS
 from .scenes import load_list
 
@@ -31,10 +31,23 @@ def make_env(scene_list, rank, seed, out, binary, reward, obs='sem_depth', n_env
         scenes = load_list(scene_list, shard=(rank, n_envs) if shard else None, dist_cell_m=cell)
         env = LandingEnv(scenes, EnvConfig(binary=binary, obs_mode=obs, **(extra or {}), **REWARD_PRESETS[reward]))
         env = Monitor(env, os.path.join(out, f'{mon}_{rank}'),
-                      info_keywords=('success', 'outcome', 'sora_success', 'majority_success'))
+                      info_keywords=('success', 'outcome', 'sora_success', 'majority_success', 'zemin_success',
+                                     'soft_landing', 'landing_class'))
         env.reset(seed=seed + 1000 * rank)
         return env
     return _f
+
+
+def zemin_extra(a):
+    """Amendment 9 switches; empty for the earlier runs, so their configuration is unchanged."""
+    extra = {}
+    if a.mirror:
+        extra['mirror'] = True
+    if a.reward == 'zemin_v1':
+        extra['sora_metric'] = False        # training needs no 3 m grid; evaluation keeps the metric
+        if a.land_hard is not None:
+            extra['land_rewards'] = {**ZEMIN_REWARDS, 1: a.land_hard}
+    return extra
 
 
 def main():
@@ -60,6 +73,8 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--device', default='auto')
     ap.add_argument('--resume', default='', help='checkpoint zip to continue from (e.g. after the host slept)')
+    ap.add_argument('--mirror', action='store_true', help='amendment 9: mirror the scene in half the episodes')
+    ap.add_argument('--land-hard', type=float, default=None, help='zemin_v1: reward for landing on hard ground')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     lr0 = a.lr
@@ -76,7 +91,8 @@ def main():
     venv_cls = DummyVecEnv if a.vec == 'dummy' else SubprocVecEnv
     venv = venv_cls([make_env(a.scenes, r, a.seed + done, a.out, a.binary, a.reward, a.obs, a.envs, a.sora_cell, a.shard,
                                    dict(sem_source=a.sem_source, depth_mode=a.depth_mode,
-                                        sora_elev_tau=a.sora_elev_tau, shield_m=a.shield_train_m), mon)
+                                        sora_elev_tau=a.sora_elev_tau, shield_m=a.shield_train_m,
+                                        **zemin_extra(a)), mon)
                      for r in range(a.envs)])
     if a.resume:
         model.set_env(venv)

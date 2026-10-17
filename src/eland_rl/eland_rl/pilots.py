@@ -49,11 +49,19 @@ def view_oracle(env):
     nearest SORA-safe point in view, else descends."""
     from .camera import ground_hits
     x, y = env.veh.pos[0], env.veh.pos[1]
-    if env.scene.is_sora_safe(x, y, env.cfg.sora_m):
+    cfg = env.cfg
+    if cfg.success_rule == 'zemin':        # amendment 9: the oracle aims at the rule's own target
+        here = env.scene.is_target(x, y, cfg.buffer_classes, cfg.buffer_m)
+    else:
+        here = env.scene.is_sora_safe(x, y, cfg.sora_m)
+    if here:
         return 9
     pos, R = env.veh.delayed_pose()
     X, Y, t = ground_hits(env.cam.rays, pos, R)
-    safe, _, _ = env.scene._sora_grid(env.cfg.sora_m)
+    if cfg.success_rule == 'zemin':
+        safe, _, _ = env.scene._target_grid(cfg.buffer_classes, cfg.buffer_m)
+    else:
+        safe, _, _ = env.scene._sora_grid(cfg.sora_m)
     gh, gw = safe.shape
     ok = np.isfinite(t) & env.scene.inside(X, Y)
     v = np.clip(((0.5 - Y / env.scene.size[1]) * gh).astype(int), 0, gh - 1)

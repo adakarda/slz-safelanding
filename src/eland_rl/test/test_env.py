@@ -249,3 +249,54 @@ def test_shield_inside_the_environment():
     env.reset(seed=0, options=start)
     info = env.step(9)[4]                                      # descend onto the person at 8 m
     assert info['shielded'] and info['action'] != 9
+
+
+# ------------------------------------------------- amendment 9: 'zemin' rule, buffer, mirror
+def _zemin_env(sc, **kw):
+    from eland_rl.env import REWARD_PRESETS
+    return LandingEnv([sc], EnvConfig(obs_mode='sem_depth_sora', **{**REWARD_PRESETS['zemin_v1'], **kw}))
+
+
+@pytest.mark.parametrize('cls,reward', [(0, 50.0), (1, 30.0), (2, -40.0), (3, -60.0), (4, -70.0)])
+def test_zemin_terminal_reward_by_class(cls, reward):
+    _, info = _run(_zemin_env(flat_scene(cls)), 9, (0.0, 0.0, 20.0, 0.0))
+    assert info['landing_class'] == cls and info['r_end'] == reward
+    assert info['success'] is (cls in (0, 1)) and info['zemin_success'] is (cls in (0, 1))
+    assert info['soft_landing'] is (cls == 0)
+
+
+def test_zemin_buffer_only_around_people_and_vehicles():
+    sc = _grass_with_person()
+    assert sc.landing_class(0.0, 0.0, (6, 5), 2.0) == 6        # on the person
+    assert sc.landing_class(1.5, 0.0, (6, 5), 2.0) == 6        # grass inside the 2 m buffer
+    assert sc.landing_class(2.8, 0.0, (6, 5), 2.0) == 0        # grass outside it; SORA's 3 m refuses it
+    assert not sc.is_sora_safe(2.8, 0.0) and sc.is_target(2.8, 0.0, (6, 5), 2.0)
+    roof = flat_scene(0, size=(60.0, 40.0))
+    H, W = roof.mask.shape
+    roof.mask[H // 2 - 3:H // 2 + 3, W // 2 - 3:W // 2 + 3] = 3  # a small structure: no buffer around it
+    assert roof.landing_class(1.0, 0.0, (6, 5), 2.0) == 0
+
+
+def test_zemin_channel_uses_the_smaller_buffer():
+    from eland_rl.env import REWARD_PRESETS
+    start = {'start': (0.0, 0.0, 10.0, 0.0), 'dynamics': NO_LAG}
+    obs_z, _ = _zemin_env(_grass_with_person()).reset(seed=0, options=start)
+    env_s = LandingEnv([_grass_with_person()], EnvConfig(obs_mode='sem_depth_sora', **REWARD_PRESETS['sora_v1']))
+    obs_s, _ = env_s.reset(seed=0, options=start)
+    assert 0 < (obs_z[2] < 0.5).sum() < (obs_s[2] < 0.5).sum()
+
+
+def test_mirrored_scene_is_the_mirror_image():
+    from eland_rl.scene import MirroredScene
+    sc = _grass_with_person()
+    H, W = sc.mask.shape
+    sc.mask[:, :W // 4] = 3                                      # a building strip on the west side
+    m = MirroredScene(sc)
+    xs, ys = np.array([-25.0, -10.0, 0.0, 10.0, 25.0]), np.array([5.0, -3.0, 0.0, 2.0, -7.0])
+    assert np.array_equal(m.classes_at(xs, ys), sc.classes_at(-xs, ys))
+    assert m.classes_at(np.array([25.0]), np.array([0.0]))[0] == 3   # the strip is now in the east
+    tx, ty, dist = m.nearest_sora_safe(0.0, 0.0)
+    bx, by, bdist = sc.nearest_sora_safe(0.0, 0.0)
+    assert (tx, ty, dist) == (-bx, by, bdist)
+    env = LandingEnv([sc], EnvConfig(mirror=True))
+    assert {env.reset(seed=s)[1]['scene'] for s in range(20)} == {sc.name, sc.name + '|ayna'}

@@ -28,6 +28,19 @@ MESSI_TO_TAXONOMY = {1: 5, 2: 3, 3: 3, 4: 3, 5: 6, 6: 3, 7: 0, 8: 3, 9: 0, 10: 3
 HAZARD = np.array(classes.DEFAULT_HAZARD_CLASSES)
 
 
+def _nearest(safe, cell_m):
+    """For every cell of a boolean grid: the nearest True cell (row, col) and its distance in metres."""
+    gh, gw = safe.shape
+    if not safe.any():
+        return np.full((gh, gw), np.inf, np.float32), np.zeros((gh, gw, 2), np.int32)
+    src = (~safe).astype(np.uint8)
+    dist, lab = cv2.distanceTransformWithLabels(src, cv2.DIST_L2, 5, labelType=cv2.DIST_LABEL_PIXEL)
+    ys, xs = np.nonzero(src == 0)
+    lut = np.zeros((lab.max() + 1, 2), np.int32)
+    lut[lab[ys, xs]] = np.stack([ys, xs], 1)
+    return dist * np.float32(cell_m), lut[lab].astype(np.int16 if max(gh, gw) < 32767 else np.int32)
+
+
 def lookup_table(mapping):
     """256-entry table: source index -> taxonomy index, UNKNOWN where unmapped."""
     lut = np.full(256, classes.UNKNOWN, np.uint8)
@@ -165,6 +178,65 @@ class Scene:
         ty = (0.5 - (tv + 0.5) / gh) * self.size[1]
         return tx, ty, float(dist[v, u])
 
+    # ------------------------------------------------- amendment 9: the 'zemin' landing rule
+    def _target_grid(self, buffer_classes, buffer_m):
+        """Target cells of the 'zemin' rule (landable class throughout AND >= buffer_m from the buffer
+        classes), the nearest target cell and its distance for every cell, on the dist_cell_m grid."""
+        key = ('zemin', tuple(sorted(buffer_classes)), round(float(buffer_m), 3))
+        cache = getattr(self, '_sora_cache', {})
+        if key not in cache:
+            gw = max(1, int(round(self.size[0] / self.dist_cell)))
+            gh = max(1, int(round(self.size[1] / self.dist_cell)))
+            landable = np.isin(self.mask, list(classes.DEFAULT_SAFE_CLASSES)).astype(np.float32)
+            safe = cv2.resize(landable, (gw, gh), interpolation=cv2.INTER_AREA) > 0.999
+            if buffer_m > 0 and len(buffer_classes):
+                hz = cv2.resize(np.isin(self.mask, list(buffer_classes)).astype(np.float32), (gw, gh),
+                                interpolation=cv2.INTER_AREA) > 0
+                if hz.any():
+                    d = cv2.distanceTransform((~hz).astype(np.uint8), cv2.DIST_L2, 5) * np.float32(self.size[0] / gw)
+                    safe &= d >= buffer_m
+            cache[key] = (safe,) + _nearest(safe, self.size[0] / gw)
+            self._sora_cache = cache
+        return cache[key]
+
+    def is_target(self, x, y, buffer_classes, buffer_m):
+        if not self.inside(x, y):
+            return False
+        safe, _, _ = self._target_grid(buffer_classes, buffer_m)
+        return bool(safe[self._cell(x, y, safe.shape)])
+
+    def nearest_target(self, x, y, buffer_classes, buffer_m):
+        """(tx, ty, distance_m) of the nearest 'zemin' target point; distance inf if there is none."""
+        safe, dist, near = self._target_grid(buffer_classes, buffer_m)
+        v, u = self._cell(x, y, safe.shape)
+        gh, gw = safe.shape
+        tv, tu = near[v, u]
+        return ((tu + 0.5) / gw - 0.5) * self.size[0], (0.5 - (tv + 0.5) / gh) * self.size[1], float(dist[v, u])
+
+    def near_class(self, x, y, cls, radius_m):
+        """True if a pixel of class cls lies within radius_m of (x, y), at mask resolution."""
+        H, W = self.mask.shape
+        cu, cv = (x / self.size[0] + 0.5) * W, (0.5 - y / self.size[1]) * H
+        ru, rv = radius_m / self.size[0] * W, radius_m / self.size[1] * H
+        u0, u1 = max(int(cu - ru), 0), min(int(cu + ru) + 1, W)
+        v0, v1 = max(int(cv - rv), 0), min(int(cv + rv) + 1, H)
+        if u0 >= u1 or v0 >= v1:
+            return False
+        vv, uu = np.mgrid[v0:v1, u0:u1]
+        d2 = ((uu + 0.5 - cu) * (self.size[0] / W)) ** 2 + ((vv + 0.5 - cv) * (self.size[1] / H)) ** 2
+        return bool(((self.mask[v0:v1, u0:u1] == cls) & (d2 < radius_m * radius_m)).any())
+
+    def landing_class(self, x, y, buffer_classes=(), buffer_m=0.0):
+        """The class a landing at (x, y) is judged by under the 'zemin' rule: the most severe buffer class
+        closer than buffer_m (buffer_classes ordered most severe first), else the class under the point.
+        UNKNOWN off the photo."""
+        if not self.inside(x, y):
+            return int(classes.UNKNOWN)
+        for c in buffer_classes:
+            if buffer_m > 0 and self.near_class(x, y, c, buffer_m):
+                return int(c)
+        return int(self.classes_at(np.array([x]), np.array([y]))[0])
+
     @classmethod
     def from_sora7(cls, mask_path, size_m, name=None, dist_cell_m=0.1):
         """A scene from a mask already in taxonomy indices (0..6, 7 = unknown), e.g. MESSI masks_sora7."""
@@ -187,3 +259,48 @@ class Scene:
             photo = cv2.cvtColor(cv2.imread(jpg_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
         stem = name or jpg_path.rsplit('/', 1)[-1].rsplit('.', 1)[0]
         return cls(mask, size, photo=photo, name=stem)
+
+
+class MirroredScene:
+    """A scene seen in a mirror (x -> -x), amendment 9: a new, physically plausible nadir view that
+    shares the base scene's arrays. It mirrors what the environment asks of a scene."""
+
+    def __init__(self, base):
+        self.base = base
+        self.name = base.name + '|ayna'
+        self.size = base.size
+        self.photo = None
+        self.mask, self.pred, self.elev = base.mask, base.pred, base.elev
+
+    @property
+    def half(self):
+        return self.base.half
+
+    def inside(self, x, y):
+        return self.base.inside(-x, y)
+
+    def values_at(self, arr, x, y, fill):
+        return self.base.values_at(arr, -x, y, fill)
+
+    def classes_at(self, x, y):
+        return self.base.classes_at(-x, y)
+
+    def hazard_distance(self, x, y):
+        return self.base.hazard_distance(-x, y)
+
+    def is_sora_safe(self, x, y, sora_m=3.0):
+        return self.base.is_sora_safe(-x, y, sora_m)
+
+    def nearest_sora_safe(self, x, y, sora_m=3.0):
+        tx, ty, dist = self.base.nearest_sora_safe(-x, y, sora_m)
+        return -tx, ty, dist
+
+    def is_target(self, x, y, buffer_classes, buffer_m):
+        return self.base.is_target(-x, y, buffer_classes, buffer_m)
+
+    def nearest_target(self, x, y, buffer_classes, buffer_m):
+        tx, ty, dist = self.base.nearest_target(-x, y, buffer_classes, buffer_m)
+        return -tx, ty, dist
+
+    def landing_class(self, x, y, buffer_classes=(), buffer_m=0.0):
+        return self.base.landing_class(-x, y, buffer_classes, buffer_m)

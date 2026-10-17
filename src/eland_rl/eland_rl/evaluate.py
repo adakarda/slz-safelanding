@@ -13,7 +13,7 @@ import csv
 
 import numpy as np
 
-from .env import REWARD_PRESETS, EnvConfig, LandingEnv
+from .env import REWARD_PRESETS, ZEMIN_REWARDS, EnvConfig, LandingEnv
 from .scenes import load_list
 
 
@@ -46,18 +46,22 @@ def main():
                     help='>= 0: SORA shield inside the environment (amendment 8)')
     ap.add_argument('--shield-m', type=float, default=10.0)
     ap.add_argument('--oracle', action='store_true', help='add the view oracle (privileged GT upper bound)')
+    ap.add_argument('--land-hard', type=float, default=None, help='zemin_v1: reward for landing on hard ground')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
     env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, obs_mode=a.obs, sem_source=a.sem_source,
                                        depth_mode=a.depth_mode, sora_elev_tau=a.sora_elev_tau,
                                        shield_m=a.shield_train_m,
+                                       **({'land_rewards': {**ZEMIN_REWARDS, 1: a.land_hard}} if a.land_hard is not None else {}),
                                        **REWARD_PRESETS[a.reward]))
     rng = np.random.default_rng(12345)
     methods = {'duz_inis': lambda o: 9, 'rastgele': lambda o: int(rng.integers(10))}
     if a.obs == 'sem_depth_sora':
-        from .pilots import channel_pilot
+        from .pilots import channel_pilot, shield as _shield
         methods['kanal'] = channel_pilot
+        # amendment 9: straight descent behind the same shield, the rule baseline RL + shield must beat
+        methods['duz_kalkan'] = lambda o: _shield(9, o, env.veh.delayed_pose()[0][2], a.shield_m)[0]
     if a.oracle:
         from .pilots import view_oracle
         methods['gorus_kahini'] = lambda o: view_oracle(env)
@@ -82,7 +86,9 @@ def main():
                                  success=int(info['success']), t=round(info['t'], 2), sora_ok=int(info['sora_ok']),
                                  sora_success=int(info['sora_success']), majority_success=int(info['majority_success']),
                                  ret=round(ret, 2),
-                                 sora_m=round(min(info['sora_distance_m'], 999.0), 2)))
+                                 sora_m=round(min(info['sora_distance_m'], 999.0), 2),
+                                 landing_class=info['landing_class'], zemin_success=int(info['zemin_success']),
+                                 soft=int(info['soft_landing'])))
     with open(a.out, 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
@@ -105,6 +111,9 @@ def main():
         h = hists[name]
         tot = sum(h.values())
         print(f'    eylemler: dur {h[0] / tot:.2f}, yanal {sum(h[i] for i in range(1, 9)) / tot:.2f}, alcal {h[9] / tot:.2f}')
+        lc = collections.Counter(x['landing_class'] for x in r if x['landing_class'] >= 0)
+        print(f'    zemin basari {100 * np.mean([x["zemin_success"] for x in r]):5.1f} %  '
+              f'yumusak {100 * np.mean([x["soft"] for x in r]):5.1f} %  inis sinifi {dict(sorted(lc.items()))}')
 
 
 if __name__ == '__main__':

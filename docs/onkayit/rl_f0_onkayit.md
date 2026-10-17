@@ -462,3 +462,70 @@ Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
   - Depth Anything sonuçları "tahmin, göreli derinlik, metrik değil" etiketiyle raporlanır.
 - K76: v3, test uçuşu 0004'ün 13 karesiyle eğitildi. 173 RGB karesinin hiçbiri iyimserlikten arınmış değil (`docs/rl_veri/k76_v3_kullanim.md`). Tahmin maskeli değerlendirmeler "iyimser" etiketi taşır.
 - **K74 cevabı (Arda, 2026-10-17 ~16:55): devam.** PA'nın değerlendirmesi bitince PB, PC ve PD, ön kayıttaki sırayla ve aynı ayarlarla koşar (`derinlik/da_devam.sh`). Bu yeni bir giriş değil: kuyruğun ilk planındaki kollar geri açıldı. PB, PC ve PD yeni hız yamalı kodla koşar; sonuçlar bit bit aynıdır (yukarıdaki not).
+
+## Düzeltme 9 (2026-10-17): `zemin_v1` ödülü ve aynalama — B deneyi, eğitimden önce
+
+**Gerekçe (ölçülen):**
+- A1'in iniş noktalarını tampona göre yeniden yargıladım (aynı 300 deneme, `tanilama/tampon_politika.py`). Tamponu kaldırmak RL'ye yalnız +3.7 puan kazandırıyor (%56.3 → %60.0). Düz alçalma ise %18.3 → %46.3 çıkıyor.
+  - Yani RL'nin güvensiz inişleri (%35) tampon yüzünden değil. Çoğunda araç inilemez zemine iniyor.
+- `sora_v1` ödülünde güvensiz iniş (−20), süre dolmasından (−50) hafif. Ajan emin olmadığında inmeyi seçiyor.
+- **Kullanıcı kararı (Arda, 2026-10-17):**
+  - Yapılar ve su için 3 m tampon kalkar.
+  - İnsan ve araç için 2 m tampon kalır.
+  - Yumuşak zemin tercih edilir.
+  - Ceza artırılır.
+  - Aynalama denenir.
+
+**`zemin_v1` (yeni ödül ayarı):**
+- **Başarı:** Aracın altındaki nokta inilebilir (yumuşak veya sert) ve 2 m içinde insan veya araç yok.
+- **Terminal ödül, inilen sınıfa göre** (2 m içinde insan veya araç varsa o sınıf sayılır):
+
+  | Sınıf | Ödül |
+  |---|---|
+  | yumuşak | +50 |
+  | sert | +30 |
+  | asfalt/ağaç | −40 |
+  | bina | −60 |
+  | su | −70 |
+  | araç | −90 |
+  | insan | −100 |
+  | bilinmeyen | −50 |
+  | süre doldu | −50 (değişmedi) |
+
+- **Değişmeyenler:** adım ve eylem ödülleri, potansiyel şekillendirme katsayısı (k = 2), alanın dışına çıkma (−50).
+- **Gözlemin 3. kanalı, şekillendirme hedefi ve görüş kâhini** yeni hedefi kullanır: inilebilir zemin, insan ve araçtan 2 m uzak.
+- **Teori (_hesap, γ = 0.99, 0.25 s adım):**
+  - +50/+30 ile ajan, yumuşak zemin için en fazla ~5 m fazladan yol gider.
+  - İnsan, araç, bina ve su cezaları süre dolmasından ağır. Ajan vakti varken bunlara inmez.
+- **Aynalama:** Her eğitim bölümünde sahne, 0.5 olasılıkla x ekseninde aynalanır. Değerlendirmede aynalama yok.
+- **Kod:** `env.py`, `scene.py`, `pilots.py`, `train.py`, `evaluate.py`.
+  - Eski ayarlar HEAD ile 6 kol ayarında bit bit aynı.
+  - 34 birim testi geçti (8'i yeni).
+  - Değerlendirmeye `duz_kalkan` (düz alçalma + kalkan) taban çizgisi eklendi.
+
+**B deneyi:**
+- Kollar:
+  - B0: `sora_v1` (kıyas),
+  - B1: `zemin_v1`,
+  - B2: `zemin_v1` + aynalama.
+- Her kol için tohum 0, 1 ve 2, her biri 1M adım. Ayarlar A1 ile aynı: ent 0.01, 4 ortam, `--shard`, SORA hücresi 0.25 m, `--vec dummy`.
+- **Eğitim listesi:** `train_b.txt`, 600 kare. Agamim'den {0004, 0043, Path B} çıkarıldı.
+- **Doğrulama:** `val_b32.txt` (`val_b.txt`'deki 96 karenin her 3. karesi, 32 kare) × 10 başlangıç = 320 deneme. Süre sınırı 30 s, nominal dinamik.
+- **IrYamim bu deneyde hiç kullanılmaz** (K75: yalnız final test).
+- **Raporlama:**
+  - Her kol için 3 tohumun ortalaması ± standart sapma.
+  - Bütün kollar iki kuralla da yargılanır: zemin başarısı ve 3 m SORA başarısı.
+  - Ayrıca yumuşak zemin payı, inilen sınıfların dağılımı ve süre dolma oranı.
+- **Birincil ölçüt:** RL'nin kalkansız zemin başarısı.
+
+**Tahminler (_tahmin):**
+- **H9a:** B1'in kalkansız güvensiz inişi (zemin kuralına göre), B0'ınkinden en az %25 az.
+- **H9b:** B1'in zemin başarısı ≥ B0'ınki + 5 puan.
+- **H9c:** Başarılı inişler içinde yumuşak zemin payı B1'de B0'dan yüksek.
+- **H9d:** B2'nin zemin başarısı ≥ B1'inki + 3 puan.
+- **Karar:** H9a ve H9b ortalamada sağlanır ve 3 tohumun en az 2'sinde aynı yöndeyse `zemin_v1` benimsenir. H9d sağlanırsa aynalama da benimsenir.
+
+**Koşum sırası:**
+- Tohum sırasıyla: önce B0, B1, B2 tohum 0; sonra tohum 1; sonra tohum 2.
+- Aynı anda en fazla 2 eğitim çalışır, Depth Anything kolları dahil. Yeni koşu ancak WSL'de en az 7 GB boş bellek varsa başlar.
+- Tahmini bitiş ertesi sabah (_hesap).
