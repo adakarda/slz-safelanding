@@ -16,6 +16,7 @@ label_image, (128, 128), INTER_NEAREST) of the 320x240 label topic, so here the
 128x128 rays are exactly the label pixels that resize would pick. Training and
 deployment then sample the ground at the same points.
 """
+import functools
 import math
 
 import cv2
@@ -56,11 +57,16 @@ def rotation(tilt_vec, yaw):
     """
     b3 = np.asarray(tilt_vec, float)
     b3 = b3 / np.linalg.norm(b3)
-    c1 = np.array([math.cos(yaw), math.sin(yaw), 0.0])
-    b2 = np.cross(b3, c1)
+    c1 = (math.cos(yaw), math.sin(yaw), 0.0)
+    b2 = np.array(_cross(b3, c1))
     b2 /= np.linalg.norm(b2)
-    b1 = np.cross(b2, b3)
+    b1 = np.array(_cross(b2, b3))
     return np.stack([b1, b2, b3], 1)
+
+
+def _cross(a, b):
+    """np.cross for two 3-vectors, same products and differences, without its per-call overhead."""
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
 
 
 def ground_hits(rays, cam_pos, R):
@@ -71,6 +77,20 @@ def ground_hits(rays, cam_pos, R):
     X = cam_pos[0] + t * d[..., 0]
     Y = cam_pos[1] + t * d[..., 1]
     return X, Y, t
+
+
+@functools.lru_cache(maxsize=None)
+def _class_table(classes):
+    t = np.zeros(256, bool)
+    t[list(classes)] = True
+    return t
+
+
+def _in_classes(img, classes):
+    """np.isin(img, classes) for small class lists; a lookup table when img is uint8."""
+    if img.dtype == np.uint8:
+        return _class_table(tuple(classes))[img]
+    return np.isin(img, classes)
 
 
 def sora_channel(sem, altitude_m, sora_m=3.0, safe_classes=(0, 1), hazard_classes=(3, 4, 5, 6),
@@ -86,13 +106,13 @@ def sora_channel(sem, altitude_m, sora_m=3.0, safe_classes=(0, 1), hazard_classe
     n = sem.shape[1]
     h_rows = int(round(n * aspect[1] / aspect[0]))
     sq = cv2.resize(sem, (n, h_rows), interpolation=cv2.INTER_NEAREST)
-    hazard = np.isin(sq, hazard_classes)
+    hazard = _in_classes(sq, hazard_classes)
     if hazard.any():
         dist_px = cv2.distanceTransform((~hazard).astype(np.uint8), cv2.DIST_L2, 5)
     else:
         dist_px = np.full(sq.shape, np.inf, np.float32)
     px_m = 2.0 * max(altitude_m, 0.1) * math.tan(hfov / 2) / n
-    ok = np.isin(sq, safe_classes) & (dist_px * px_m >= sora_m)
+    ok = _in_classes(sq, safe_classes) & (dist_px * px_m >= sora_m)
     return cv2.resize(ok.astype(np.uint8), (n, sem.shape[0]), interpolation=cv2.INTER_NEAREST).astype(bool)
 
 

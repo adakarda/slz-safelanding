@@ -436,3 +436,20 @@ Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
   - Eğitim koşarken başka bir GPU veya bellek işi çalıştırılmaz.
   - Kuyruk, bağlı bir `wsl.exe` istemcisiyle ön planda koşar (`~/rl_inis/kuyruk.sh`).
 - Hipotezler, listeler ve adım sayıları değişmedi.
+
+**Hız yaması (2026-10-17 ~16:10, sonucu değiştirmez):**
+- Değişiklikler:
+  - `dynamics.py`: Tutum matrisi yalnız kameranın kullandığı kayıt için hesaplanır. Aynı `rotation()` aynı sayılarla çağrılır, sadece ~5 kat daha az.
+  - `camera.py`:
+    - `sora_channel`'da `np.isin` yerine uint8 arama tablosu kullanılır.
+    - 3-vektör çapraz çarpım elle yapılır; çarpımlar ve farklar aynıdır.
+  - `scene.py`: Harita okuma tek toplama ile yapılır. Fotoğraf üstündeki indeks, eskisiyle aynı kesilmiş çarpımdır.
+- Doğrulama (ölçülen): HEAD kodu ile yamalı kod, 6 kol ayarında aynı tohum ve aynı eylemlerle koşuldu.
+  - Her ayarda 40 bölüm koşuldu, toplam ~21 000 adım.
+  - Gözlemlerin SHA-256 özeti, ödüller, ödül bileşenleri, eylemler, kalkan bayrakları, iniş noktaları ve sonuçlar **bit bit aynı** çıktı.
+  - 26 birim testi geçti.
+- Hız (ölçülen, arkada iki eğitim koşarken, 4 turun en iyisi): Ortam adımı A1 ayarında 2.22 → 1.49 ms, PD ayarında 3.32 → 2.26 ms.
+- Koşan süreçler eski kodla devam eder, sonraki kollar yeni kodla başlar. Sonuçlar bit bit aynı olduğu için karşılaştırma bozulmaz.
+- Uygulanmayanlar: Aşağıdakiler öğrenmeyi veya girdiyi değiştirir. Ancak ayrı ve ön kayıtlı bir kolla denenebilirler.
+  - batch 512
+  - gözlemi uint8 veya float16 saklamak

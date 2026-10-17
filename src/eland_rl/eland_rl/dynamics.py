@@ -76,7 +76,7 @@ class Vehicle:
         self._cmds = collections.deque([(-1e9, np.zeros(3))])
         n = int(np.ceil(max(params.latency_s, 0.0) / params.substep_s)) + 2
         self.history = collections.deque(maxlen=n)
-        self.history.append((self.t, self.pos.copy(), self.attitude()))
+        self.history.append(self._record())
 
     def attitude(self):
         # thrust is m (a + g z): the body z axis points along it
@@ -92,6 +92,17 @@ class Vehicle:
                 break
             v = c
         return v[axis]
+
+    def _record(self):
+        # the attitude is computed later, only for the record the camera actually uses (delayed_pose):
+        # same rotation() on the same numbers, ~5x fewer calls
+        return [self.t, self.pos.copy(), self.acc.copy(), self.yaw, None]
+
+    def _rotation_of(self, rec):
+        if rec[4] is None:
+            a = rec[2]
+            rec[4] = rotation((a[0] + self._bias[0], a[1] + self._bias[1], max(G + a[2], 1.0)), rec[3])
+        return rec[4]
 
     def step(self, v_cmd, duration):
         """Command v_cmd (world frame) now, and fly for `duration` seconds."""
@@ -113,12 +124,12 @@ class Vehicle:
             self.vel += a * dt
             self.pos += self.vel * dt
             self.t += dt
-            self.history.append((self.t, self.pos.copy(), self.attitude()))
+            self.history.append(self._record())
 
     def delayed_pose(self):
         """(position, rotation) as the camera image arriving now shows it."""
         target = self.t - self.p.latency_s
-        for t, pos, R in self.history:       # oldest first; first one not too old wins
-            if t >= target - 1e-9:
-                return pos, R
-        return self.history[-1][1], self.history[-1][2]
+        for rec in self.history:             # oldest first; first one not too old wins
+            if rec[0] >= target - 1e-9:
+                return rec[1], self._rotation_of(rec)
+        return self.history[-1][1], self._rotation_of(self.history[-1])

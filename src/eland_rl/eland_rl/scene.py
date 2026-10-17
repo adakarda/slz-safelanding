@@ -83,20 +83,16 @@ class Scene:
         fu = x / self.size[0] + 0.5
         fv = 0.5 - y / self.size[1]
         ok = (fu >= 0) & (fu < 1) & (fv >= 0) & (fv < 1)
-        out = np.full(np.shape(x), fill, arr.dtype)
         H, W = arr.shape
-        out[ok] = arr[(fv[ok] * H).astype(np.intp), (fu[ok] * W).astype(np.intp)]
-        return out
+        # one gather over all points; on the photo the index is the same truncated product as before,
+        # off it the clipped index is read and then replaced by fill
+        r = np.minimum((np.clip(fv, 0.0, 1.0) * H).astype(np.intp), H - 1)
+        c = np.minimum((np.clip(fu, 0.0, 1.0) * W).astype(np.intp), W - 1)
+        return np.where(ok, arr.reshape(-1)[r * W + c], np.array(fill, arr.dtype))
 
     def classes_at(self, x, y):
         """Taxonomy class under world points (x, y); UNKNOWN off the photo."""
-        fu = x / self.size[0] + 0.5
-        fv = 0.5 - y / self.size[1]
-        ok = (fu >= 0) & (fu < 1) & (fv >= 0) & (fv < 1)
-        out = np.full(np.shape(x), classes.UNKNOWN, np.uint8)
-        H, W = self.mask.shape
-        out[ok] = self.mask[(fv[ok] * H).astype(np.intp), (fu[ok] * W).astype(np.intp)]
-        return out
+        return self.values_at(self.mask, x, y, classes.UNKNOWN)
 
     def hazard_distance(self, x, y):
         """Metres from (x, y) to the nearest SORA hazard pixel (inf if none).
