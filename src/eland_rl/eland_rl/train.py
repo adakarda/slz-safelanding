@@ -6,6 +6,8 @@ Four parallel environments, SB3 PPO defaults, learning rate falling linearly
 from 3e-4 to 0, ground-truth inputs. --reward picks a preset from env.REWARD_PRESETS;
 --ent-coef adds PPO's entropy bonus (0 = SB3 default; amendment 4 uses 0.01). Writes DIR/model.zip, checkpoints, the
 SB3 progress.csv and per-episode monitor files (reward, length, outcome).
+--resume CKPT continues a checkpoint up to --steps in total; its logs go to DIR/devam<N>/ and
+DIR/monitor_devam<N>_*, so the files of the first part stay as they are.
 """
 import argparse
 import json
@@ -23,11 +25,12 @@ from .policy import POLICY_KWARGS
 from .scenes import load_list
 
 
-def make_env(scene_list, rank, seed, out, binary, reward, obs='sem_depth', n_envs=1, cell=0.1, shard=False, extra=None):
+def make_env(scene_list, rank, seed, out, binary, reward, obs='sem_depth', n_envs=1, cell=0.1, shard=False, extra=None,
+             mon='monitor'):
     def _f():
         scenes = load_list(scene_list, shard=(rank, n_envs) if shard else None, dist_cell_m=cell)
         env = LandingEnv(scenes, EnvConfig(binary=binary, obs_mode=obs, **(extra or {}), **REWARD_PRESETS[reward]))
-        env = Monitor(env, os.path.join(out, f'monitor_{rank}'),
+        env = Monitor(env, os.path.join(out, f'{mon}_{rank}'),
                       info_keywords=('success', 'outcome', 'sora_success', 'majority_success'))
         env.reset(seed=seed + 1000 * rank)
         return env
@@ -56,24 +59,38 @@ def main():
     ap.add_argument('--ent-coef', type=float, default=0.0)
     ap.add_argument('--out', required=True)
     ap.add_argument('--device', default='auto')
+    ap.add_argument('--resume', default='', help='checkpoint zip to continue from (e.g. after the host slept)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
-    json.dump(vars(a), open(os.path.join(a.out, 'args.json'), 'w'), indent=1)
+    lr0 = a.lr
+    schedule = lambda progress: lr0 * progress  # noqa: E731
+    done, tag, log_dir, mon = 0, '', a.out, 'monitor'
+    if a.resume:
+        # weights, optimiser state and the step counter come back; the rollout buffer and the episodes restart
+        model = PPO.load(a.resume, device=a.device, custom_objects={'learning_rate': schedule, 'lr_schedule': schedule})
+        done = model.num_timesteps
+        tag = f'_devam{done}'
+        log_dir, mon = os.path.join(a.out, f'devam{done}'), f'monitor_devam{done}'
+    json.dump(vars(a), open(os.path.join(a.out, f'args{tag}.json'), 'w'), indent=1)
 
     venv_cls = DummyVecEnv if a.vec == 'dummy' else SubprocVecEnv
-    venv = venv_cls([make_env(a.scenes, r, a.seed, a.out, a.binary, a.reward, a.obs, a.envs, a.sora_cell, a.shard,
+    venv = venv_cls([make_env(a.scenes, r, a.seed + done, a.out, a.binary, a.reward, a.obs, a.envs, a.sora_cell, a.shard,
                                    dict(sem_source=a.sem_source, depth_mode=a.depth_mode,
-                                        sora_elev_tau=a.sora_elev_tau, shield_m=a.shield_train_m)) for r in range(a.envs)])
-    lr0 = a.lr
-    model = PPO('MlpPolicy', venv, learning_rate=lambda progress: lr0 * progress, policy_kwargs=POLICY_KWARGS,
-                ent_coef=a.ent_coef, seed=a.seed, device=a.device, verbose=0)
-    model.set_logger(configure(a.out, ['stdout', 'csv']))
+                                        sora_elev_tau=a.sora_elev_tau, shield_m=a.shield_train_m), mon)
+                     for r in range(a.envs)])
+    if a.resume:
+        model.set_env(venv)
+    else:
+        model = PPO('MlpPolicy', venv, learning_rate=schedule, policy_kwargs=POLICY_KWARGS,
+                    ent_coef=a.ent_coef, seed=a.seed, device=a.device, verbose=0)
+    model.set_logger(configure(log_dir, ['stdout', 'csv']))
     t0 = time.time()
-    model.learn(total_timesteps=a.steps,
+    # reset_num_timesteps=False keeps the LR schedule on the total: progress = 1 - steps_done / a.steps
+    model.learn(total_timesteps=a.steps - done, reset_num_timesteps=not a.resume,
                 callback=CheckpointCallback(max(a.steps // 10 // a.envs, 1), os.path.join(a.out, 'ckpt'), 'model'))
     model.save(os.path.join(a.out, 'model.zip'))
     venv.close()
-    print(f'egitim bitti: {a.steps} adim, {(time.time() - t0) / 60:.1f} dk -> {a.out}/model.zip')
+    print(f'egitim bitti: {a.steps} adim ({done} devralindi), {(time.time() - t0) / 60:.1f} dk -> {a.out}/model.zip')
 
 
 if __name__ == '__main__':

@@ -403,3 +403,24 @@ Hiçbiri sağlamazsa Depth Anything eklenmez ve bu sonuç raporlanır.
 
 Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
 - Uygulama notu (01:25): kollar `--vec dummy` ile koşar: 4 ortam tek süreçte. Algoritma ve veri aynıdır. İlk denemede (SubprocVecEnv) swap'a 1.7 GB taşıldı. P0 8k adımda durduruldu ve baştan başlatıldı.
+
+## Yürütme notu (2026-10-17 13:55): bilgisayar uykuya geçti, koşular yeniden başlatıldı
+
+**Olay (ölçülen, Windows System günlüğü):**
+- 01:25:09 `winlogon.exe` uyku istedi (Kernel-Power 187, neden "Application API"). Boşta kalma zaman aşımı değil.
+- 11:01 güç kaynağı değişti (105, adaptör çıktı) ve bilgisayar yine uyudu. 13:42'de uyandı, WSL yeniden başladı.
+- Ölen koşular:
+  - A1 753 664 / 2M adımda kaldı. Son checkpoint 600 000 adım. `model.zip` ve değerlendirme yok.
+  - P0 49 152 adımda kaldı.
+  - A2b hiç başlamadı.
+
+**Yeniden başlatma:**
+- A1, `ckpt/model_600000_steps.zip`'den devam eder (`train.py --resume`).
+  - Geri gelenler: ağırlıklar, Adam durumu, adım sayacı.
+  - Öğrenme oranı programı toplam 2M adıma göre sürer.
+  - Rollout tamponu ve bölümler sıfırdan başlar. Ortam tohumları 600 000 kaydırılır, aynı sahne sırası tekrar etmez.
+  - 600k–753k arası eğitim atılır. İlk kısmın `monitor_*.csv` dosyalarında bu aralık kalır. Analizde ilk kısım 600 000 adımda kesilir; devam kısmı `monitor_devam600000_*` ve `devam600000/progress.csv` dosyalarındadır.
+  - Sonuçlar, kesintisiz bir 2M koşusuyla birebir aynı değildir. Fark, rollout'un yeniden başlamasıyla ve tohumla sınırlıdır.
+- Düzeltme 7'nin beş kolu baştan başlar. P0'ın yarım klasörü `kos/_olu/` altına taşınır.
+- A2b, A1 değerlendirmesinden sonra başlar (değişmedi).
+- Hipotezler, karar kuralları, listeler ve adım sayıları değişmedi.
