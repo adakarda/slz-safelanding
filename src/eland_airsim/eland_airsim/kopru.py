@@ -4,7 +4,12 @@
 
 Publishes, in the formats the rest of the project already reads:
   /camera/image          rgb8 640x480        (Gazebo: the RGB camera through ros_gz_image)
-  /camera/camera_info    pinhole, HFOV from the parameter
+  /camera/camera_info    only if kamera_bilgisi: pinhole of the RGB image, HFOV from the parameter.
+                         Off by default, as in Gazebo (advertised there, never published): mapping_node
+                         applies any CameraInfo it receives to the 320x240 mask, so the RGB's K would
+                         double its focal length and put the principal point in the corner (Faz 3, first
+                         AirSim runs: candidates lost during approach). Without it, mapping_node derives K
+                         from its own camera_hfov_deg for whatever size the mask has.
   /camera/segmentation   mono8 320x240, label = SORA class + 1, 0 = unknown (perception_node.remap_gt)
   /eland/gercek_poz      PoseStamped, ENU world / FLU body, ground truth (Gazebo: dynamic_pose/info)
   /clock                 AirSim's simulation time, if saat_yayinla (for use_sim_time nodes)
@@ -51,6 +56,7 @@ class Kopru(Node):
         p('cerceve', 'camera_link')
         p('dunya_cerceve', 'map')
         p('ruzgar_ned', [0.0, 0.0, 0.0])
+        p('kamera_bilgisi', False)     # see the module docstring before turning this on
         g = lambda n: self.get_parameter(n).value  # noqa: E731
         host = g('host') or istemci.windows_host()
         self.img_client = istemci.connect(host, g('port'))
@@ -115,8 +121,9 @@ class Kopru(Node):
                 info = CameraInfo(width=res[0].width, height=res[0].height, distortion_model='plumb_bob',
                                   d=[0.0] * 5, k=[fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0],
                                   r=[1.0, 0, 0, 0, 1.0, 0, 0, 0, 1.0], p=[fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0])
-            info.header.stamp, info.header.frame_id = stamp, g('cerceve')
-            self.pub_info.publish(info)
+            if g('kamera_bilgisi'):
+                info.header.stamp, info.header.frame_id = stamp, g('cerceve')
+                self.pub_info.publish(info)
             if len(res) > 1:
                 seg = np.frombuffer(res[1].image_data_uint8, np.uint8).reshape(res[1].height, res[1].width, 3)
                 labels = siniflar.decode(seg, self.pal, g('kanal_sirasi'))

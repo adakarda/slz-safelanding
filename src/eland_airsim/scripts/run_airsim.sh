@@ -4,6 +4,10 @@
 #   src/eland_airsim/scripts/run_airsim.sh [--dunya AirSimNH] [--takeoff 25] [--trigger] [--no-hud]
 #                                           [--station] [--px4-param K=V]... [--log-dir DIR] [--zorla]
 #                                           [--yalniz-px4]   (yalniz AirSim + PX4; ROS 2 tarafi acilmaz)
+#                                           [--params FILE] [--v3] [--baslangic X,Y[,YAW_DERECE]]
+#   --v3         maskeyi AirSim'in gercek etiketi yerine v3 uretir (~/v3_test/v3_airsim.py); algi zinciri
+#                calisma basina kopyalanan parametre dosyasiyla /eland/v3/etiket'i okur, kod degismez
+#   --baslangic  aracin dogdugu nokta, PlayerStart'a gore NED metre (kuzey, dogu) ve yon
 #
 # Gazebo'ya dokunmaz: eland_sim.launch.py aynen kullanilir (Gazebo kopruleri bosta bekler), PX4 ayri bir
 # rootfs'te calisir (rootfs_airsim) ki Gazebo kosularinin kayitli parametreleri karismasin.
@@ -15,7 +19,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
-YALNIZ_PX4=0
+YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -28,7 +32,10 @@ while [ $# -gt 0 ]; do
 	--log-dir) LOG_DIR=$2; shift ;;
 	--zorla) ZORLA=1 ;;
 	--yalniz-px4) YALNIZ_PX4=1 ;;
-	-h | --help) sed -n 2,11p "$0"; exit 0 ;;
+	--params) PARAMS=$2; shift ;;
+	--v3) V3=1 ;;
+	--baslangic) BASLANGIC=$2; shift ;;
+	-h | --help) sed -n 2,15p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
 	shift
@@ -55,14 +62,16 @@ GW=$(ip route | awk '$1 == "default" {print $3; exit}')
 mkdir -p "$LOG_DIR"
 echo "[run_airsim] gunlukler: $LOG_DIR; Windows: $GW"
 
-AIRSIM_PID=""; PX4_PID=""; AGENT_PID=""; KOPRU_PID=""; LAUNCH_PID=""; BEKCI_PID=""
+AIRSIM_PID=""; PX4_PID=""; AGENT_PID=""; KOPRU_PID=""; LAUNCH_PID=""; BEKCI_PID=""; V3_PID=""
 temizle() {
 	echo "[run_airsim] kapatiliyor..."
 	[ -n "$BEKCI_PID" ] && kill "$BEKCI_PID" 2>/dev/null
-	for p in $LAUNCH_PID $KOPRU_PID $AGENT_PID; do kill -INT "$p" 2>/dev/null; done
+	for p in $LAUNCH_PID $KOPRU_PID $AGENT_PID $V3_PID; do kill -INT "$p" 2>/dev/null; done
 	sleep 2
+	# the model node can take a few seconds to release CUDA
+	for _ in 1 2 3 4 5; do [ -n "$V3_PID" ] && kill -0 "$V3_PID" 2>/dev/null || break; sleep 1; done
 	[ -n "$PX4_PID" ] && kill "$PX4_PID" 2>/dev/null
-	for p in $LAUNCH_PID $KOPRU_PID $AGENT_PID $PX4_PID; do kill -9 "$p" 2>/dev/null; done
+	for p in $LAUNCH_PID $KOPRU_PID $AGENT_PID $PX4_PID $V3_PID; do kill -9 "$p" 2>/dev/null; done
 	pkill -x MicroXRCEAgent 2>/dev/null
 	taskkill.exe /IM "$DUNYA.exe" /F >/dev/null 2>&1
 	echo "[run_airsim] kapandi"
@@ -71,12 +80,19 @@ trap temizle EXIT INT TERM
 
 # ------------------------------------------------------------ AirSim
 AYAR_WIN='C:\Users\arda_\airsim\settings_px4.json'
-python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" <<'PY'
+python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" "$BASLANGIC" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1]))
-s['Vehicles']['PX4']['LocalHostIp'] = sys.argv[3]
+v = s['Vehicles']['PX4']
+v['LocalHostIp'] = sys.argv[3]
+if sys.argv[4]:
+    b = [float(x) for x in sys.argv[4].split(',')]
+    v['X'], v['Y'] = b[0], b[1]
+    if len(b) > 2:
+        v['Yaw'] = b[2]
 json.dump(s, open(sys.argv[2], 'w'), indent=2)
 PY
+cp "$AIRSIM_DIR/settings_px4.json" "$LOG_DIR/settings_px4.json"
 echo "[run_airsim] AirSim aciliyor ($DUNYA)..."
 "$EXE" -settings="$AYAR_WIN" -windowed -ResX=1280 -ResY=720 >"$LOG_DIR/airsim.log" 2>&1 &
 AIRSIM_PID=$!
@@ -142,8 +158,24 @@ source "$WS_DIR/install/setup.bash"
 set -u
 "$VENV/bin/python" -m eland_airsim.kopru --ros-args -p host:="$GW" >"$LOG_DIR/kopru.log" 2>&1 &
 KOPRU_PID=$!
+[ -n "$PARAMS" ] || PARAMS=$(ros2 pkg prefix eland_sim)/share/eland_sim/config/eland_params.yaml
+if [ "$V3" = 1 ]; then
+	# per-run copy: only perception_node's segmentation_topic changes, the original file is untouched
+	python3 - "$PARAMS" "$LOG_DIR/params_v3.yaml" <<'PY'
+import sys, yaml
+p = yaml.safe_load(open(sys.argv[1]))
+p['perception_node']['ros__parameters']['segmentation_topic'] = '/eland/v3/etiket'
+yaml.safe_dump(p, open(sys.argv[2], 'w'), sort_keys=False)
+PY
+	PARAMS=$LOG_DIR/params_v3.yaml
+	"$HOME/v3_test/venv/bin/python" -P "$HOME/v3_test/v3_airsim.py" >"$LOG_DIR/v3.log" 2>&1 &
+	V3_PID=$!
+	echo "[run_airsim]   v3 dugumu baslatildi (algi zinciri /eland/v3/etiket'i okuyacak)"
+fi
+cp "$PARAMS" "$LOG_DIR/params.yaml" 2>/dev/null
+# obstacles:=false -- obstacle_driver moves Gazebo models; AirSim has none of them
 ros2 launch eland_sim eland_sim.launch.py hud:="$HUD" hud_view:="$HUD_VIEW" station:="$STATION" \
-	bridge_colored:=false >"$LOG_DIR/pipeline.log" 2>&1 &
+	bridge_colored:=false obstacles:=false params_file:="$PARAMS" >"$LOG_DIR/pipeline.log" 2>&1 &
 LAUNCH_PID=$!
 for _ in $(seq 1 60); do
 	grep -q "RegisterExtComponentReply" "$LOG_DIR/pipeline.log" 2>/dev/null && break
