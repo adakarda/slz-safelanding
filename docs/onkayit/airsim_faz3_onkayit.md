@@ -50,6 +50,52 @@ GT kolunun ilk koşusu (başlangıç 1) geçersiz sayıldı ve kol baştan başl
 - Harita ölçeği ve konumu bu yüzden yanlıştı. Belirti: "candidate lost during approach", sonra kör iniş, yola.
 
 Düzeltme yalnız köprüde (`kamera_bilgisi` varsayılan kapalı, Gazebo'daki gibi). Algı koduna dokunulmadı.
+**İkinci deneme (00:27–00:45) de geçersiz.** run_airsim.sh kapanırken `ros2 launch`'ın alt düğümleri
+(mapping, detector, perception, tracker, mod) yetim kaldı ve koşudan koşuya birikti:
+- 7. koşuda WSL'de boş bellek 623 MB'a düştü (ölçülen).
+- Eski dedektörler yeni koşulara da aday yayınlamış olabilir.
+
+İlk 5 koşunun sonuçları (5/5 indi; 2 sert zemin, 3 çim) bu yüzden temiz sayılmaz; yalnız ön bilgi.
+6. koşuda ölçüm betiği sonuç yazamadı. Düzeltmeler:
+- run_airsim.sh kapanışta düğümleri ada göre de kapatıyor (run_sim.sh gibi).
+- inis_sina.sh her koşudan önce ve sonra yetim düğüm arıyor.
+
+GT kolu üçüncü kez, temiz olarak koşuluyor.
+
+**Üçüncü denemede (00:45–) ölçüm kopmaları.** 1., 4. ve 5. koşularda AirSim bütün RPC bağlantılarını aynı
+anda düşürdü: köprü "Broken pipe", ölçüm betiği "connection reset" aldı. AirSim günlüğüne göre simülasyon
+sürdü ve 5. koşu indi; sonuç yazılamadı.
+
+Şüphelenilen neden: ölçüm betiği, araç havada sabitken saniyede 20 kez derinlik görüntüsü istiyordu.
+Düzeltmeler (6. koşudan sonra devreye girdi):
+- derinlik isteği saniyede en fazla 1;
+- ölçüm betiğinde ve köprüde kopunca yeniden bağlanma.
+
+İniş davranışını değiştiren bir şey yok. Ölçülemeyen başlangıçlar batch sonunda yeniden koşulacak.
+
+**Sonuç ve teşhis (01:30).** Üçüncü denemede 10 koşunun dökümü:
+- 5'i ölçüldü; 5'i de çime indi. Temas hızı 0.09–0.30 m/s.
+- 1'i zaman aşımı: araç yerdeydi ama "durağan" sayılmadı.
+- 2'si ölçüm kopması.
+- 2'si AirSim kopması.
+
+Teşhis için iki yük testi yapıldı. Köprünün yükü (görüntü 10 Hz + gerçek konum 50 Hz) ve üçüncü bir istemci
+6 dk verildi:
+- araç yerdeyken: 0 hata;
+- araç 25 m'de askıdayken: 0 hata.
+
+Kopan koşulardaki sıra hep aynı:
+1. Bütün API bağlantıları aynı anda düşüyor.
+2. AirSim günlüğü kesiliyor.
+3. 5–8 s sonra mod "no request received from FMU" ile kapanıyor (SIGABRT). PX4 kilitli adımda donmuş,
+   yani AirSim süreci ölmüş.
+
+Windows'a olay düşmüyor. Kök neden açık; API yükü ya da askıda uçuş değil.
+
+Önlem: inis_sina.sh böyle bir denemeyi en çok 3'e kadar tekrarlıyor ve sayıyor ("deneme", "coken").
+Ölçüt düzeltmesi: iniş, son 3 s'deki yer değiştirme < 0.10 m ya da hız ile anlaşılıyor; temas anı, son
+yüksekliğe 5 cm yaklaşılan ilk örnek. Tutarlılık için GT kolu bu ölçütle baştan koşuluyor (dördüncü deneme).
+
 Bu koşudan kalan, ölçümle ilgisiz bir bulgu var: COMMIT'te PX4 "invalid setpoints → blind land"
 failsafe'i verdi. Bu mod tarafında, ayrı incelenecek.
 

@@ -59,6 +59,7 @@ class Kopru(Node):
         p('kamera_bilgisi', False)     # see the module docstring before turning this on
         g = lambda n: self.get_parameter(n).value  # noqa: E731
         host = g('host') or istemci.windows_host()
+        self._host = host
         self.img_client = istemci.connect(host, g('port'))
         self.pose_client = istemci.connect(host, g('port'))
         self.arac = g('arac')
@@ -92,6 +93,21 @@ class Kopru(Node):
         return SetParametersResult(successful=True)
 
     # ------------------------------------------------------------------ loops
+    def _reconnect(self, client, error):
+        """A fresh connection after a broken one; the old client if AirSim does not answer yet.
+
+        AirSim dropped every RPC connection at once in the second Faz 3 batch while the simulation kept
+        running; the bridge then logged "Broken pipe" for the rest of the run and the pipeline went blind.
+        """
+        if not isinstance(error, (ConnectionError, OSError, EOFError)):
+            return client
+        try:
+            new = istemci.connect(self._host, self.get_parameter('port').value, timeout_s=5.0)
+            self.get_logger().warning('AirSim baglantisi yenilendi')
+            return new
+        except Exception:  # noqa: BLE001
+            return client
+
     def _now(self):
         return self.get_clock().now().to_msg()
 
@@ -109,6 +125,7 @@ class Kopru(Node):
                 res = self.img_client.simGetImages(reqs, self.arac)
             except Exception as e:  # noqa: BLE001
                 self.get_logger().warning(f'goruntu alinamadi: {e}', throttle_duration_sec=5.0)
+                self.img_client = self._reconnect(self.img_client, e)
                 time.sleep(0.5)
                 continue
             stamp = self._now()
@@ -142,6 +159,7 @@ class Kopru(Node):
                     self.pub_clock.publish(Clock(clock=_stamp(self.pose_client.getMultirotorState(self.arac).timestamp)))
             except Exception as e:  # noqa: BLE001
                 self.get_logger().warning(f'durum alinamadi: {e}', throttle_duration_sec=5.0)
+                self.pose_client = self._reconnect(self.pose_client, e)
                 time.sleep(0.5)
                 continue
             pos, q = donusum.ned_pose_to_enu(k.position.x_val, k.position.y_val, k.position.z_val,

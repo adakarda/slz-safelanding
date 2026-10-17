@@ -16,26 +16,40 @@ WHERE THE OBSERVATION COMES FROM
 Depth is always the flat-ground depth from the camera pose: on a flat world
 that is exactly what a depth sensor would report.
 
+WHERE THE POSE COMES FROM
+  pose_source = 'gz'      Gazebo's dynamic_pose (default, unchanged)
+  pose_source = 'topic'   a PoseStamped, ENU world / FLU body: in AirSim the
+                          bridge's /eland/gercek_poz (eland_airsim.kopru)
+
+THE OBSERVATION FOLLOWS THE TRAINING RUN
+The run's args.json (next to model_path, or run_args) sets what the
+environment fed the policy: the reward preset decides the third channel
+(zemin_v1: landable and clear of the buffer classes; otherwise SORA 3 m), and
+--binary the first. Without args.json the node keeps its old observation.
+kalkan_m >= 0 puts evaluate.py's SORA shield (pilots.shield) behind the policy.
+
 The action is body-relative (1 = nose = image up, counter-clockwise in 45
 degree steps); it is turned into a world velocity with the vehicle's current
 heading, as the environment does.
 """
 import csv
+import json
 import math
+import os
 import threading
 import time
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import TwistStamped
-from gz.msgs10.pose_v_pb2 import Pose_V
-from gz.transport13 import Node as GzNode
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Int8
 
 from .camera import Camera, ground_hits, nearest_source_index, sora_channel
+from .env import REWARD_PRESETS, EnvConfig
+from .pilots import shield
 from .scene import Scene
 
 N_CLASSES = 8
@@ -68,10 +82,17 @@ class PolicyNode(Node):
         p('depth_norm_m', 40.0)
         p('log_csv', '')
         p('publish_view', True)
+        p('pose_source', 'gz')
+        p('pose_topic', '/eland/gercek_poz')
+        p('run_args', '')
+        p('kalkan_m', -1.0)
         g = lambda k: self.get_parameter(k).value  # noqa: E731
         from stable_baselines3 import PPO
         self.model = PPO.load(g('model_path'), device='cpu')
         self.n_channels = int(self.model.observation_space.shape[0])
+        self.cfg, self.cfg_note = self.training_config(g('run_args') or os.path.join(
+            os.path.dirname(os.path.abspath(g('model_path'))), 'args.json'))
+        self.kalkan_m = float(g('kalkan_m'))
         self.source = g('label_source')
         self.offset = int(g('label_offset'))
         self.cam_off, self.ground_z = float(g('camera_offset_m')), float(g('ground_z_m'))
@@ -92,22 +113,47 @@ class PolicyNode(Node):
         self.pub_view = self.create_publisher(Image, '/eland/rl/gorus', 1) if g('publish_view') else None
         if self.source == 'topic':
             self.create_subscription(Image, g('label_topic'), self.on_label, 1)
-        self.gz = GzNode()
-        topic = f'/world/{g("gz_world")}/dynamic_pose/info'
-        if not self.gz.subscribe(Pose_V, topic, self.on_pose):
-            raise RuntimeError(f'{topic}: cannot subscribe')
+        if g('pose_source') == 'topic':
+            self.create_subscription(PoseStamped, g('pose_topic'), self.on_pose_topic, 10)
+            pose_from = g('pose_topic')
+        else:
+            from gz.msgs10.pose_v_pb2 import Pose_V
+            from gz.transport13 import Node as GzNode
+            self.gz = GzNode()
+            pose_from = f'/world/{g("gz_world")}/dynamic_pose/info'
+            if not self.gz.subscribe(Pose_V, pose_from, self.on_pose):
+                raise RuntimeError(f'{pose_from}: cannot subscribe')
         self.log = None
         if g('log_csv'):
             self.log_f = open(g('log_csv'), 'w', newline='')
             self.log = csv.writer(self.log_f)
             self.log.writerow(['t_wall', 't_sim', 'x', 'y', 'z_cam', 'yaw_deg', 'tilt_deg', 'action',
-                               'safe_share', 'majority', 'vn', 've', 'vd', 'infer_ms'])
+                               'safe_share', 'majority', 'vn', 've', 'vd', 'infer_ms', 'kalkan'])
         self.safe = np.zeros(N_CLASSES, bool)
         self.safe[[0, 1]] = True
         ang = np.radians(np.arange(8) * 45.0)
         self.lateral = np.stack([np.cos(ang), np.sin(ang)], 1)
         self.create_timer(float(g('period_s')), self.tick)
-        self.get_logger().info(f'policy {g("model_path")}, labels from {self.source}')
+        self.get_logger().info(f'policy {g("model_path")}, labels from {self.source}, pose from {pose_from}; '
+                               f'{self.cfg_note}; kalkan {"yok" if self.kalkan_m < 0 else f"{self.kalkan_m} m"}')
+
+    @staticmethod
+    def training_config(path):
+        """The EnvConfig the policy was trained with, as far as the observation goes."""
+        if not os.path.exists(path):
+            return EnvConfig(), 'args.json yok: eski gozlem (SORA 3 m)'
+        a = json.load(open(path))
+        cfg = EnvConfig(binary=bool(a.get('binary', False)), obs_mode=a.get('obs', 'sem_depth'),
+                        **REWARD_PRESETS[a.get('reward', 'paper')])
+        third = (f'tampon {cfg.buffer_m} m {tuple(cfg.buffer_classes)}' if cfg.success_rule == 'zemin'
+                 else f'SORA {cfg.sora_m} m')
+        return cfg, f'egitim: odul {a.get("reward")}, gozlem {cfg.obs_mode}, 3. kanal {third}'
+
+    def on_pose_topic(self, msg):
+        t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        p, o = msg.pose.position, msg.pose.orientation
+        with self.lock:
+            self.pose = (t, np.array([p.x, p.y, p.z]), rotation_from_quat(o.x, o.y, o.z, o.w))
 
     def on_pose(self, msg):
         t = msg.header.stamp.sec + msg.header.stamp.nsec * 1e-9
@@ -139,9 +185,15 @@ class PolicyNode(Node):
             sem = np.where((cls >= 0) & (cls < N_CLASSES - 1), cls, N_CLASSES - 1).astype(np.uint8)
             _, _, depth = ground_hits(self.cam.rays, c, R)
         d = np.where(np.isfinite(depth), depth, self.dnorm)
-        chans = [sem.astype(np.float32) / (N_CLASSES - 1), np.clip(d / self.dnorm, 0, 1).astype(np.float32)]
+        cfg = self.cfg
+        ch0 = self.safe[sem].astype(np.float32) if cfg.binary else sem.astype(np.float32) / (N_CLASSES - 1)
+        chans = [ch0, np.clip(d / self.dnorm, 0, 1).astype(np.float32)]
         if self.n_channels == 3:                                   # observation v2: + SORA-safe mask
-            chans.append(sora_channel(sem, c[2]).astype(np.float32))
+            if cfg.success_rule == 'zemin':                        # as env._observe, amendment 9
+                sora = sora_channel(sem, c[2], cfg.buffer_m, hazard_classes=cfg.buffer_classes)
+            else:
+                sora = sora_channel(sem, c[2], cfg.sora_m)
+            chans.append(sora.astype(np.float32))
         obs = np.stack(chans)
         return obs, sem
 
@@ -170,6 +222,9 @@ class PolicyNode(Node):
         t0 = time.perf_counter()
         a = int(self.model.predict(obs, deterministic=True)[0])
         ms = (time.perf_counter() - t0) * 1000
+        overridden = False
+        if self.kalkan_m >= 0 and self.n_channels == 3:
+            a, overridden = shield(a, obs, c[2], self.kalkan_m)
         yaw = math.atan2(R[1, 0], R[0, 0])
         if a == 9:
             v_enu = np.array([0.0, 0.0, -self.v_down])
@@ -192,7 +247,7 @@ class PolicyNode(Node):
             self.log.writerow([f'{time.time():.3f}', f'{t_sim:.3f}', f'{c[0]:.3f}', f'{c[1]:.3f}', f'{c[2]:.3f}',
                                f'{math.degrees(yaw):.1f}', f'{tilt:.2f}', a, f'{self.safe[sem].mean():.3f}',
                                int(np.bincount(sem.ravel(), minlength=N_CLASSES).argmax()),
-                               f'{vn:.2f}', f'{ve:.2f}', f'{vd:.2f}', f'{ms:.2f}'])
+                               f'{vn:.2f}', f'{ve:.2f}', f'{vd:.2f}', f'{ms:.2f}', int(overridden)])
             self.log_f.flush()
 
 
