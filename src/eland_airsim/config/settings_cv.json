@@ -1,0 +1,15 @@
+{
+  "SettingsVersion": 1.2,
+  "SimMode": "ComputerVision",
+  "ClockSpeed": 1,
+  "CameraDefaults": {
+    "CaptureSettings": [
+      {"ImageType": 0, "Width": 1920, "Height": 1440, "FOV_Degrees": 99.7},
+      {"ImageType": 5, "Width": 1920, "Height": 1440, "FOV_Degrees": 99.7}
+    ]
+  },
+  "SegmentationSettings": {
+    "InitMethod": "None",
+    "MeshNamingMethod": "OwnerName"
+  }
+}

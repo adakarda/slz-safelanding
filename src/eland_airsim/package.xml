@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>eland_airsim</name>
+  <version>0.1.0</version>
+  <description>AirSim world for the emergency landing stack: ROS 2 bridge (camera, SORA segmentation, ground truth, wind) and launch script. PX4 SITL connects to AirSim directly over MAVLink.</description>
+  <maintainer email="adakarda34@gmail.com">arda</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>rosgraph_msgs</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <!-- the airsim client and msgpack live in ~/airsim-venv (system site packages on); see istemci.py -->
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
