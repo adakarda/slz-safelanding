@@ -3,6 +3,7 @@
 #
 #   src/eland_airsim/scripts/run_airsim.sh [--dunya AirSimNH] [--takeoff 25] [--trigger] [--no-hud]
 #                                           [--station] [--px4-param K=V]... [--log-dir DIR] [--zorla]
+#                                           [--yalniz-px4]   (yalniz AirSim + PX4; ROS 2 tarafi acilmaz)
 #
 # Gazebo'ya dokunmaz: eland_sim.launch.py aynen kullanilir (Gazebo kopruleri bosta bekler), PX4 ayri bir
 # rootfs'te calisir (rootfs_airsim) ki Gazebo kosularinin kayitli parametreleri karismasin.
@@ -14,6 +15,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
+YALNIZ_PX4=0
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -25,7 +27,8 @@ while [ $# -gt 0 ]; do
 	--px4-param) PX4_PARAMS="$PX4_PARAMS $2"; shift ;;
 	--log-dir) LOG_DIR=$2; shift ;;
 	--zorla) ZORLA=1 ;;
-	-h | --help) sed -n 2,10p "$0"; exit 0 ;;
+	--yalniz-px4) YALNIZ_PX4=1 ;;
+	-h | --help) sed -n 2,11p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
 	shift
@@ -44,17 +47,18 @@ fi
 tasklist.exe 2>/dev/null | grep -qi "$DUNYA.exe" && fail "AirSim zaten acik ($DUNYA.exe); once kapat"
 BOS_MB=$(powershell.exe -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024)" 2>/dev/null | tr -dc 0-9)
 echo "[run_airsim] Windows bos bellek: ${BOS_MB:-?} MB"
-if [ -n "$BOS_MB" ] && [ "$BOS_MB" -lt 3000 ] && [ "$ZORLA" = 0 ]; then
-	fail "Windows'ta 3 GB'tan az bos bellek var; egitimler bitince dene ya da --zorla"
+if [ -n "$BOS_MB" ] && [ "$BOS_MB" -lt 2500 ] && [ "$ZORLA" = 0 ]; then
+	fail "Windows'ta 2.5 GB'tan az bos bellek var; egitimler bitince dene ya da --zorla"
 fi
 GW=$(ip route | awk '$1 == "default" {print $3; exit}')
 [ -n "$GW" ] || fail "Windows adresi (varsayilan ag gecidi) bulunamadi"
 mkdir -p "$LOG_DIR"
 echo "[run_airsim] gunlukler: $LOG_DIR; Windows: $GW"
 
-AIRSIM_PID=""; PX4_PID=""; AGENT_PID=""; KOPRU_PID=""; LAUNCH_PID=""
+AIRSIM_PID=""; PX4_PID=""; AGENT_PID=""; KOPRU_PID=""; LAUNCH_PID=""; BEKCI_PID=""
 temizle() {
 	echo "[run_airsim] kapatiliyor..."
+	[ -n "$BEKCI_PID" ] && kill "$BEKCI_PID" 2>/dev/null
 	for p in $LAUNCH_PID $KOPRU_PID $AGENT_PID; do kill -INT "$p" 2>/dev/null; done
 	sleep 2
 	[ -n "$PX4_PID" ] && kill "$PX4_PID" 2>/dev/null
@@ -76,6 +80,21 @@ PY
 echo "[run_airsim] AirSim aciliyor ($DUNYA)..."
 "$EXE" -settings="$AYAR_WIN" -windowed -ResX=1280 -ResY=720 >"$LOG_DIR/airsim.log" 2>&1 &
 AIRSIM_PID=$!
+# bekci: Windows'ta bos bellek 30 s boyunca 500 MB altinda kalirsa AirSim kapatilir (egitimler WSL'de surer)
+(
+	dusuk=0
+	while sleep 5; do
+		b=$(powershell.exe -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024)" 2>/dev/null | tr -dc 0-9)
+		[ -z "$b" ] && continue
+		if [ "$b" -lt 500 ]; then dusuk=$((dusuk + 5)); else dusuk=0; fi
+		if [ $dusuk -ge 30 ]; then
+			echo "[run_airsim] BEKCI: Windows bos bellek $b MB, AirSim kapatiliyor"
+			taskkill.exe /IM "$DUNYA.exe" /F >/dev/null 2>&1
+			break
+		fi
+	done
+) &
+BEKCI_PID=$!
 for _ in $(seq 1 120); do
 	python3 -c "import socket,sys; socket.create_connection(('$GW', 41451), 1)" 2>/dev/null && break
 	sleep 1
@@ -108,6 +127,11 @@ echo "[run_airsim]   PX4 AirSim'e bagli"
 for kv in $PX4_PARAMS; do
 	"$PX4_BIN/px4-param" set "${kv%%=*}" "${kv#*=}" >/dev/null 2>&1 && echo "[run_airsim]   PX4 param $kv"
 done
+if [ "$YALNIZ_PX4" = 1 ]; then
+	echo "[run_airsim] hazir (yalniz AirSim + PX4). Kapatmak icin Ctrl+C."
+	wait "$PX4_PID"
+	exit 0
+fi
 
 # ------------------------------------------------------------ ROS 2
 MicroXRCEAgent udp4 -p 8888 >"$LOG_DIR/agent.log" 2>&1 &

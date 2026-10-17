@@ -16,23 +16,33 @@ import numpy as np
 UNKNOWN = 7
 
 #: (SORA class, words). Later rows win where a name matches several (a "CarPark" is a car). The words
-#: were checked against AirSimNH's 3884 object names (M0 pilot): its grass is the Landscape actor, and
-#: "Garden_Chair", "Car_Porch" (a carport) and "Pool_Table" must not take their first word's class.
+#: were checked against the object names of AirSimNH (3884) and CityEnviron (5707) in the M0 pilot:
+#: AirSimNH's grass is the Landscape actor; "Garden_Chair", "Car_Porch" (a carport), "Pool_Table",
+#: "prp_streetLight" and "PatioFurniture" must not take their first word's class.
 WORDS = [
     (0, ['grass', 'lawn', 'field', 'meadow', 'soil', 'dirt', 'turf', 'landscape']),
     (1, ['sidewalk', 'pavement', 'driveway', 'walkway', 'path', 'plaza', 'patio', 'curb', 'kerb']),
-    (2, ['road', 'street', 'asphalt', 'parking', 'tree', 'bush', 'hedge', 'shrub', 'foliage', 'pine', 'oak',
-         'birch', 'fir', 'leaf', 'leaves', 'plant']),
+    (2, ['road', 'street', 'asphalt', 'parking', 'intersection', 'crosswalk', 'tree', 'bush', 'hedge', 'shrub',
+         'foliage', 'pine', 'oak', 'birch', 'fir', 'leaf', 'leaves', 'plant', 'weeds']),
     (3, ['house', 'building', 'roof', 'wall', 'fence', 'garage', 'shed', 'porch', 'chimney', 'pole', 'lamp',
          'sign', 'bench', 'mailbox', 'hydrant', 'trash', 'bin', 'wire', 'door', 'veranda', 'banister', 'stair',
          'steps', 'chair', 'table', 'sofa', 'rock', 'hoop', 'monument', 'power_line', 'cable', 'pipe', 'cladding',
-         'shutter', 'support', 'fireplace', 'skateboard']),
+         'shutter', 'support', 'fireplace', 'skateboard', 'light', 'barrier', 'litter', 'palette', 'vent', 'grate',
+         'garbage', 'apartment', 'pillar', 'newspaper', 'pot', 'dumpster', 'duct', 'flag', 'pylon', 'electrical',
+         'cone', 'skyscraper', 'tower', 'stilts', 'station', 'furniture', 'umbrella', 'plate']),
     (4, ['pool', 'water', 'pond', 'river', 'lake', 'fountain']),
-    (5, ['car', 'vehicle', 'truck', 'van', 'suv', 'bus', 'bike', 'bicycle', 'dog', 'cat', 'animal', 'deer',
-         'raccoon']),
+    (5, ['car', 'vehicle', 'truck', 'van', 'suv', 'bus', 'bike', 'bicycle', 'coupe', 'saloon', 'sedan',
+         'hatchback', 'taxi', 'dog', 'cat', 'animal', 'deer', 'raccoon']),
     (6, ['person', 'human', 'pedestrian', 'character', 'mannequin', 'people']),
+    # names a later word would take: "Bush" holds "bus", "BaseCarPath" holds "car", and so on
+    (1, ['pedestrianpath', 'bicyclepath']),
+    (2, ['carpath', 'crosswalk', 'bush']),
     (3, ['car_porch', 'carport', 'pool_table']),
 ]
+
+#: Words per std::regex call. One alternation of 60+ words fails inside AirSim on CityEnviron (the call
+#: returned False and that class was left unpainted); short patterns, applied in order, give the same result.
+CHUNK = 6
 
 
 def ci(word):
@@ -40,9 +50,10 @@ def ci(word):
     return ''.join(f'[{ch.upper()}{ch.lower()}]' if ch.isalpha() else re.escape(ch) for ch in word)
 
 
-def rules(words=WORDS):
-    """[(class, std::regex pattern)] in priority order."""
-    return [(c, '.*(' + '|'.join(ci(w) for w in ws) + ').*') for c, ws in words]
+def rules(words=WORDS, chunk=CHUNK):
+    """[(class, std::regex pattern)] in priority order, at most `chunk` words per pattern."""
+    return [(c, '.*(' + '|'.join(ci(w) for w in ws[i:i + chunk]) + ').*')
+            for c, ws in words for i in range(0, len(ws), chunk)]
 
 
 def classify_names(names, words=WORDS):
@@ -57,9 +68,15 @@ def classify_names(names, words=WORDS):
 
 
 def assign_ids(client, words=WORDS):
-    """Set every object to ID 0, then each class's objects to class + 1. Returns per-class success."""
+    """Set every object to ID 0, then each class's objects to class + 1.
+
+    Returns {class: [result per pattern]}; AirSim answers False when a pattern matched nothing (or failed).
+    """
     client.simSetSegmentationObjectID('.*', 0, True)
-    return {c: bool(client.simSetSegmentationObjectID(p, c + 1, True)) for c, p in rules(words)}
+    out = {}
+    for c, p in rules(words):
+        out.setdefault(c, []).append(bool(client.simSetSegmentationObjectID(p, c + 1, True)))
+    return out
 
 
 def palette(path=None):

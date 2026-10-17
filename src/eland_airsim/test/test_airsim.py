@@ -26,6 +26,26 @@ def test_airsimnh_names_that_fooled_the_first_rules():
         'Car_01': 5}
 
 
+def test_cityenviron_names():
+    names = ['Bush_A_12', 'prp_streetLight_3', 'BasePedestrianPath_Crosswalk_BP_7', 'BasePedestrianPath_BP_2',
+             '012_coupe_SM_40', 'PatioFurniture_Umbrella_A', 'Intersection_LargeLarge_2', 'BaseBaseBicyclePathBP_9',
+             'BaseCarPath_BP_5', 'Sidewalk_Extra_Small_A_100', 'Grass_Patch_A', 'Apartment_LShape_2']
+    assert siniflar.classify_names(names) == {
+        'Bush_A_12': 2, 'prp_streetLight_3': 3, 'BasePedestrianPath_Crosswalk_BP_7': 2, 'BasePedestrianPath_BP_2': 1,
+        '012_coupe_SM_40': 5, 'PatioFurniture_Umbrella_A': 3, 'Intersection_LargeLarge_2': 2,
+        'BaseBaseBicyclePathBP_9': 1, 'BaseCarPath_BP_5': 2, 'Sidewalk_Extra_Small_A_100': 1, 'Grass_Patch_A': 0,
+        'Apartment_LShape_2': 3}
+
+
+def test_rules_are_short_and_keep_the_order():
+    rs = siniflar.rules()
+    assert all(p.count('|') < siniflar.CHUNK for _, p in rs)
+    # same priority as classify_names: the last matching pattern wins
+    for name, want in siniflar.classify_names(['Bush_A', 'Car_Porch', 'Lawn', 'Fireplace_01']).items():
+        got = [c for c, p in rs if re.fullmatch(p, name)][-1]
+        assert got == want, name
+
+
 def test_palette_and_decode_roundtrip():
     pal = siniflar.palette()
     assert pal.shape == (256, 3) and tuple(pal[1]) == (153, 108, 6)
