@@ -577,3 +577,27 @@ Bellek: A1 veya A2b ile bir kol aynı anda koşar (~9.5 GB / 11 GB, _hesap).
 - **Önlem:** Taşmayı önlemek için PD bir dakika sonra durduruldu. Kayıt noktası yoktu.
 - **Yeniden koşma:** PD aynı ayarlarla `derinlik/pd_tekrar.sh` ile yeniden koşacak. Ancak en çok bir eğitim çalışırken ve en az 5.5 GB boş bellek varken başlar.
 - Kollar arasında sıra değişti, ayarlar değişmedi.
+
+## Sonuç: Düzeltme 7, Depth Anything deneyi (2026-10-18 02:55)
+
+PD 02:10'da bitti (yeniden koşu; ilk deneme bellek yüzünden durdurulmuştu). Değerlendirme: test uçuşu 0004,
+600 iniş, argmax, tek tohum (ön sonuç). Karar kuralı `~/rl_inis/derinlik/h7_karar.py` ile uygulandı.
+SORA başarısı ve güvensiz iniş oranı (ölçülen):
+
+| Kol | RL SORA | RL güvensiz | RL+kalkan SORA | RL+kalkan güvensiz | Kural (PA'ya göre) |
+|---|---|---|---|---|---|
+| P0 (GT, kıyas) | 15.8 | 9.7 | 17.5 | 0.0 | — |
+| PA (v3) | 13.3 | 28.5 | 10.3 | 1.7 | — |
+| PB | 4.7 | 95.3 | 33.0 | 20.2 | sağlamaz |
+| PC | 7.7 | 92.3 | 31.7 | 17.3 | sağlamaz |
+| PD | 15.2 | 71.3 | 25.0 | 6.0 | sağlamaz |
+
+**Karar: Depth Anything eklenmez.** PB, PC ve PD'nin üçünde de RL + kalkan SORA başarısını 14–23 puan
+artırdı. Ama güvensiz inişi 4–19 puan kötüleştirdi; kural 3 puandan fazlasına izin vermiyor. Kalkansız RL
+iki kolda çöktü (PB %95, PC %92 güvensiz: neredeyse her zaman "alçal").
+
+- **H7a tuttu.** PA, P0'dan düşük: RL 13.3 < 15.8, RL + kalkan 10.3 < 17.5. Segmentasyon gürültüsü zarar veriyor.
+- **H7b tutmadı.** PC karar kuralını sağlamadı.
+
+Not: kalkanlı SORA artışı gerçek bir etki olabilir. Ama güvensiz inişteki artış daha büyük ve ön kayıt bunu
+karşılaştırmanın şartı yaptı. Yeni bir deneme ancak yeni bir ön kayıtla açılabilir; bu sonuç değiştirilmez.
