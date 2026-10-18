@@ -601,3 +601,33 @@ iki kolda çöktü (PB %95, PC %92 güvensiz: neredeyse her zaman "alçal").
 
 Not: kalkanlı SORA artışı gerçek bir etki olabilir. Ama güvensiz inişteki artış daha büyük ve ön kayıt bunu
 karşılaştırmanın şartı yaptı. Yeni bir deneme ancak yeni bir ön kayıtla açılabilir; bu sonuç değiştirilmez.
+
+## Sonuç: Düzeltme 9, B deneyi (2026-10-18 07:40)
+
+9 koşu bitti (3 kol × 3 tohum, 1M adım). Değerlendirme: val_b32, 320 deneme / koşu, argmax, süre sınırı 30 s.
+Kural `~/rl_inis/h9_karar.py` ile uygulandı. Ölçülen, 3 tohumun ortalaması ± standart sapma, zemin kuralıyla.
+
+**RL, kalkansız (birincil):**
+
+| Kol | Zemin başarısı | Güvensiz iniş | Süre doldu | Başarılarda yumuşak payı | SORA 3 m |
+|---|---|---|---|---|---|
+| B0 (sora_v1) | 22.1 ± 17.7 | 17.7 ± 27.5 | 60.2 ± 45.2 | 59.6 ± 39.5 | 16.4 ± 8.6 |
+| B1 (zemin_v1) | 56.9 ± 10.9 | 18.6 ± 10.3 | 24.5 ± 16.3 | 27.4 ± 5.3 | 12.2 ± 2.4 |
+| B2 (zemin_v1 + aynalama) | 35.6 ± 32.0 | 3.1 ± 4.9 | 55.8 ± 32.1 | 55.7 ± 37.1 | 10.8 ± 3.6 |
+
+**RL + kalkan:**
+- B0: 24.2 ± 21.0
+- B1: 66.7 ± 13.1
+- B2: 37.2 ± 34.5
+
+**Tahminler:**
+- **H9a tutmadı.** B1'in güvensiz inişi B0'ınkinden az değil (18.6 / 17.7). Tohum bazında yalnız tohum 0'da tuttu.
+- **H9b tuttu.** B1 ≥ B0 + 5, üç tohumda da. Ortalamada +34.8 puan.
+- **H9c tutmadı.** B1'de yumuşak payı daha düşük. B0'ın az sayıdaki başarısı çoğunlukla yumuşak.
+- **H9d tutmadı.** B2'nin tohum 1 ve 2'si çoğunlukla süre doldurdu (aynalama eğitimi kararsızlaştırdı, _tahmin).
+
+**Karar (ön kayıtlı kurala göre): `zemin_v1` benimsenmez; aynalama benimsenmez.**
+
+Not: B0'ın düşük güvensiz oranı, denemelerin %60'ında hiç inmeyip süreyi doldurmasından geliyor. Kural bu
+durumu ödüllendiriyor. Birincil ölçüt (zemin başarısı) B1'de açıkça yüksek. Kural sonradan değiştirilmedi.
+Yeni bir yargı ancak yeni ön kayıtla yapılır; bu Arda'nın kararı.
