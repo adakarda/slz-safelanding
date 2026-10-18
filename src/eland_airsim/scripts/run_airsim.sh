@@ -8,7 +8,8 @@
 #   --v3         maskeyi AirSim'in gercek etiketi yerine v3 uretir (~/v3_test/v3_airsim.py); algi zinciri
 #                calisma basina kopyalanan parametre dosyasiyla /eland/v3/etiket'i okur, kod degismez
 #   --baslangic  aracin dogdugu nokta, PlayerStart'a gore NED metre (kuzey, dogu) ve yon
-#   [--rl MODEL.zip] [--kalkan METRE] [--ruzgar KUZEY,DOGU,ASAGI]
+#   [--rl MODEL.zip] [--kalkan METRE] [--ruzgar KUZEY,DOGU,ASAGI] [--izle]
+#   --station ile: klavyeyle uc (1 arm, 2 kalkis, 3 manuel, W/A/S/D Q/E R/F), 0 acil inis (--rl ise RL Landing)
 #   --rl         klasik mod yerine RL: eland_rl_mode + eland_rl.policy_node (konum /eland/gercek_poz'dan,
 #                etiket AirSim'den ya da --v3 ile v3'ten); --trigger RL modunu secer. --kalkan: SORA kalkani
 #   --ruzgar     sabit ruzgar, m/s NED (AirSim simSetWind; kopru basinda uygulanir)
@@ -49,7 +50,7 @@ while [ $# -gt 0 ]; do
 	--kalkan) KALKAN=$2; shift ;;
 	--ruzgar) RUZGAR=$2; shift ;;
 	--izle) IZLE=1 ;;
-	-h | --help) sed -n 2,22p "$0"; exit 0 ;;
+	-h | --help) sed -n 2,23p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
 	shift
@@ -76,11 +77,11 @@ GW=$(ip route | awk '$1 == "default" {print $3; exit}')
 mkdir -p "$LOG_DIR"
 echo "[run_airsim] gunlukler: $LOG_DIR; Windows: $GW"
 
-AIRSIM_PID=""; PX4_PID=""; AGENT_PID=""; KOPRU_PID=""; LAUNCH_PID=""; BEKCI_PID=""; V3_PID=""; RLM_PID=""; POL_PID=""
+AIRSIM_PID=""; PX4_PID=""; AGENT_PID=""; KOPRU_PID=""; LAUNCH_PID=""; BEKCI_PID=""; V3_PID=""; RLM_PID=""; POL_PID=""; RLT_PID=""
 temizle() {
 	echo "[run_airsim] kapatiliyor..."
 	[ -n "$BEKCI_PID" ] && kill "$BEKCI_PID" 2>/dev/null
-	for p in $POL_PID $RLM_PID $LAUNCH_PID $KOPRU_PID $AGENT_PID $V3_PID; do kill -INT "$p" 2>/dev/null; done
+	for p in $RLT_PID $POL_PID $RLM_PID $LAUNCH_PID $KOPRU_PID $AGENT_PID $V3_PID; do kill -INT "$p" 2>/dev/null; done
 	sleep 2
 	# the model node can take a few seconds to release CUDA
 	for _ in 1 2 3 4 5; do [ -n "$V3_PID" ] && kill -0 "$V3_PID" 2>/dev/null || break; sleep 1; done
@@ -94,6 +95,7 @@ temizle() {
 		pkill -x "$ad" 2>/dev/null
 	done
 	pkill emergency_land 2>/dev/null   # emergency_landing_mode, comm truncated to 15 characters
+	pkill -f 'eland_airsim\.rl_tetik' 2>/dev/null   # python3 -m: its comm is python3
 	pkill -x MicroXRCEAgent 2>/dev/null
 	taskkill.exe /IM "$DUNYA.exe" /F >/dev/null 2>&1
 	echo "[run_airsim] kapandi"
@@ -266,17 +268,26 @@ if [ -n "$TAKEOFF_ALT" ]; then
 	echo "[run_airsim]   irtifa $(echo "$alt" | tr -d '-') m"
 fi
 if [ -n "$RL_MODEL" ]; then
-	ros2 run eland_rl_mode rl_landing_mode >"$LOG_DIR/rl_mod.log" 2>&1 &
-	RLM_PID=$!
-	for _ in $(seq 1 60); do
-		grep -qE "RegisterExtComponentReply|Registration failed" "$LOG_DIR/rl_mod.log" 2>/dev/null && break
-		kill -0 "$RLM_PID" 2>/dev/null || break
-		sleep 1
+	for kayit in 1 2 3; do      # a registration attempted too early fails; try again after a pause
+		ros2 run eland_rl_mode rl_landing_mode >"$LOG_DIR/rl_mod.log" 2>&1 &
+		RLM_PID=$!
+		for _ in $(seq 1 60); do
+			grep -qE "RegisterExtComponentReply|Registration failed" "$LOG_DIR/rl_mod.log" 2>/dev/null && break
+			kill -0 "$RLM_PID" 2>/dev/null || break
+			sleep 1
+		done
+		grep -q "RegisterExtComponentReply" "$LOG_DIR/rl_mod.log" && break
+		kill "$RLM_PID" 2>/dev/null; sleep 10
 	done
 	if grep -q "RegisterExtComponentReply" "$LOG_DIR/rl_mod.log"; then
 		echo "[run_airsim]   RL modu PX4'e kaydedildi"
 	else
 		fail "RL modu PX4'e kaydolamadi: $(grep -v DEBUG "$LOG_DIR/rl_mod.log" | tail -2 | tr '\n' ' ')"
+	fi
+	if [ "$STATION" = true ]; then   # the station's "0" key then selects RL Landing (eland_airsim.rl_tetik)
+		python3 -m eland_airsim.rl_tetik >"$LOG_DIR/rl_tetik.log" 2>&1 &
+		RLT_PID=$!
+		echo "[run_airsim]   istasyonda 0 tusu: RL Landing"
 	fi
 fi
 if [ "$DO_TRIGGER" = 1 ] && [ -n "$RL_MODEL" ]; then
