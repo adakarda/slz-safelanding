@@ -80,10 +80,21 @@ Her biri bir koşuyu ya da ölçümü bozdu. Ayrıntı ön kayıtlarda.
 | PX4 v1.17 `-w` olmadan `build/rootfs`'u kullanır | Gazebo'nun kayıtlı parametreleri ezildi | `-w rootfs_airsim`; Gazebo dosyası ULog'dan geri yüklendi |
 | policy_node etiket aboneliği "reliable" | Politika hiç adım atmadı | Best effort (`SENSOR_QOS`) |
 | RL modu DDS hazır olmadan başlatıldı | "Registration failed" | Kalkıştan sonra başlatılıyor |
-| AirSim uçuşta öldü (bir batch'te 4/10) | Bütün API bağlantıları birden düştü, PX4 dondu | Kök neden açık. Ölçüm betiğinin 20 Hz derinlik isteği 1 Hz'e indi; batch çökeni 3 kereye kadar tekrarlıyor |
+| AirSim uçuşta ya da açılışta öldü (önce 4/10, sonra ~%9) | Bütün API bağlantıları birden düştü, PX4 kilitli adımda dondu, PX4 komutları sonsuza dek bekledi | Kök neden açık. Ölçüm betiğinin 20 Hz derinlik isteği 1 Hz'e indi; PX4 istemci komutlarına 10 s zaman aşımı; batch çöken ya da başlamayan denemeyi 3 kereye kadar tekrarlıyor ve sayıyor |
 | Çalışan bir bash betiğini düzenlemek | Çalışan kopya yarı eski, yarı yeni satır okur | Betik gövdeleri `{ ... exit; }` içinde |
 
 ## Sonuçlar
+
+Ölçülen; tek tohum, AirSimNH'de 10 başlangıç, ikinci tur (PX4 eş parametreleriyle). Ön sonuç.
+
+| Kol | İndi | Güvenli zemin | SORA (tehlikeye ≥ 3 m) | Ağaç/çit/yapıya temas |
+|---|---|---|---|---|
+| Klasik mod, AirSim etiketi | 10/10 | 10 | 8 | 0 |
+| Klasik mod, v3 maskesi | 10/10 | 4 (6 yol) | 4 | 0 |
+| RL B2-s0, kalkansız | 10/10 | 7 | 5 | 1 |
+| RL B2-s0, kalkan 10 m | 10/10 | 10 | 5 | 0 |
+| Klasik, 5 m/s rüzgâr | 10/10 | 8 (temasa göre 10) | 5 | 0 |
+| RL kalkansız, 5 m/s rüzgâr | 10/10 | 8 | 4 | 2 |
 
 Ayrıntılı tablolar ve görseller: AirSim Taşıma Yol Haritası sayfası. Ön kayıtlar:
 

@@ -32,3 +32,24 @@ kuralı, temas hızı, süre. Ek olarak:
 - **W2.** 10/10 iner. Zemin kuralına uygunluk rüzgârsızdan en çok 2 eksik. Politika rüzgârla eğitilmedi ama hız
   komutlarını PX4'ün hız denetleyicisi uyguluyor; rüzgâr büyük ölçüde karşılanır.
 - **Risk.** 5 m'den sonraki dikine inişte (RL modu politikayı bırakır) rüzgâr yönünde 0.5–1 m sürüklenme.
+
+## Sonuç (2026-10-18 06:00)
+
+Ölçülen; tek tohum, 10 başlangıç, harita ile. Rüzgâr köprü günlüğünde doğrulandı ("baslangic ruzgari [0, 5, 0]").
+
+| Kol | İndi | Güvenli sınıf (harita) | Zemin kuralı | SORA | Temas | Temas hızı |
+|---|---|---|---|---|---|---|
+| W1 klasik, rüzgâr | 10/10 | 8 | 8 | 5 | 0 | 0.27–0.32 m/s |
+| Klasik, rüzgârsız (ikinci tur) | 10/10 | 10 | 10 | 8 | 0 | 0.28–0.34 m/s |
+| W2 RL, rüzgâr | 10/10 | 8 | 8 | 4 | 2 (ağaç, çit) | 0.66–1.38 m/s |
+| RL, rüzgârsız (ikinci tur) | 10/10 | 7 | 7 | 5 | 1 | 0.67–0.83 m/s |
+
+**Tahminler:**
+- **W1, 10/10 iner:** tuttu.
+- **W1, "güvenli iniş rüzgârsızdan en çok 1 eksik":** haritaya göre tutmadı (10 → 8). Ama W1'in "ağaç" görünen
+  2 inişinin temas nesnesi zemin (`Landscape`), kameranın altı çim. Bunlar ağaç tacı kenarında; haritanın
+  sınırı. Temasa göre W1 10/10 güvenli.
+- **W1, temas < 1 m/s:** tuttu.
+- **W2, 10/10 iner ve zemin uygunluğu en çok 2 eksik:** tuttu (7 → 8).
+- **W2 riski:** tahmin edilenden kötü. 2 iniş gerçek temasla güvensiz: bir ağaç tepesine (yerden 8 m, 1.3 m/s)
+  ve bir çitin üstüne. Kalkansız RL rüzgârda ağaç ve çit kenarına sürükleniyor (_tahmin).

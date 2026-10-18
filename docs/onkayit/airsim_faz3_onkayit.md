@@ -106,3 +106,22 @@ failsafe'i verdi. Bu mod tarafında, ayrı incelenecek.
 - **v3 kolu.** Daha az güvenli iniş: 5–8/10. Pilot ölçümünde v3 AirSimNH asfaltının %45'ini "sert zemin"
   dedi, bu yüzden bazı inişler yola olabilir.
 - **İki kolda da risk.** Ağaç tepesi ya da çatı kenarına yakın adaylarda iniş sırasında temas.
+
+## Sonuç (2026-10-18 06:00)
+
+Esas sonuç ikinci tur: PX4 kendi rootfs'unda ve Gazebo eş parametreleriyle (`airsim_faz4_onkayit.md`
+yürütme notu). İniş yeri ortografik GT haritasından değerlendirildi (`araclar/inis_harita.py`). "Temas",
+AirSim'in bildirdiği temas nesnesi ağaç, çit ya da yapı demek. Hepsi ölçülen; tek tohum, 10 başlangıç.
+
+| Kol | İndi | Güvenli sınıf | SORA (tehlikeye ≥ 3 m) | Temas | Temas hızı ort |
+|---|---|---|---|---|---|
+| GT, ikinci tur | 10/10 | 10 | 8 | 0 | 0.30 m/s |
+| v3, ikinci tur | 10/10 | 4 (6 yol) | 4 | 0 | 0.30 m/s |
+| GT, ilk tur (PX4 varsayılanı) | 10/10 | 10 | 9 | 0 | 0.32 m/s |
+| v3, ilk tur | 10/10 | 3 | 2 | 1 (çit) | 0.52 m/s |
+
+**Tahminler:**
+- GT kolunda "≥ 8 iner, hepsi güvenli, temas < 1 m/s": **tuttu** (iki turda da).
+- v3 kolunda "5–8/10 güvenli": **tutmadı**, 3–4/10. v3 yolu "sert zemin" sanıyor.
+
+**Kapı** (zincir kopmadan çalışır): **geçti.**

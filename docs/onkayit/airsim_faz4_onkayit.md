@@ -84,3 +84,30 @@ rootfs'u. Sonuçları:
 
 **İkinci tur.** Faz 3'ün iki kolu (GT, v3) ve Faz 4'ün R1/R2 kolları eş parametrelerle yeniden koşuluyor
 (`rl_inis/airsim_pilot/faz34_ikinci_tur.sh`). İlk tur sonuçları "PX4 varsayılanlarıyla" etiketiyle saklanıyor.
+
+## Sonuç (2026-10-18 06:00)
+
+Ölçülen; tek tohum, 10 başlangıç, harita ile.
+
+| Kol | İndi | Zemin kuralı | Güvenli sınıf | SORA | Temas | Temas hızı ort |
+|---|---|---|---|---|---|---|
+| R1 (kalkansız), ikinci tur | 10/10 | 7 | 7 | 5 | 1 | 0.71 m/s |
+| R2 (kalkan 10 m), ikinci tur | 10/10 | 10 | 10 | 5 | 0 | 0.71 m/s |
+| R1, ilk tur (PX4 varsayılanı) | 10/10 | 9 | 9 | 4 | 0 | 0.84 m/s |
+| R2, ilk tur | 9/10 | 8 | 8 | 2 | 0 | 0.77 m/s |
+
+**Tahminler:**
+- **R1** "10/10 devreye girer; %40–70 güvenli": devreye girme tuttu. Güvenli iniş %70 (ikinci tur) ile %90 (ilk tur)
+  arasında; aralığın üst ucu ya da üstü.
+- **R2 ≥ R1:** ikinci turda **tuttu** (10 > 7). İlk turda tutmadı (8/9 < 9/10).
+- **R3** koşulmadı. v3'ün yol hatası Faz 3'te zaten büyük çıktı; RL + v3 sonraya kaldı.
+- **Dinamik:** "tau_xy ve gecikme farklı" **tutmadı** (yatay neredeyse aynı). Fark dikeyde (tau_z 2.3 kat).
+  İkinci parametre seti önerildi.
+
+**Kapı** (RL modu her başlangıçta devreye girer ve iner; uyum raporlanır): **geçti.**
+
+Hafif ortamla uyum (val_b32, zemin kuralı):
+- RL: hafif ortamda %72.5, AirSimNH'de %70.
+- RL + kalkan: hafif ortamda %76.9, AirSimNH'de %100.
+
+Farklı dünya ve 10 başlangıç olduğu için yalnız yön göstergesi; ön sonuç.

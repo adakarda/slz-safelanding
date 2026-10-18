@@ -165,11 +165,11 @@ echo "[run_airsim]   PX4 AirSim'e bagli"
 # the PX4 parameters the Gazebo rootfs carries (config/px4_gazebo_esdeger.params), then the caller's
 while read -r ad deger _; do
 	case "$ad" in "" | \#*) continue ;; esac
-	"$PX4_BIN/px4-param" set "$ad" "$deger" >/dev/null 2>&1
+	timeout 10 "$PX4_BIN/px4-param" set "$ad" "$deger" >/dev/null 2>&1
 done <"$WS_DIR/src/eland_airsim/config/px4_gazebo_esdeger.params"
 echo "[run_airsim]   PX4: Gazebo esdeger parametreleri uygulandi (MPC_Z_VEL_MAX_DN 2.0 ...)"
 for kv in $PX4_PARAMS; do
-	"$PX4_BIN/px4-param" set "${kv%%=*}" "${kv#*=}" >/dev/null 2>&1 && echo "[run_airsim]   PX4 param $kv"
+	timeout 10 "$PX4_BIN/px4-param" set "${kv%%=*}" "${kv#*=}" >/dev/null 2>&1 && echo "[run_airsim]   PX4 param $kv"
 done
 if [ "$YALNIZ_PX4" = 1 ]; then
 	echo "[run_airsim] hazir (yalniz AirSim + PX4). Kapatmak icin Ctrl+C."
@@ -245,12 +245,12 @@ fi
 # ------------------------------------------------------------ kalkis ve tetik (run_sim.sh ile ayni)
 if [ -n "$TAKEOFF_ALT" ]; then
 	echo "[run_airsim] kalkis: $TAKEOFF_ALT m"
-	"$PX4_BIN/px4-param" set MIS_TAKEOFF_ALT "$TAKEOFF_ALT" >/dev/null 2>&1
-	"$PX4_BIN/px4-commander" arm -f >/dev/null 2>&1
+	timeout 10 "$PX4_BIN/px4-param" set MIS_TAKEOFF_ALT "$TAKEOFF_ALT" >/dev/null 2>&1
+	timeout 10 "$PX4_BIN/px4-commander" arm -f >/dev/null 2>&1
 	sleep 2
-	"$PX4_BIN/px4-commander" takeoff >/dev/null 2>&1
+	timeout 10 "$PX4_BIN/px4-commander" takeoff >/dev/null 2>&1
 	for _ in $(seq 1 60); do
-		alt=$("$PX4_BIN/px4-listener" vehicle_local_position 2>/dev/null | grep -E "^\s+z:" | head -1 | tr -d ' z:')
+		alt=$(timeout 10 "$PX4_BIN/px4-listener" vehicle_local_position 2>/dev/null | grep -E "^\s+z:" | head -1 | tr -d ' z:')
 		case "$alt" in -*) ;; *) alt="-0" ;; esac
 		awk -v a="$alt" -v t="$TAKEOFF_ALT" 'BEGIN{exit !(-a > t*0.9)}' && break
 		sleep 1
@@ -273,7 +273,7 @@ if [ -n "$RL_MODEL" ]; then
 fi
 if [ "$DO_TRIGGER" = 1 ] && [ -n "$RL_MODEL" ]; then
 	echo "[run_airsim] RL Landing modu seciliyor..."
-	nav_state() { "$PX4_BIN/px4-listener" vehicle_status 2>/dev/null | awk '$1 == "nav_state:" {print $2; exit}'; }
+	nav_state() { timeout 10 "$PX4_BIN/px4-listener" vehicle_status 2>/dev/null | awk '$1 == "nav_state:" {print $2; exit}'; }
 	for deneme in 1 2 3; do       # as rl_izle.sh: the mode asks for activation, nav_state confirms it
 		ros2 topic pub -1 /eland/rl/etkinlestir std_msgs/msg/Bool "{data: true}" >/dev/null 2>&1
 		sleep 2

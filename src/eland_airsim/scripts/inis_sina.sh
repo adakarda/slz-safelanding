@@ -87,7 +87,7 @@ for satir in "${SATIRLAR[@]}"; do
 		SONUC=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print('olcum_kacti' if d.get('sonuc') == 'zaman_asimi' and d.get('px4_yerde') else d.get('sonuc'))" "$D/inis.json")
 		# a landing PX4 saw but the measurement missed is a measurement failure, not a mode failure
 		[ "$SONUC" = olcum_kacti ] && { echo "   [inis] PX4 yerde ama olcum inisi kacirdi; yeniden"; continue; }
-		if [ -n "$KOPMA" ] || [ "${MOD_DUSTU:-0}" -gt 0 ] || [[ "$SONUC" =~ ^(olcum_hatasi|airsim_yok|kopma)$ ]]; then
+		if [ -n "$KOPMA" ] || [ "${MOD_DUSTU:-0}" -gt 0 ] || [[ "$SONUC" =~ ^(olcum_hatasi|airsim_yok|kopma|baslamadi)$ ]]; then
 			coken=$((coken + 1))
 			echo "   [inis] AirSim/olcum koptu (kopru ilk uyari $([ -n "$KOPMA" ] && date -d @$KOPMA +%H:%M:%S || echo -), mod dustu $MOD_DUSTU); yeniden"
 			[ "$SONUC" = indi ] && [ -z "$KOPMA" ] && break     # landed and measured before the drop: keep it
