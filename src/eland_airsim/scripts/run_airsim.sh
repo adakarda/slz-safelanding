@@ -8,13 +8,14 @@
 #   --v3         maskeyi AirSim'in gercek etiketi yerine v3 uretir (~/v3_test/v3_airsim.py); algi zinciri
 #                calisma basina kopyalanan parametre dosyasiyla /eland/v3/etiket'i okur, kod degismez
 #   --baslangic  aracin dogdugu nokta, PlayerStart'a gore NED metre (kuzey, dogu) ve yon
-#   [--rl MODEL.zip] [--kalkan METRE]
+#   [--rl MODEL.zip] [--kalkan METRE] [--ruzgar KUZEY,DOGU,ASAGI]
 #   --rl         klasik mod yerine RL: eland_rl_mode + eland_rl.policy_node (konum /eland/gercek_poz'dan,
 #                etiket AirSim'den ya da --v3 ile v3'ten); --trigger RL modunu secer. --kalkan: SORA kalkani
+#   --ruzgar     sabit ruzgar, m/s NED (AirSim simSetWind; kopru basinda uygulanir)
 #
 # Gazebo'ya dokunmaz: eland_sim.launch.py aynen kullanilir (Gazebo kopruleri bosta bekler), PX4 ayri bir
 # rootfs'te calisir (rootfs_airsim) ki Gazebo kosularinin kayitli parametreleri karismasin.
-# PX4 parametreleri: run_sim.sh ile ayni politika (NAV_RCL_ACT=1) + istenenler; baska degisiklik yok.
+# PX4 parametreleri: Gazebo rootfs'unun kayitli degerleri (config/px4_gazebo_esdeger.params) + istenenler.
 #
 # The whole body is one { ... } block: bash parses it completely before running it, so editing this file
 # while a run is going cannot make that run read half-old, half-new lines when it resumes after `wait`.
@@ -26,7 +27,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
-YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1
+YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -44,7 +45,8 @@ while [ $# -gt 0 ]; do
 	--baslangic) BASLANGIC=$2; shift ;;
 	--rl) RL_MODEL=$2; shift ;;
 	--kalkan) KALKAN=$2; shift ;;
-	-h | --help) sed -n 2,19p "$0"; exit 0 ;;
+	--ruzgar) RUZGAR=$2; shift ;;
+	-h | --help) sed -n 2,20p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
 	shift
@@ -144,7 +146,10 @@ mkdir -p "$R"
 echo "[run_airsim] PX4 SITL (none_iris) baslatiliyor..."
 (
 	cd "$R" || exit 1
-	PX4_SYS_AUTOSTART=10016 PX4_SIM_MODEL=none_iris PX4_SIM_HOSTNAME="$GW" exec ../bin/px4 -d
+	# -w is required: without it PX4 v1.17 ignores the current directory and runs in build/rootfs, which is
+	# Gazebo's -- the first AirSim runs (18.10 00:03-03:00) overwrote its saved parameters that way
+	# (SYS_AUTOSTART 10016); restored from the last Gazebo flight log with tanilama/param_geri_yukle.py.
+	PX4_SYS_AUTOSTART=10016 PX4_SIM_MODEL=none_iris PX4_SIM_HOSTNAME="$GW" exec ../bin/px4 -d -w "$R"
 ) >"$LOG_DIR/px4.log" 2>&1 &
 PX4_PID=$!
 for _ in $(seq 1 90); do
@@ -157,7 +162,12 @@ for _ in $(seq 1 60); do
 	sleep 1
 done
 echo "[run_airsim]   PX4 AirSim'e bagli"
-"$PX4_BIN/px4-param" set NAV_RCL_ACT 1 >/dev/null 2>&1
+# the PX4 parameters the Gazebo rootfs carries (config/px4_gazebo_esdeger.params), then the caller's
+while read -r ad deger _; do
+	case "$ad" in "" | \#*) continue ;; esac
+	"$PX4_BIN/px4-param" set "$ad" "$deger" >/dev/null 2>&1
+done <"$WS_DIR/src/eland_airsim/config/px4_gazebo_esdeger.params"
+echo "[run_airsim]   PX4: Gazebo esdeger parametreleri uygulandi (MPC_Z_VEL_MAX_DN 2.0 ...)"
 for kv in $PX4_PARAMS; do
 	"$PX4_BIN/px4-param" set "${kv%%=*}" "${kv#*=}" >/dev/null 2>&1 && echo "[run_airsim]   PX4 param $kv"
 done
@@ -174,7 +184,12 @@ set +u
 source /opt/ros/jazzy/setup.bash
 source "$WS_DIR/install/setup.bash"
 set -u
-"$VENV/bin/python" -m eland_airsim.kopru --ros-args -p host:="$GW" >"$LOG_DIR/kopru.log" 2>&1 &
+RUZGAR_ARG=()
+if [ -n "$RUZGAR" ]; then      # a ROS double array: "5,0,0" -> [5.00,0.00,0.00]
+	RUZGAR_ARG=(-p "ruzgar_ned:=[$(echo "$RUZGAR" | awk -F, '{printf "%.2f,%.2f,%.2f", $1, $2, $3}')]")
+	echo "[run_airsim]   ruzgar ${RUZGAR_ARG[1]#ruzgar_ned:=} m/s (NED)"
+fi
+"$VENV/bin/python" -m eland_airsim.kopru --ros-args -p host:="$GW" "${RUZGAR_ARG[@]}" >"$LOG_DIR/kopru.log" 2>&1 &
 KOPRU_PID=$!
 [ -n "$PARAMS" ] || PARAMS=$(ros2 pkg prefix eland_sim)/share/eland_sim/config/eland_params.yaml
 if [ "$V3" = 1 ]; then

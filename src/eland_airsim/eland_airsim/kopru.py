@@ -73,6 +73,12 @@ class Kopru(Node):
         self.pub_pose = self.create_publisher(PoseStamped, '/eland/gercek_poz', 10)
         self.pub_clock = self.create_publisher(Clock, '/clock', 10) if g('saat_yayinla') else None
         self.add_on_set_parameters_callback(self._on_params)
+        # a wind given at start (-p ruzgar_ned:=[...]) is applied now; the callback only sees later changes
+        w0 = list(g('ruzgar_ned'))
+        if any(abs(x) > 0 for x in w0):
+            import airsim
+            self.pose_client.simSetWind(airsim.Vector3r(*[float(x) for x in w0]))
+            self.get_logger().info(f'baslangic ruzgari {w0} m/s (NED)')
         self._run = True
         self._threads = [threading.Thread(target=self._image_loop, daemon=True),
                          threading.Thread(target=self._pose_loop, daemon=True)]

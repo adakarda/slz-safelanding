@@ -2,7 +2,7 @@
 # Faz 3/4: birden cok baslangictan inis, AirSim gercegiyle olculur (eland_airsim.inis_sina).
 #
 #   src/eland_airsim/scripts/inis_sina.sh BASLANGIC_CSV [--v3] [--rl MODEL.zip] [--kalkan M] [--etiket AD]
-#                                         [--irtifa 25]
+#                                         [--irtifa 25] [--ruzgar KUZEY,DOGU,ASAGI]
 #
 # BASLANGIC_CSV: x_ned,y_ned[,...] satirlari (baslik satiri atlanir; orto_analiz.py'nin baslangiclar.csv'si).
 # Her satir icin run_airsim.sh --takeoff --trigger --no-hud --baslangic X,Y [--v3] [--rl ...] acilir, inis
@@ -20,6 +20,7 @@ while [ $# -gt 0 ]; do
 	--kalkan) RL+=(--kalkan "$2"); RL_AD="${RL_AD}_k$2"; shift ;;
 	--etiket) ETIKET=$2; shift ;;
 	--irtifa) IRTIFA=$2; shift ;;
+	--ruzgar) RL+=(--ruzgar "$2"); RL_AD="${RL_AD:-klasik}_r$(echo "$2" | tr -d ' ' | tr ',' '_')"; shift ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
 	shift

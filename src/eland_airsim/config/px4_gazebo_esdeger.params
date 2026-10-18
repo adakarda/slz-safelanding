@@ -1,0 +1,11 @@
+# PX4 parameters the Gazebo rootfs carries saved, applied to the AirSim rootfs too so that both simulators fly
+# the same PX4 ("birebir"). Read from the last Gazebo flight before the AirSim work (ULog 2026-10-17 18:43 UTC,
+# rl_inis/tanilama/ulg_param.py). Airframe defaults (x500 vs none_iris: rotor geometry, MPC_THR_HOVER) and
+# per-simulator sensor settings are not here: they belong to the vehicle model, not to the project.
+#
+# NAME VALUE   # why (source)
+MPC_Z_VEL_MAX_DN 2.0   # the descent law and the RL "descend" action command 2.0 m/s; default 1.5 clipped it (run_sim.sh)
+MPC_Z_V_AUTO_DN 2.0    # same, for auto modes (run_sim.sh, --px4-param)
+COM_RC_LOSS_T 3.0      # saved in the Gazebo rootfs since 2026-09-04; run_sim.sh says 0.5 is right -- question to Arda
+NAV_RCL_ACT 1          # run_sim.sh sets it every run (Hold, not Return)
+EKF2_SENS_EN 8189      # saved in the Gazebo rootfs
