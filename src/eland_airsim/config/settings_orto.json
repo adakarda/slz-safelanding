@@ -1,0 +1,15 @@
+{
+  "SettingsVersion": 1.2,
+  "SimMode": "ComputerVision",
+  "ClockSpeed": 1,
+  "CameraDefaults": {
+    "CaptureSettings": [
+      {"ImageType": 0, "Width": 2000, "Height": 2000, "ProjectionMode": "orthographic", "OrthoWidth": 200},
+      {"ImageType": 5, "Width": 2000, "Height": 2000, "ProjectionMode": "orthographic", "OrthoWidth": 200}
+    ]
+  },
+  "SegmentationSettings": {
+    "InitMethod": "None",
+    "MeshNamingMethod": "OwnerName"
+  }
+}
