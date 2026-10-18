@@ -207,7 +207,14 @@ MicroXRCEAgent udp4 -p 8888 >"$LOG_DIR/agent.log" 2>&1 &
 AGENT_PID=$!
 set +u
 source /opt/ros/jazzy/setup.bash
-source "$WS_DIR/install/setup.bash"
+if [ -f "$WS_DIR/install/setup.bash" ]; then
+	source "$WS_DIR/install/setup.bash"
+else      # a git worktree has no build of its own: use the main workspace's (px4_msgs, eland_* launch files)
+	echo "[run_airsim] $WS_DIR/install yok; ~/ros2_ws/install kullaniliyor"
+	source "$HOME/ros2_ws/install/setup.bash"
+fi
+command -v ros2 >/dev/null && ros2 interface show px4_msgs/msg/VehicleCommand >/dev/null 2>&1 ||
+	fail "ROS 2 ortami eksik: px4_msgs bulunamadi"
 set -u
 RUZGAR_ARG=()
 if [ -n "$RUZGAR" ]; then      # a ROS double array: "5,0,0" -> [5.00,0.00,0.00]
