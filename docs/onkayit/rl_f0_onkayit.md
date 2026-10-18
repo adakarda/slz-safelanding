@@ -725,3 +725,31 @@ Yeni bir yargı ancak yeni ön kayıtla yapılır; bu Arda'nın kararı.
   - Paper'ın %87.6'sı da yan yana yazılır. Ama kural ve veri farklı olduğu için karşılaştırma değildir.
 - **Beklenen (_tahmin):** D1 RL + kalkan ≥ %85, süre doldu ≤ %10.
 - **Not:** val_b32 artık birçok kararda kullanıldı, ona göre aşırı uyum riski var. Son sayı ancak IrYamim final testinde verilir (K75); o test bu deneyde kullanılmaz.
+
+## Sonuç: Düzeltme 11, C deneyi (2026-10-18 16:08)
+
+3 koşu bitti (C1 = `zemin_v2`, tohum 0–2, 1M adım). Değerlendirme: val_b32, 320 deneme / koşu, argmax, 30 s.
+Kural `~/rl_inis/h11_karar.py` ile uygulandı. Ölçülen, 3 tohumun ortalaması ± standart sapma, 320 denemenin yüzdesi.
+
+**RL, kalkansız (birincil):**
+
+| Kol | Çime iniş | Zemin başarısı | Güvensiz | Sert iniş | Süre doldu |
+|---|---|---|---|---|---|
+| B1 (`zemin_v1`) | 15.8 ± 5.3 | 56.9 ± 10.9 | 18.6 ± 10.3 | 41.0 ± 6.6 | 24.5 ± 16.3 |
+| C1 (`zemin_v2`) | 19.8 ± 8.7 | 50.9 ± 5.6 | 21.0 ± 8.2 | 31.1 ± 5.6 | 27.8 ± 13.3 |
+
+**RL + kalkan:** B1 zemin başarısı 66.7 ± 13.1, çim 16.4; C1 zemin başarısı 60.4 ± 6.5, çim 20.6, süre doldu 37.3 (B1: 30.5).
+
+**Tahminler:**
+- **H11a tutmadı.** Çime iniş +4.0 puan (gereken +10). Tohum bazında +9.4, +6.2, −3.8.
+- **H11b tutmadı.** Zemin başarısı 50.9; eşik 51.9 (B1 − 5). Tohum 0 ve 1'de tuttu, tohum 2'de tutmadı.
+- **H11c tuttu.** Güvensiz iniş 21.0 ≤ 23.6, üç tohumda da.
+
+**Karar (ön kayıtlı kurala göre): `zemin_v2` benimsenmez.** AirSim'in varsayılan modeli B2-s0 kalır.
+- Faz 6, C1-s0 ile yalnız tanımlayıcı olarak koşar. C1-s0, `h11_karar.py`'nin seçimi: çim 29.7, zemin başarısı 56.6.
+- D deneyi (Düzeltme 12) bu karara göre `zemin_v1` ile koşar. Kıyası B1.
+
+**Not (tanımlayıcı):**
+- Sert iniş 10 puan azaldı. Ama bunun ancak 4 puanı çime iniş olarak geri döndü. Kalanı süre dolmasına ve güvensiz inişe kaydı.
+- Düzeltme 11'deki risk notu gerçekleşti: ajan çim için daha çok yol gidiyor, 30 s sınırı yetmiyor.
+- `zemin_v2` + eğitimde 30 s birlikte denenmedi. Denenmesi yeni bir ön kayıt gerektirir.
