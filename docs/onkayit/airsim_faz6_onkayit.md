@@ -63,3 +63,35 @@ ve 1'in değerlendirmesi bitti, ama `h11_karar.py` çıktısına bakılmadı. Da
 - **AirSim'in varsayılan RL modeli** (kullanıcı denemeleri için): T1 ve T2 sağlanırsa ve C deneyinde `zemin_v2` benimsendiyse C1 olur. Öbür durumlarda B2-s0 kalır.
 - **`zemin_v2` benimsenmediyse:** bu faz yalnız tanımlayıcıdır. Model değişikliği Arda'nın kararıdır.
 - Gerçek temasla güvensiz iniş (ağaç, çit, araç, yapı) her kolda ayrıca raporlanır.
+
+## Sonuç (2026-10-18 16:49)
+
+- **C deneyi kararı:** `zemin_v2` benimsenmedi. C1 tohumu `h11_karar.py` ile seçildi: C1-s0 (tanımlayıcı).
+- **Koşum:** Her kol 10 başlangıç, hepsi ilk denemede indi, çöken koşu yok.
+- Ölçülen, ortografik harita ile:
+
+| Kol | Model, etiket | Çim | Sert | Yol | Diğer | Zemin kuralı | SORA | Gerçek temas (zemin dışı) |
+|---|---|---|---|---|---|---|---|---|
+| G0 (önceki R2, ikinci tur) | B2-s0, GT | 7 | 3 | 0 | 0 | 10 | 5 | 0 |
+| **A0** | B2-s0, v3 | 1 | 0 | 9 | 0 | 1 | 1 | 1 (çit) |
+| **A1** | C1-s0, v3 | 1 | 0 | 9 | 0 | 1 | 1 | 0 |
+| **G1** | C1-s0, GT | 6 | 2 | 0 | 2 (ağaç, yapı) | 8 | 2 | 0 |
+
+- **G1'in iki inişi:** haritada "ağaç" ve "yapı" görünüyor, ama temas nesnesi zemin (`Landscape_0`). Faz 5'teki gibi haritanın sınır hatası. Temasa göre G1 10/10 zemine indi.
+
+**Tahminler:**
+- **T1 tutmadı:** A1'in çim sayısı A0'ınkiyle aynı (1 ve 1).
+- **T2 tuttu:** zemin kuralı 1 ≥ 0.
+- **T3 tuttu:** yol 9 ≤ 9.
+- **T4 tutmadı:** G1'de çim 6 (< 8), zemin kuralı 8 (< 9).
+- **Beklenen A0 tutmadı:** 3–5 çim ve 3–6 yol beklenmişti; sonuç 1 çim ve 9 yol. Klasik + v3'ten (4 çim, 6 yol) daha kötü.
+
+**Karar:** AirSim'in varsayılan modeli B2-s0 kalır (ön kayıttaki kurala göre; `zemin_v2` de benimsenmemişti).
+
+**Tanımlayıcı:**
+- İlk yanal eylemin medyan irtifası (AirSim): A0 8.9 m, A1 6.8 m, G1 9.4 m.
+- Hafif ortamda (B1 ve C1 tohumları): 6.7–9.1 m.
+- Her iki model de v3 ile yola iniyor. Sebep (_tahmin): araç yolda doğuyor ve tam üstünden tetikleniyor, v3 de yolu "sert zemin" sayıyor (Faz 1). Politika altındaki "sert" zemini kabul ediyor.
+- Bu kurulum (yolda doğup oradan tetiklenmek) testi kolaylaştırıyor ve yanlı. Arda'nın gözlemi.
+  - Sonraki AirSim kıyasları havada rastgele başlangıçla yapılmalı: `run_airsim.sh --havada`, dal `havada`.
+  - Bunun için ayrı bir ön kayıt yazılacak.
