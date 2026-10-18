@@ -964,3 +964,21 @@ Tek tek tam deneyler (3 tohum × 1M) çok yavaş. Bu yüzden ön kayıtlı, aşa
 1. Gözlem turu benimsediyse onun çeşidi.
 2. Değilse H15 kazananı.
 3. Değilse F, E, D, B2-s0.
+
+### Düzeltme 15b (2026-10-19 00:30, taramanın hiçbir eğitimi başlamadan önce)
+
+**Gerekçe (ölçülen):**
+- D1 (eğitimde 30 s) dümdüz alçalmaya çöktü.
+- E1-s0 (30 s + kayarken alçal) ise tersine çöktü: eylemlerin %97.5'i düz kayma, 96 denemenin 92'sinde süre doldu, başarı %8.4.
+- Eğitimde 30 s baskısı politikayı iki farklı uca çöktürebiliyor (_tahmin). Tur 1'de neredeyse bütün ayarlar 30 s'de. Bu yüzden süre ekseni genişletildi.
+
+**Tur 1'e 4 ayar eklendi.** Toplam 20 ayar. Öbür turlar, skor ve karar kuralı (H15) değişmedi.
+
+| Ad | Ayar |
+|---|---|
+| c16 | `zemin_v3`, 60 s |
+| c17 | `zemin_v3`, 60 s + kayarken alçal |
+| c18 | `zemin_v3`, 90 s (yalnız ödül düzeltmesi, süre baskısı yok) |
+| c19 | `zemin_v3`, 90 s + kayarken alçal |
+
+Orkestratör yeniden başlatıldı. Hiçbir tarama eğitimi koşmamıştı, sadece val_b64 referans değerlendirmeleri yapılmıştı. Onlar yeniden kullanılıyor.

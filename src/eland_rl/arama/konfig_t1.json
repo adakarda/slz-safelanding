@@ -14,5 +14,9 @@
   {"ad": "c12_b1_kayarak",       "args": ["--reward", "zemin_v1", "--diag"]},
   {"ad": "c13_f_kayarak_kalkan", "args": ["--reward", "zemin_v3", "--max-t", "30", "--diag", "--shield-train-m", "10"]},
   {"ad": "c14_f_kayarak_adim05", "args": ["--reward", "zemin_v3", "--max-t", "30", "--diag", "--env-json", "{\"r_step\": -0.5}"]},
-  {"ad": "c15_f_n1024_b128",     "args": ["--reward", "zemin_v3", "--max-t", "30", "--ppo-json", "{\"n_steps\": 1024, \"batch_size\": 128}"]}
+  {"ad": "c15_f_n1024_b128",     "args": ["--reward", "zemin_v3", "--max-t", "30", "--ppo-json", "{\"n_steps\": 1024, \"batch_size\": 128}"]},
+  {"ad": "c16_v3_60s",           "args": ["--reward", "zemin_v3", "--max-t", "60"]},
+  {"ad": "c17_v3_60s_kayarak",   "args": ["--reward", "zemin_v3", "--max-t", "60", "--diag"]},
+  {"ad": "c18_v3_90s",           "args": ["--reward", "zemin_v3"]},
+  {"ad": "c19_v3_90s_kayarak",   "args": ["--reward", "zemin_v3", "--diag"]}
 ]
