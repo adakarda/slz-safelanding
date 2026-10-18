@@ -43,9 +43,9 @@ def zemin_extra(a):
     extra = {}
     if a.mirror:
         extra['mirror'] = True
-    if a.reward == 'zemin_v1':
+    if a.reward in ('zemin_v1', 'zemin_v2'):
         extra['sora_metric'] = False        # training needs no 3 m grid; evaluation keeps the metric
-        if a.land_hard is not None:
+        if a.land_hard is not None and a.reward == 'zemin_v1':     # zemin_v2 sets its own hard reward
             extra['land_rewards'] = {**ZEMIN_REWARDS, 1: a.land_hard}
     return extra
 

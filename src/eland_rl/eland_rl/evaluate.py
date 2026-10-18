@@ -53,8 +53,9 @@ def main():
     env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, obs_mode=a.obs, sem_source=a.sem_source,
                                        depth_mode=a.depth_mode, sora_elev_tau=a.sora_elev_tau,
                                        shield_m=a.shield_train_m,
-                                       **({'land_rewards': {**ZEMIN_REWARDS, 1: a.land_hard}} if a.land_hard is not None else {}),
-                                       **REWARD_PRESETS[a.reward]))
+                                       **{**REWARD_PRESETS[a.reward],
+                                          **({'land_rewards': {**ZEMIN_REWARDS, 1: a.land_hard}}
+                                             if a.land_hard is not None else {})}))
     rng = np.random.default_rng(12345)
     methods = {'duz_inis': lambda o: 9, 'rastgele': lambda o: int(rng.integers(10))}
     if a.obs == 'sem_depth_sora':

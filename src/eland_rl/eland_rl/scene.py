@@ -179,15 +179,19 @@ class Scene:
         return tx, ty, float(dist[v, u])
 
     # ------------------------------------------------- amendment 9: the 'zemin' landing rule
-    def _target_grid(self, buffer_classes, buffer_m):
+    def _target_grid(self, buffer_classes, buffer_m, target_classes=None):
         """Target cells of the 'zemin' rule (landable class throughout AND >= buffer_m from the buffer
-        classes), the nearest target cell and its distance for every cell, on the dist_cell_m grid."""
+        classes), the nearest target cell and its distance for every cell, on the dist_cell_m grid.
+        target_classes narrows 'landable' (amendment 11: soft ground only); None = the safe classes."""
         key = ('zemin', tuple(sorted(buffer_classes)), round(float(buffer_m), 3))
+        if target_classes is not None:
+            key += (tuple(sorted(target_classes)),)
         cache = getattr(self, '_sora_cache', {})
         if key not in cache:
             gw = max(1, int(round(self.size[0] / self.dist_cell)))
             gh = max(1, int(round(self.size[1] / self.dist_cell)))
-            landable = np.isin(self.mask, list(classes.DEFAULT_SAFE_CLASSES)).astype(np.float32)
+            target = classes.DEFAULT_SAFE_CLASSES if target_classes is None else target_classes
+            landable = np.isin(self.mask, list(target)).astype(np.float32)
             safe = cv2.resize(landable, (gw, gh), interpolation=cv2.INTER_AREA) > 0.999
             if buffer_m > 0 and len(buffer_classes):
                 hz = cv2.resize(np.isin(self.mask, list(buffer_classes)).astype(np.float32), (gw, gh),
@@ -205,9 +209,9 @@ class Scene:
         safe, _, _ = self._target_grid(buffer_classes, buffer_m)
         return bool(safe[self._cell(x, y, safe.shape)])
 
-    def nearest_target(self, x, y, buffer_classes, buffer_m):
+    def nearest_target(self, x, y, buffer_classes, buffer_m, target_classes=None):
         """(tx, ty, distance_m) of the nearest 'zemin' target point; distance inf if there is none."""
-        safe, dist, near = self._target_grid(buffer_classes, buffer_m)
+        safe, dist, near = self._target_grid(buffer_classes, buffer_m, target_classes)
         v, u = self._cell(x, y, safe.shape)
         gh, gw = safe.shape
         tv, tu = near[v, u]
@@ -298,8 +302,8 @@ class MirroredScene:
     def is_target(self, x, y, buffer_classes, buffer_m):
         return self.base.is_target(-x, y, buffer_classes, buffer_m)
 
-    def nearest_target(self, x, y, buffer_classes, buffer_m):
-        tx, ty, dist = self.base.nearest_target(-x, y, buffer_classes, buffer_m)
+    def nearest_target(self, x, y, buffer_classes, buffer_m, target_classes=None):
+        tx, ty, dist = self.base.nearest_target(-x, y, buffer_classes, buffer_m, target_classes)
         return -tx, ty, dist
 
     def landing_class(self, x, y, buffer_classes=(), buffer_m=0.0):

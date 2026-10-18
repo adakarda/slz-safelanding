@@ -631,3 +631,58 @@ Kural `~/rl_inis/h9_karar.py` ile uygulandı. Ölçülen, 3 tohumun ortalaması 
 Not: B0'ın düşük güvensiz oranı, denemelerin %60'ında hiç inmeyip süreyi doldurmasından geliyor. Kural bu
 durumu ödüllendiriyor. Birincil ölçüt (zemin başarısı) B1'de açıkça yüksek. Kural sonradan değiştirilmedi.
 Yeni bir yargı ancak yeni ön kayıtla yapılır; bu Arda'nın kararı.
+
+## Düzeltme 11 (2026-10-18): `zemin_v2` ödülü — C deneyi, eğitimden önce
+
+**Gerekçe:**
+- **Kullanıcı isteği (Arda, 2026-10-18):** AirSim'de RL + v3 sert zemine (yol) iniyor. Arda yumuşak zemine (çim) daha sık inmesini istiyor. Seçtiği yol: yeniden eğitim (`zemin_v2`).
+- **Ölçülen, B1 (val_b32, kalkansız RL):** yumuşak iniş 15.8 ± 5.3, sert iniş 41.0 ± 6.6 (320 denemenin yüzdesi). Görüş kâhini (B2-s0 değerlendirmesi) %34.1 yumuşak iniyor.
+- **Ölçülen, B2-s0 hafif ortamda (val_b32, 96 bölüm):**
+  - 15 m üstünde eylemlerin %100'ü "alçal".
+  - İlk yanal eylemin medyan irtifası 9.2 m. Yanal eylemlerin çoğu 5–10 m arasında.
+- **Ölçülen, AirSim'de aynı model:** 3 RL inişinde de 10 m'ye kadar %100 "alçal".
+- `zemin_v1`'de sert iniş +30, yumuşak +50. Fark küçük, ajan altındaki sert zemini kabul ediyor.
+
+**`zemin_v2` (yeni ödül ayarı) = `zemin_v1` + iki değişiklik:**
+1. **Sert zemine iniş +5** (önce +30). Öbür sınıfların ödülleri aynı (yumuşak +50, asfalt/ağaç −40, … , süre doldu −50).
+2. **Şekillendirme yumuşak zemine yönelir:**
+   - Potansiyel = −k · min(d_yumuşak, d_hedef + 10 m, 20 m), k = 2.
+   - d_hedef: en yakın inilebilir hedef (`zemin_v1` ile aynı).
+   - d_yumuşak: en yakın yumuşak hedef (yumuşak sınıf, insan ve araçtan 2 m uzak).
+   - Yumuşak zemin, en yakın hedeften 10 m'den fazla uzaktaysa çekim yok, ajan `zemin_v1` gibi davranır.
+- **Değişmeyenler:**
+  - Başarı kuralı (zemin), adım ve eylem ödülleri, alan dışı (−50).
+  - Gözlem: 3. kanal yine inilebilir hedef. Yumuşak/sert ayrımı 1. kanalda (sınıf) zaten var.
+  - Kalkan. AirSim'deki politika düğümü değişmez.
+- **Teori (_hesap, γ = 0.99, 0.25 s adım, yanal adım −0.25):**
+  - Ajan yumuşak zemin için en fazla ~23 m fazladan yol gider. `zemin_v1`'de aynı hesapla ~7.5 m.
+  - Risk: test süre sınırı 30 s. 20–30 m'den 5 m'ye alçalmak 7.5–12.5 s sürer, yanal yol için 17–22 s kalır. Eğitimde sınır 90 s. Süre dolması artabilir (_tahmin).
+- **Kod:** `env.py` (`zemin_v2` ayarı, `soft_bias_m`, `soft_classes`), `scene.py` (hedef ızgarasına sınıf seçimi), `train.py`, `evaluate.py` (`--land-hard` ayarın üstüne yazar).
+  - Eski ayarlar değişmedi: `soft_bias_m` varsayılanı −1 (kapalı).
+  - 48 birim testi geçti (6'sı yeni).
+
+**C deneyi:**
+- **C1:** `zemin_v2`, tohum 0, 1 ve 2, her biri 1M adım. Ayarlar B1 ile aynı: ent 0.01, 4 ortam, `--shard`, SORA hücresi 0.25 m, `--vec dummy`, aynalama yok, kodlayıcı `paper`.
+- **Kıyas:** B1 (`zemin_v1`, tohum 0–2). Yeniden koşulmaz; değerlendirme aynı (val_b32 × 10 başlangıç = 320 deneme, 30 s, nominal dinamik).
+- **Eğitim listesi** `train_b.txt`. IrYamim kullanılmaz.
+- **Koşum:** `~/rl_inis/kuyruk_c.sh`.
+  - Aynı anda en fazla 2 eğitim. Yeni koşu için en az 7 GB boş bellek.
+  - AirSim oturumu açıkken başlamaz.
+- **Karar betiği:** `~/rl_inis/h11_karar.py`.
+
+**Ölçütler (320 denemenin yüzdesi, kalkansız RL birincil):**
+- Yumuşak iniş: yumuşak zemine başarılı iniş (2 m içinde insan veya araç yok).
+- Zemin başarısı.
+- Güvensiz iniş: indi ama zemin başarısı yok.
+- **Tanımlayıcı (karara girmez):** sert iniş, süre doldu, SORA 3 m, RL + kalkan, ilk yanal eylemin medyan irtifası.
+
+**Tahminler (_tahmin):**
+- **H11a:** C1'in yumuşak inişi ≥ B1'inki + 10 puan (B1: 15.8).
+- **H11b:** C1'in zemin başarısı ≥ B1'inki − 5 puan (B1: 56.9).
+- **H11c:** C1'in güvensiz inişi ≤ B1'inki + 5 puan (B1: 18.6). Bu bir güvenlik koruması: yumuşak zemin arayışı güvensiz inişi artırmamalı.
+- **Karar:**
+  - H11a, H11b ve H11c ortalamada sağlanmalı.
+  - Her biri tohum çiftlerinin (C1-sN ile B1-sN) en az 2'sinde de sağlanmalı.
+  - İkisi de olursa `zemin_v2` benimsenir.
+- **AirSim modeli:** Benimsenirse, H11b ve H11c'yi kendi tohum çiftinde sağlayan C1 tohumları arasından yumuşak inişi en yüksek olan seçilir. AirSim'de B2-s0 ile aynı başlangıçlarda karşılaştırılır.
+- Benimsenmezse AirSim'de B2-s0 kalır. Yeni bir deneme ancak yeni ön kayıtla açılır.

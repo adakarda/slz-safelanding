@@ -95,6 +95,10 @@ class EnvConfig:
     buffer_m: float = 2.0
     sora_metric: bool = True        # also judge landings by the 3 m SORA rule (a metric; one grid per scene)
     mirror: bool = False            # each episode sees its scene mirrored with p = 0.5
+    # Amendment 11 ('zemin_v2'): >= 0 makes the shaping head for soft ground, unless the nearest soft
+    # target is more than soft_bias_m farther than the nearest landable one; < 0 keeps zemin_v1's shaping.
+    soft_bias_m: float = -1.0
+    soft_classes: tuple = (0,)
 
 
 #: Reward presets. 'paper' is Bartolomei et al. as pre-registered; 'sora_v1' is ours
@@ -106,6 +110,9 @@ REWARD_PRESETS = {
     'sora_v1': dict(success_rule='sora', shaping_k=2.0, a_descend=0.5, w_s=0.0, out_of_bounds=-50.0),
     # amendment 9: landable ground, soft preferred, graded hazard penalties, 2 m around people and vehicles
     'zemin_v1': dict(success_rule='zemin', shaping_k=2.0, a_descend=0.5, w_s=0.0, out_of_bounds=-50.0),
+    # amendment 11: zemin_v1 with hard ground worth +5 instead of +30, and shaping that heads for soft ground
+    'zemin_v2': dict(success_rule='zemin', shaping_k=2.0, a_descend=0.5, w_s=0.0, out_of_bounds=-50.0,
+                     land_rewards={**ZEMIN_REWARDS, 1: 5.0}, soft_bias_m=10.0),
 }
 
 
@@ -189,6 +196,11 @@ class LandingEnv(gym.Env):
             return 0.0
         if self.cfg.success_rule == 'zemin':
             _, _, d = self.scene.nearest_target(pos[0], pos[1], self.cfg.buffer_classes, self.cfg.buffer_m)
+            if self.cfg.soft_bias_m >= 0:
+                # amendment 11: soft ground pulls unless it is more than soft_bias_m farther than any target
+                _, _, d_soft = self.scene.nearest_target(pos[0], pos[1], self.cfg.buffer_classes, self.cfg.buffer_m,
+                                                         self.cfg.soft_classes)
+                d = min(d_soft, d + self.cfg.soft_bias_m)
         else:
             _, _, d = self.scene.nearest_sora_safe(pos[0], pos[1], self.cfg.sora_m)
         return -self.cfg.shaping_k * min(d, self.cfg.shaping_dmax)

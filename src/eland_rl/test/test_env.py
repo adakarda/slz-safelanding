@@ -300,3 +300,51 @@ def test_mirrored_scene_is_the_mirror_image():
     assert (tx, ty, dist) == (-bx, by, bdist)
     env = LandingEnv([sc], EnvConfig(mirror=True))
     assert {env.reset(seed=s)[1]['scene'] for s in range(20)} == {sc.name, sc.name + '|ayna'}
+
+
+# ------------------------------------------------- amendment 11: 'zemin_v2', hard ground worth less, soft pull
+def _hard_with_grass(x0, x1):
+    """Hard ground with a grass strip from x0 to x1 metres (full height of the scene)."""
+    sc = flat_scene(1, size=(60.0, 40.0))
+    H, W = sc.mask.shape
+    sc.mask[:, int((x0 / 60.0 + 0.5) * W):int((x1 / 60.0 + 0.5) * W)] = 0
+    return sc
+
+
+@pytest.mark.parametrize('cls,reward', [(0, 50.0), (1, 5.0), (2, -40.0), (6, -100.0)])
+def test_zemin_v2_terminal_reward(cls, reward):
+    from eland_rl.env import REWARD_PRESETS
+    env = LandingEnv([flat_scene(cls)], EnvConfig(obs_mode='sem_depth_sora', **REWARD_PRESETS['zemin_v2']))
+    _, info = _run(env, 9, (0.0, 0.0, 20.0, 0.0))
+    assert info['r_end'] == reward and info['zemin_success'] is (cls in (0, 1))
+
+
+def test_soft_target_grid_and_mirror():
+    from eland_rl.scene import MirroredScene
+    sc = _hard_with_grass(5.0, 15.0)
+    assert sc.nearest_target(0.0, 0.0, (6, 5), 2.0)[2] == 0.0                 # hard ground is a target
+    tx, _, d = sc.nearest_target(0.0, 0.0, (6, 5), 2.0, (0,))
+    assert 4.9 <= d <= 5.2 and 4.9 <= tx <= 5.2                               # the strip's near edge
+    mx, _, md = MirroredScene(sc).nearest_target(0.0, 0.0, (6, 5), 2.0, (0,))
+    assert (mx, md) == (-tx, d)
+    assert sc.nearest_target(0.0, 0.0, (6, 5), 2.0)[2] == 0.0                 # cached grids stay apart
+
+
+def _shaping_gain(env, action, n):
+    env.reset(seed=0, options={'start': (0.0, 0.0, 25.0, 0.0), 'dynamics': NO_LAG})
+    return sum(env.step(action)[4]['r_shape'] for _ in range(n))
+
+
+def test_soft_bias_pulls_towards_near_grass_only():
+    from eland_rl.env import REWARD_PRESETS
+    v1 = {**REWARD_PRESETS['zemin_v1'], 'gamma': 1.0}
+    v2 = {**REWARD_PRESETS['zemin_v2'], 'gamma': 1.0}
+    near = _hard_with_grass(5.0, 15.0)
+    # zemin_v1: standing on hard ground is already on target, moving pays nothing
+    assert _shaping_gain(LandingEnv([near], EnvConfig(**v1)), 1, 12) == pytest.approx(0.0, abs=1e-9)
+    # zemin_v2: grass 5 m away (< 10 m bias) pulls; moving towards it (1 = nose = +x) pays, away costs
+    assert _shaping_gain(LandingEnv([near], EnvConfig(**v2)), 1, 12) > 2.0
+    assert _shaping_gain(LandingEnv([near], EnvConfig(**v2)), 5, 12) < -2.0
+    # grass 15 m away: further than hard ground + 10 m, so no pull
+    far = _hard_with_grass(15.0, 25.0)
+    assert _shaping_gain(LandingEnv([far], EnvConfig(**v2)), 1, 12) == pytest.approx(0.0, abs=1e-9)
