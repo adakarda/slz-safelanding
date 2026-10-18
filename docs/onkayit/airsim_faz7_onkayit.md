@@ -80,3 +80,16 @@ RL modeli sırası:
 2. Değilse önceki sıra: F, E, D, B2-s0.
 
 Kollar, başlangıçlar ve tahminler değişmedi.
+
+## Düzeltme 3 (2026-10-19 03:00, Faz 7 koşmadan önce): 30 başlangıç
+
+**Sebep:** 10 başlangıçla klasik zincir ile RL arasındaki fark istatistiksel olarak ayrılamaz.
+- Örnek: 7/10 ile 9/10 arasındaki fark, Fisher testinde anlamlı değil (_hesap).
+- Bu karşılaştırma tezin bir bölümü olacak. Arda bilgisayarı açık bırakıyor, süre var.
+
+**Değişiklik:** `havada_sec.py --tohum 2026 --n 30`. Aynı tohumdan çekilir, ilk 10 başlangıç öncekilerle aynıdır.
+- Kollar, ölçüm ve tahminler değişmedi. Tahminlerdeki "/10" oranları "/30"a orantılı okunur.
+  - T7c: ≤ 21/30.
+  - T7d: ≤ 18/30.
+- Ek tanımlayıcı: klasik ile RL arasında zemin kuralı oranları için Fisher kesin testi, GT ve v3 için ayrı ayrı.
+- Süre: ~4–5 saat (_tahmin).

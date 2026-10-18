@@ -11,7 +11,7 @@ while ! grep -q -- '--havada) HAVADA' $S/run_airsim.sh || pgrep -f '[h]avada_son
 	sleep 60
 done
 echo "[faz7] $(date +%H:%M) basliyor"
-python3 $S/havada_sec.py --tohum 2026 --n 10 --cikti $CSV && cat $CSV
+python3 $S/havada_sec.py --tohum 2026 --n 30 --cikti $CSV && cat $CSV
 read -r M MAD <<<"$(python3 $P/faz7_model.py)"
 echo "[faz7] RL modeli: $MAD"
 kol() {
