@@ -240,8 +240,36 @@ def referans():
                 f' | RL B {s["rl"]["B"]:.1f} T {s["rl"]["T"]:.1f} s U {s["rl"]["U"]:.1f}')
 
 
+def mevcut_hazirla(konf):
+    """Amendment 15c: a config an earlier experiment already trained with the same settings (seed 0 = Tur 1 and 2,
+    seeds 1 and 2 = Tur 3) is not trained again: its 400k checkpoint is the Tur 1 model (same 1M LR schedule), its
+    1M model the Tur 2 model, its seed 1 and 2 models the Tur 3 seeds. Called before every round, so a seed that
+    finished in the meantime is picked up."""
+    import shutil
+    kos = f'{H}/rl_inis/kos'
+    for c in konf:
+        desen = c.get('mevcut')
+        if not desen:
+            continue
+        for hedef, kosu, dosya in ((f'{K}/t1_{c["ad"]}', desen.format(0), 'ckpt/model_400000_steps.zip'),
+                                   (f'{K}/t2_{c["ad"]}', desen.format(0), 'model.zip'),
+                                   (f'{K}/t3_{c["ad"]}_s1', desen.format(1), 'model.zip'),
+                                   (f'{K}/t3_{c["ad"]}_s2', desen.format(2), 'model.zip')):
+            kaynak = f'{kos}/{kosu}/{dosya}'
+            if os.path.exists(kaynak) and not os.path.exists(f'{hedef}/BITTI'):
+                if os.path.isdir(f'{hedef}/ckpt'):
+                    shutil.rmtree(f'{hedef}/ckpt')            # a run started before amendment 15c: not used
+                os.makedirs(hedef, exist_ok=True)
+                shutil.copy(kaynak, f'{hedef}/model.zip')
+                shutil.copy(f'{kos}/{kosu}/args.json', f'{hedef}/args.json')
+                open(f'{hedef}/MEVCUT', 'w').write(kaynak + '\n')
+                open(f'{hedef}/BITTI', 'w').close()
+                log(f'{c["ad"]}: {os.path.basename(hedef)} <- mevcut {kosu}/{dosya}')
+
+
 def main():
     konf = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'konfig_t1.json')))
+    mevcut_hazirla(konf)
     if DUMAN:
         konf = [konf[2], konf[13]]      # sliding descents and the in-training shield: the riskiest paths
         Is.__init__.__defaults__ = (0, '', ('val_b64', 1), False)
@@ -256,11 +284,13 @@ def main():
     tur_kos(t1)
     sira = sorted(t1, key=lambda j: -j.sonuc['S'])
     log('tur 1 bitti; sira: ' + ', '.join(f'{j.ad} {j.sonuc["S"]:.1f}' for j in sira))
+    mevcut_hazirla(konf)
     t2 = [Is(2, j.ad, j.args, 0, f'{K}/t2_{j.ad}', resume=f'{j.out}/model.zip', degerlendir=('val_b64', 10))
           for j in sira[:4]]
     tur_kos(t2)
     sira2 = sorted(t2, key=lambda j: -j.sonuc['S'])
     log('tur 2 bitti; sira: ' + ', '.join(f'{j.ad} {j.sonuc["S"]:.1f}' for j in sira2))
+    mevcut_hazirla(konf)
     t3 = []
     for j in sira2[:2]:
         t3.append(Is(3, j.ad, j.args, 0, j.out, degerlendir=('val_b32', 10), tam=True))   # seed 0: the Tur 2 run

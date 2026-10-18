@@ -1045,3 +1045,34 @@ Final modelin bütün tohumları raporlanır. "En iyi tohum" ayrıca belirtilir 
 - **B1 iyi genelleşiyor:** eğitim sahnelerinde 65.9, doğrulamada 61.6.
 - Eğitim sırasındaki başarı ile testteki başarı arasındaki farkın kalanı, rastgele dinamik ve olasılıkla seçimden geliyor (_tahmin).
 - Bu not karar değiştirmez.
+
+### Düzeltme 15c (2026-10-19 02:50, Tur 1'in ilk eğitimi 200k adımdayken durduruldu)
+
+**Gerekçe (ölçülen):** F1 (`zemin_v3` + eğitimde 30 s), tohum 0 ve 1:
+- Başarı 29.1 ± 11.9, süre doldu 65.6 ± 7.1.
+- Eylemlerin %63–83'ü kayma. Model dolaşmaya çöktü, E1 gibi.
+
+**Teşhis (_tahmin):** eğitimde süre kısayken belirsiz durumda iki son yarışıyor: yanlış yere inmek ya da süreyi doldurmak. Cezası küçük olan son, ajanın varsayılanı oluyor.
+- D'de yol −40 > süre −50 olduğu için model hep alçaldı.
+- F'de yol −60 < süre −50 olduğu için model hiç alçalmadı.
+- 90 s eğitimde süre nadiren doluyor, bu çatışma oluşmuyor (B1).
+
+**Değişiklikler:**
+1. **Sıra:** 90 s ve 60 s'li ayarlar öne alındı. 30 s'li ayarlar sona kaldı.
+2. **Yeni 90 s ayarları:** hız süre sınırıyla değil, ödülle zorlanıyor (`zemin_v1` tabanı).
+
+   | Ad | Ayar |
+   |---|---|
+   | c20 | adım cezası −0.5 |
+   | c21 | alçal +1 |
+   | c22 | γ 0.98 |
+   | c23 | adım −0.5 + alçal +1 |
+   | c24 | kayarken alçal + adım −0.5 |
+
+3. **Mevcut koşular yeniden eğitilmez.** c00 (B1 kontrol) ile B1, c01 (F temel) ile F1 aynı ayar ve tohumda.
+   - Tur 1 modeli: o koşunun 400k kayıt noktası. Öğrenme oranı programı aynı (1M).
+   - Tur 2 modeli: 1M modeli.
+   - Tur 3 modelleri: tohum 1 ve 2.
+   - (`arama.py` `mevcut_hazirla`)
+
+Toplam 25 ayar, 23 yeni eğitim. Tur 2, Tur 3 ve skor ile karar kuralı (H15) değişmedi. Durdurulan c00 eğitimi kullanılmıyor.
