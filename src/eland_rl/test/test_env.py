@@ -399,3 +399,20 @@ def test_zemin_v3_terminal_reward(cls, reward):
     assert cfg.a_descend == 1.0 and cfg.land_rewards[7] == -60.0 and cfg.land_rewards[2] < cfg.timeout
     _, info = _run(LandingEnv([flat_scene(cls)], cfg), 9, (0.0, 0.0, 20.0, 0.0))
     assert info['r_end'] == reward and info['zemin_success'] is (cls in (0, 1))
+
+
+# ------------------------------------------------- amendment 15: screening overrides
+def test_env_json_overrides_merge_into_the_preset():
+    import argparse
+    from eland_rl.env import REWARD_PRESETS
+    from eland_rl.train import zemin_extra
+    a = argparse.Namespace(mirror=False, reward='zemin_v3', land_hard=None, max_t=30.0, diag=False,
+                           env_json='{"a_descend": 2.0, "r_step": -0.5, "land_rewards": {"2": -80}}',
+                           ppo_json='{"gamma": 0.98}')
+    ex = zemin_extra(a)
+    cfg = EnvConfig(**{**REWARD_PRESETS['zemin_v3'], **ex})
+    assert cfg.a_descend == 2.0 and cfg.r_step == -0.5 and cfg.gamma == 0.98 and cfg.max_t == 30.0
+    assert cfg.land_rewards[2] == -80.0 and cfg.land_rewards[7] == -60.0 and cfg.land_rewards[0] == 50.0
+    a.env_json = '{"no_such_field": 1}'
+    with pytest.raises(SystemExit):
+        zemin_extra(a)

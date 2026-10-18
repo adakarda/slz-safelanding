@@ -48,6 +48,7 @@ def main():
     ap.add_argument('--oracle', action='store_true', help='add the view oracle (privileged GT upper bound)')
     ap.add_argument('--land-hard', type=float, default=None, help='zemin_v1: reward for landing on hard ground')
     ap.add_argument('--diag', action='store_true', help='amendment 13: the model has the sliding-descent actions')
+    ap.add_argument('--only-rl', action='store_true', help='amendment 15: evaluate only rl and rl_kalkan')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
@@ -78,6 +79,8 @@ def main():
             def rl_shield(o):
                 return shield(rl(o), o, env.veh.delayed_pose()[0][2], a.shield_m)[0]
             methods = {'rl': rl, 'rl_kalkan': rl_shield, **{k: v for k, v in methods.items() if k != 'rl'}}
+        if a.only_rl:                       # amendment 15 screening: the baselines do not change between models
+            methods = {k: v for k, v in methods.items() if k in ('rl', 'rl_kalkan')}
     rows, hists = [], collections.defaultdict(collections.Counter)
     for name, act in methods.items():
         for i, sc in enumerate(scenes):

@@ -70,3 +70,13 @@ F deneyi (Düzeltme 14) eklendi. RL modeli sırası şöyle olur:
 4. Değilse B2-s0.
 
 Seçim ölçütü aynı: val_b32'de RL + kalkan başarısı en yüksek tohum. Faz 7 F de bitince koşar, çünkü eğitim sürerken beklemeye devam eder.
+
+## Düzeltme 2 (2026-10-18 ~22:30, Faz 7 koşmadan önce)
+
+Arda tarama istedi (rl_f0 Düzeltme 15). Faz 7, taramanın sonuna ertelendi. Böylece RL kolu en iyi modelle koşar.
+
+RL modeli sırası:
+1. Tarama kararı (H15) kazanan ayarı yeni en iyi saydıysa, onun üç tohumundan val_b32'de RL + kalkan başarısı en yüksek olanı.
+2. Değilse önceki sıra: F, E, D, B2-s0.
+
+Kollar, başlangıçlar ve tahminler değişmedi.

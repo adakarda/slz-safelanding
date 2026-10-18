@@ -15,7 +15,7 @@ import os
 import time
 
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList, CheckpointCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
@@ -29,13 +29,25 @@ def make_env(scene_list, rank, seed, out, binary, reward, obs='sem_depth', n_env
              mon='monitor'):
     def _f():
         scenes = load_list(scene_list, shard=(rank, n_envs) if shard else None, dist_cell_m=cell)
-        env = LandingEnv(scenes, EnvConfig(binary=binary, obs_mode=obs, **(extra or {}), **REWARD_PRESETS[reward]))
+        # the preset first, the run's switches over it (amendment 15: --env-json may override preset fields)
+        env = LandingEnv(scenes, EnvConfig(binary=binary, obs_mode=obs, **{**REWARD_PRESETS[reward], **(extra or {})}))
         env = Monitor(env, os.path.join(out, f'{mon}_{rank}'),
                       info_keywords=('success', 'outcome', 'sora_success', 'majority_success', 'zemin_success',
                                      'soft_landing', 'landing_class'))
         env.reset(seed=seed + 1000 * rank)
         return env
     return _f
+
+
+class StopAt(BaseCallback):
+    """Amendment 15: end a screening run at a step count without changing its learning-rate schedule."""
+
+    def __init__(self, steps):
+        super().__init__()
+        self.steps = steps
+
+    def _on_step(self):
+        return self.num_timesteps < self.steps
 
 
 def zemin_extra(a):
@@ -51,7 +63,25 @@ def zemin_extra(a):
         extra['sora_metric'] = False        # training needs no 3 m grid; evaluation keeps the metric
         if a.land_hard is not None and a.reward == 'zemin_v1':     # zemin_v2 sets its own hard reward
             extra['land_rewards'] = {**ZEMIN_REWARDS, 1: a.land_hard}
+    extra.update(env_overrides(a))
     return extra
+
+
+def env_overrides(a):
+    """Amendment 15: EnvConfig fields from --env-json (e.g. {"a_descend": 1.0, "land_rewards": {"2": -80}}).
+    land_rewards entries replace single classes of the preset's table; PPO's gamma is mirrored into the
+    shaping's gamma so the potential stays policy-invariant."""
+    env = json.loads(getattr(a, 'env_json', '') or '{}')
+    if 'land_rewards' in env:
+        base = REWARD_PRESETS[a.reward].get('land_rewards', ZEMIN_REWARDS)
+        env['land_rewards'] = {**base, **{int(k): float(v) for k, v in env['land_rewards'].items()}}
+    ppo = json.loads(getattr(a, 'ppo_json', '') or '{}')
+    if 'gamma' in ppo:
+        env['gamma'] = float(ppo['gamma'])
+    unknown = set(env) - set(EnvConfig.__dataclass_fields__)
+    if unknown:
+        raise SystemExit(f'--env-json: unknown EnvConfig fields {sorted(unknown)}')
+    return env
 
 
 def main():
@@ -83,6 +113,11 @@ def main():
     ap.add_argument('--max-t', type=float, default=None,
                     help='amendment 12: episode time limit in training, s (default: EnvConfig, 90 s; tests use 30 s)')
     ap.add_argument('--diag', action='store_true', help='amendment 13: eight sliding-descent actions (10..17)')
+    ap.add_argument('--env-json', default='', help='amendment 15: EnvConfig overrides as JSON')
+    ap.add_argument('--ppo-json', default='', help='amendment 15: PPO arguments as JSON (gamma, n_steps, batch_size, ...)')
+    ap.add_argument('--stop-at', type=int, default=0,
+                    help='amendment 15: stop at this many steps, the learning rate still following --steps '
+                         '(a screening run that --resume can later carry on to --steps unchanged)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     lr0 = a.lr
@@ -107,15 +142,19 @@ def main():
     else:
         kw = POLICY_KWARGS if a.encoder == 'paper' else policy_kwargs(a.encoder)
         model = PPO('MlpPolicy', venv, learning_rate=schedule, policy_kwargs=kw,
-                    ent_coef=a.ent_coef, seed=a.seed, device=a.device, verbose=0)
+                    ent_coef=a.ent_coef, seed=a.seed, device=a.device, verbose=0,
+                    **json.loads(a.ppo_json or '{}'))
     model.set_logger(configure(log_dir, ['stdout', 'csv']))
     t0 = time.time()
+    hedef = min(a.stop_at, a.steps) if a.stop_at else a.steps
+    callbacks = [CheckpointCallback(max(a.steps // 10 // a.envs, 1), os.path.join(a.out, 'ckpt'), 'model')]
+    if a.stop_at:
+        callbacks.append(StopAt(hedef))     # learn() still runs to --steps, so the LR schedule is the full one
     # reset_num_timesteps=False keeps the LR schedule on the total: progress = 1 - steps_done / a.steps
-    model.learn(total_timesteps=a.steps - done, reset_num_timesteps=not a.resume,
-                callback=CheckpointCallback(max(a.steps // 10 // a.envs, 1), os.path.join(a.out, 'ckpt'), 'model'))
+    model.learn(total_timesteps=a.steps - done, reset_num_timesteps=not a.resume, callback=CallbackList(callbacks))
     model.save(os.path.join(a.out, 'model.zip'))
     venv.close()
-    print(f'egitim bitti: {a.steps} adim ({done} devralindi), {(time.time() - t0) / 60:.1f} dk -> {a.out}/model.zip')
+    print(f'egitim bitti: {hedef} adim ({done} devralindi), {(time.time() - t0) / 60:.1f} dk -> {a.out}/model.zip')
 
 
 if __name__ == '__main__':

@@ -841,3 +841,68 @@ Kural `~/rl_inis/h11_karar.py` ile uygulandı. Ölçülen, 3 tohumun ortalaması
 2. Değilse E.
 3. Değilse D.
 4. Değilse B2-s0.
+
+## Düzeltme 15 (2026-10-18): ödül ve eğitim ayarları taraması — eğitimlerden önce
+
+**Kullanıcı isteği (Arda, 2026-10-18):**
+- Performansı en yüksek düzeye çıkarana kadar çok sayıda deneme ve ödül kombinasyonu yapılsın.
+- İniş süresi ortalamada paper gibi kısa olsun (paper 11.8 s).
+
+Tek tek tam deneyler (3 tohum × 1M) çok yavaş. Bu yüzden ön kayıtlı, aşamalı bir tarama yapılır. Önce ucuz bir eleme, sonra en iyilerin tam değerlendirmesi.
+
+**Ölçüt — tarama skoru:** S = B_K + 0.5 × B_RL − 4 × max(0, T_K − 12)
+- B_K: RL + kalkan zemin başarısı (%).
+- B_RL: kalkansız zemin başarısı (%).
+- T_K: RL + kalkanın başarılı iniş süresi (s).
+- Sahada kalkan kullanılıyor, bu yüzden ağırlık onda. Paper süresinin (~12 s) her 1 s fazlası 4 puan götürür.
+- Eğitimde kalkanı olan ayarlar değerlendirmede de ortam içi kalkanla koşar.
+
+**Listeler:**
+- Eleme: `val_b64` (val_b'nin val_b32 dışındaki 64 karesi). val_b32 her denemede tüketilmesin diye.
+- Son karar: val_b32. IrYamim kullanılmaz (K75, final test).
+
+**Tur 1 (eleme):** 16 ayar, tohum 0. 400k adımda durdurulur, öğrenme oranı 1M programında kalır (`--stop-at`). val_b64 × 5 başlangıç = 320 deneme, yalnız RL ve RL + kalkan. Ayarlar (`~/rl_inis/arama/konfig_t1.json`):
+
+| Ad | Ayar |
+|---|---|
+| c00 | B1 kontrol (`zemin_v1`, 90 s) |
+| c01 | F temel (`zemin_v3`, 30 s) |
+| c02 | F + kayarken alçal |
+| c03 | F + kayarken alçal, 45 s |
+| c04 | F, yol/ağaç/bilinmeyen −80 |
+| c05 | F, adım cezası −0.5 |
+| c06 | F, alçal +2 |
+| c07 | F, şekillendirme k = 4 |
+| c08 | F, kalkan eğitimde |
+| c09 | F, görüş terimi 0.5 (paper'ın R_S'si) |
+| c10 | F, PPO γ = 0.98 (şekillendirme γ'sı da) |
+| c11 | F, entropi 0.02 |
+| c12 | `zemin_v1` + kayarken alçal, 90 s |
+| c13 | F + kayarken alçal + kalkan eğitimde |
+| c14 | F + kayarken alçal + adım −0.5 |
+| c15 | F, PPO n_steps 1024, batch 128 |
+
+**Tur 2:** Tur 1'de skoru en yüksek 4 ayar aynı koşudan 1M'ye tamamlanır (`--resume`). val_b64 × 10 = 640 deneme.
+
+**Tur 3:** Tur 2'de skoru en yüksek 2 ayarın tohum 1 ve 2'si sıfırdan 1M eğitilir. Üç tohum val_b32 × 10 = 320 denemede tam değerlendirilir (kâhin dahil).
+
+**Karar (H15, `~/rl_inis/arama/kararla.py`):** Tur 3'te ortalama S'si en yüksek ayar, B1 ile karşılaştırılır. Şu dört koşulun hepsi tutarsa yeni en iyi ayar olur:
+- **H15a:** ortalama S ≥ B1'in S'si + 5, ve tohum çiftlerinin en az 2'sinde de.
+- **H15b:** ortalama B_K ≥ B1'inki − 3.
+- **H15c:** ortalama T_K ≤ 13.5 s.
+- **H15d:** ortalama kalkansız güvensiz iniş ≤ B1'inki + 5.
+
+**Kod:**
+- `train.py`: `--env-json`, `--ppo-json`, `--stop-at`. Ön ayar alanlarının üstüne yazılabilir. PPO γ verilirse şekillendirme γ'sı da değişir.
+- `evaluate.py`: `--only-rl`.
+- Orkestratör: `~/rl_inis/arama/arama.py` (yer kuralları kuyruklarla aynı). Duman testi geçti. 57 birim testi geçti.
+
+**Sıra:**
+- Tarama, F kuyruğu üç tohumunu başlattıktan sonra boş yerlerde başlar.
+- F bitince havada başlangıç denemesi önce koşar.
+- Faz 7, taramanın kazananıyla taramadan sonra koşar.
+
+**Sonraki aşamalar** (her biri ayrı ön kayıtla, bu taramanın sonucuna göre):
+- **Ağ gövdesi (IMPALA / iki kol):** K79 kilidi. Arda'nın onayını bekler.
+- **2M adım ve tohum seçimi.**
+- **AirSim Faz 7 ve final IrYamim testi:** bir kez.
