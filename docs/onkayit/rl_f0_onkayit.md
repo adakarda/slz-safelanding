@@ -982,3 +982,18 @@ Tek tek tam deneyler (3 tohum × 1M) çok yavaş. Bu yüzden ön kayıtlı, aşa
 | c19 | `zemin_v3`, 90 s + kayarken alçal |
 
 Orkestratör yeniden başlatıldı. Hiçbir tarama eğitimi koşmamıştı, sadece val_b64 referans değerlendirmeleri yapılmıştı. Onlar yeniden kullanılıyor.
+
+## Sonuç: Düzeltme 13, E deneyi (2026-10-19 00:53)
+
+3 koşu bitti (E1 = D1 + kayarken alçal, eğitimde 30 s). Kural `h13_karar.py` ile uygulandı. Ölçülen, ortalama ± sapma, kalkansız RL:
+
+| | D1 | E1 |
+|---|---|---|
+| Başarılı iniş süresi | 12.2 ± 1.7 s | 15.9 ± 1.5 s |
+| Zemin başarısı | 24.8 ± 4.6 | 23.9 ± 25.9 |
+| Güvensiz iniş | 59.6 ± 17.2 | 2.5 ± 4.3 |
+| Süre doldu | 15.0 ± 20.1 | 70.5 ± 28.2 |
+
+- **Karar: kayarken alçal benimsenmez.** H13a (süre) tutmadı. H13b ve H13c tuttu.
+- **E1 ters yönde çöktü:** iniş yerine dolaşıyor. E1-s0'da eylemlerin %97.5'i düz kayma.
+- **Tanılama sürüyor (tanımlayıcı):** eğitimde (olasılıkla eylem seçimi) başarı ~%60, argmax testinde %8–24. 18 eylemde argmax yanıltıcı olabilir. Ayrıntı ayrı bir notta.
