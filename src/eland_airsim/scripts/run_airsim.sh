@@ -12,6 +12,8 @@
 #   --rl         klasik mod yerine RL: eland_rl_mode + eland_rl.policy_node (konum /eland/gercek_poz'dan,
 #                etiket AirSim'den ya da --v3 ile v3'ten); --trigger RL modunu secer. --kalkan: SORA kalkani
 #   --ruzgar     sabit ruzgar, m/s NED (AirSim simSetWind; kopru basinda uygulanir)
+#   --izle       AirSim penceresinde asagi kameranin goruntu + segmentasyon alt pencereleri; ayrica
+#                v3 paneli (--v3) ve politikanin gordugu (--rl) icin goruntu pencereleri
 #
 # Gazebo'ya dokunmaz: eland_sim.launch.py aynen kullanilir (Gazebo kopruleri bosta bekler), PX4 ayri bir
 # rootfs'te calisir (rootfs_airsim) ki Gazebo kosularinin kayitli parametreleri karismasin.
@@ -27,7 +29,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
-YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""
+YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -46,7 +48,8 @@ while [ $# -gt 0 ]; do
 	--rl) RL_MODEL=$2; shift ;;
 	--kalkan) KALKAN=$2; shift ;;
 	--ruzgar) RUZGAR=$2; shift ;;
-	-h | --help) sed -n 2,20p "$0"; exit 0 ;;
+	--izle) IZLE=1 ;;
+	-h | --help) sed -n 2,22p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
 	shift
@@ -100,7 +103,7 @@ trap 'exit 130' INT TERM      # exit, so EXIT runs temizle once and nothing afte
 
 # ------------------------------------------------------------ AirSim
 AYAR_WIN='C:\Users\arda_\airsim\settings_px4.json'
-python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" "$BASLANGIC" <<'PY'
+python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" "$BASLANGIC" "$IZLE" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1]))
 v = s['Vehicles']['PX4']
@@ -110,6 +113,9 @@ if sys.argv[4]:
     v['X'], v['Y'] = b[0], b[1]
     if len(b) > 2:
         v['Yaw'] = b[2]
+if sys.argv[5] == '1':   # --izle: the downward camera's image and segmentation in AirSim's own window
+    s['SubWindows'] = [{'WindowID': i, 'CameraName': 'asagi', 'ImageType': t, 'VehicleName': 'PX4', 'Visible': True}
+                       for i, t in ((0, 0), (1, 5))]
 json.dump(s, open(sys.argv[2], 'w'), indent=2)
 PY
 cp "$AIRSIM_DIR/settings_px4.json" "$LOG_DIR/settings_px4.json"
@@ -204,6 +210,7 @@ PY
 	"$HOME/v3_test/venv/bin/python" -P "$HOME/v3_test/v3_airsim.py" >"$LOG_DIR/v3.log" 2>&1 &
 	V3_PID=$!
 	echo "[run_airsim]   v3 dugumu baslatildi (algi zinciri /eland/v3/etiket'i okuyacak)"
+	[ "$IZLE" = 1 ] && ros2 run rqt_image_view rqt_image_view /eland/v3/panel >"$LOG_DIR/izle_v3.log" 2>&1 &
 fi
 cp "$PARAMS" "$LOG_DIR/params.yaml" 2>/dev/null
 # obstacles:=false -- obstacle_driver moves Gazebo models; AirSim has none of them.
@@ -231,6 +238,7 @@ if [ -n "$RL_MODEL" ]; then
 	done
 	grep -q "policy " "$LOG_DIR/politika.log" || fail "politika dugumu acilmadi: $(tail -2 "$LOG_DIR/politika.log")"
 	grep -h "policy " "$LOG_DIR/politika.log" | cut -c1-220 | sed 's/^/[run_airsim]   /'
+	[ "$IZLE" = 1 ] && ros2 run rqt_image_view rqt_image_view /eland/rl/gorus >"$LOG_DIR/izle_rl.log" 2>&1 &
 	# rl_landing_mode is started after the takeoff (as rl_izle.sh does): started this early, while the
 	# uXRCE-DDS session was still coming up, it failed to register ("Registration failed") and aborted
 else
