@@ -23,7 +23,9 @@ def en_iyi(onek):
     return os.path.join(K, f'{onek}_s{t}', 'model.zip'), f'{onek}_s{t} (RL + kalkan val {100 * puan(t):.1f} %)'
 
 
-if benimsendi('h13_karar.py'):
+if benimsendi('h14_karar.py'):          # amendment 14, written before Faz 7 ran: F first
+    yol, ad = en_iyi('f_F1')
+elif benimsendi('h13_karar.py'):
     yol, ad = en_iyi('e_E1')
 elif benimsendi('h12_karar.py'):
     yol, ad = en_iyi('d_D1')

@@ -127,6 +127,10 @@ REWARD_PRESETS = {
     # amendment 11: zemin_v1 with hard ground worth +5 instead of +30, and shaping that heads for soft ground
     'zemin_v2': dict(success_rule='zemin', shaping_k=2.0, a_descend=0.5, w_s=0.0, out_of_bounds=-50.0,
                      land_rewards={**ZEMIN_REWARDS, 1: 5.0}, soft_bias_m=10.0),
+    # amendment 14: zemin_v1 where landing on asphalt/trees or unknown ground (-60) costs more than running out
+    # of time (-50), so rushing down is never the cheaper bet, and descending is worth the paper's +1
+    'zemin_v3': dict(success_rule='zemin', shaping_k=2.0, a_descend=1.0, w_s=0.0, out_of_bounds=-50.0,
+                     land_rewards={**ZEMIN_REWARDS, 2: -60.0, 7: -60.0}),
 }
 
 

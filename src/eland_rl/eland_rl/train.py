@@ -47,7 +47,7 @@ def zemin_extra(a):
         extra['max_t'] = a.max_t            # amendment 12: train under the test's time limit
     if getattr(a, 'diag', False):
         extra['diag_actions'] = True        # amendment 13: slide while descending
-    if a.reward in ('zemin_v1', 'zemin_v2'):
+    if a.reward in ('zemin_v1', 'zemin_v2', 'zemin_v3'):
         extra['sora_metric'] = False        # training needs no 3 m grid; evaluation keeps the metric
         if a.land_hard is not None and a.reward == 'zemin_v1':     # zemin_v2 sets its own hard reward
             extra['land_rewards'] = {**ZEMIN_REWARDS, 1: a.land_hard}

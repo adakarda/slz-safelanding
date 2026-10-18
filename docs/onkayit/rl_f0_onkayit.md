@@ -796,3 +796,48 @@ Kural `~/rl_inis/h11_karar.py` ile uygulandı. Ölçülen, 3 tohumun ortalaması
   - Her biri tohum çiftlerinin (E1-sN ile D1-sN) en az 2'sinde de sağlanmalı.
   - İkisi de olursa kayarken alçal eylemleri benimsenir.
 - **Beklenen (_tahmin):** E1 ortalama iniş süresi 12–13 s.
+
+## Düzeltme 14 (2026-10-18): `zemin_v3` ödülü + eğitimde 30 s — F deneyi, eğitimden önce
+
+**Gerekçe (ölçülen, D1 tohum 0 ve 1, val_b32, kalkansız RL):**
+- D1 çöktü. Başarı %25.9 ve %28.8, güvensiz iniş %74.1 ve %64.1.
+- D1-s0 her zaman dümdüz alçalıyor (eylemlerin %100'ü), D1-s1 %79 oranında.
+- Başarılı inişler hızlı: 10.5 ve 12.3 s. Paper'da 11.8 s.
+- **Teşhis (_tahmin):** `zemin_v1`'de yola veya ağaca inmek (−40), süre dolmasından (−50) daha ucuz. 30 s baskısında ajan, aramak yerine dosdoğru inip cezayı göze alıyor.
+- **Kullanıcı kararı (Arda, 2026-10-18):**
+  - Yol, ağaç ve bilinmeyen zeminin cezası süre dolmasından ağır olsun.
+  - Alçal ödülü paper'daki gibi +1 olsun.
+  - Eğitimde süre sınırı doğrudan 30 s olsun (paper'ın test sınırı).
+  - Görüş terimi ve kademeli süre önerileri seçilmedi.
+
+**`zemin_v3` (yeni ödül ayarı) = `zemin_v1` + iki değişiklik:**
+1. **Ceza:** asfalt/ağaç (sınıf 2) ve bilinmeyen (sınıf 7) inişi −60 olur. Öncesi −40 ve −50. Süre doldu −50 olarak kalır.
+2. **Alçal eylemi ödülü:** +1, öncesi +0.5.
+- Öbür ödüller aynı: çim +50, sert +30, bina −60, su −70, araç −90, insan −100, alan dışı −50, adım −0.2, kayma −0.05, şekillendirme k = 2.
+- Kod: `env.py` (`zemin_v3`), `train.py`. 56 birim testi geçti (5'i yeni). Eski ayarlar değişmedi.
+
+**F deneyi:**
+- **F1:** `zemin_v3`, eğitimde 30 s (`--max-t 30`), kayarken alçal yok, aynalama yok. Tohum 0, 1 ve 2, 1M adım. Öbür ayarlar B1 ile aynı.
+- **Kıyas:**
+  - Başarı ve güvenlik için B1 (aynı tohumlar). İniş süresi için de B1.
+  - D1 (aynı süre, eski ödül) tanımlayıcı: ödül düzeltmesinin çöküşü önleyip önlemediğini gösterir.
+- **Değerlendirme:** val_b32 × 10 = 320 deneme, 30 s, nominal dinamik, argmax.
+- **Koşum:** `~/rl_inis/kuyruk_f.sh`. E kuyruğu üç tohumu da başlattıktan sonra boş yer bekler. Aynı anda en fazla 2 eğitim, en az 7 GB boş bellek, AirSim açıkken başlamaz.
+- **Karar betiği:** `~/rl_inis/h14_karar.py`.
+
+**Tahminler (_tahmin, kalkansız RL birincil):**
+- **H14a:** F1'in zemin başarısı ≥ B1'inki − 3 puan (B1: 56.9).
+- **H14b (hız):** F1'in başarılı iniş süresi ≤ B1'inki − 2 s (B1: 15.2 s).
+- **H14c (güvenlik koruması):** F1'in güvensiz inişi ≤ B1'inki + 5 puan (B1: 18.6).
+- **Karar:**
+  - Üçü de ortalamada sağlanmalı.
+  - Her biri tohum çiftlerinin (F1-sN ile B1-sN) en az 2'sinde de sağlanmalı.
+  - İkisi de olursa `zemin_v3` + eğitimde 30 s benimsenir.
+- **Tanımlayıcı:** D1 ile kıyas (düz alçalma payı, güvensiz iniş), RL + kalkan, çime iniş, süre doldu. Paper (11.8 s, %87.6) yan yana yazılır ama kural farklıdır.
+- **Beklenen (_tahmin):** başarı ~%55–65, süre ~13 s, düz alçalma payı < %60.
+
+**Faz 7'ye etkisi (Faz 7 koşmadan önce yazıldı):** Faz 7'nin RL modeli sırası şöyle olur:
+1. F benimsendiyse F1 (val_b32'de RL + kalkan başarısı en yüksek tohum).
+2. Değilse E.
+3. Değilse D.
+4. Değilse B2-s0.

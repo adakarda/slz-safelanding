@@ -389,3 +389,13 @@ def test_shield_treats_a_sliding_descent_as_a_descent():
         assert over and 1 <= b <= 8                                             # a plain slide instead
     assert shield(13, obs, 12.0, 10.0) == (13, False)                           # above 10 m: untouched
     assert shield(4, obs, 8.0, 10.0) == (4, False)                              # slides pass
+
+
+# ------------------------------------------------- amendment 14: 'zemin_v3', rushing onto asphalt costs more than a time-out
+@pytest.mark.parametrize('cls,reward', [(0, 50.0), (1, 30.0), (2, -60.0), (3, -60.0), (6, -100.0)])
+def test_zemin_v3_terminal_reward(cls, reward):
+    from eland_rl.env import REWARD_PRESETS
+    cfg = EnvConfig(obs_mode='sem_depth_sora', **REWARD_PRESETS['zemin_v3'])
+    assert cfg.a_descend == 1.0 and cfg.land_rewards[7] == -60.0 and cfg.land_rewards[2] < cfg.timeout
+    _, info = _run(LandingEnv([flat_scene(cls)], cfg), 9, (0.0, 0.0, 20.0, 0.0))
+    assert info['r_end'] == reward and info['zemin_success'] is (cls in (0, 1))

@@ -60,3 +60,13 @@ Faz 3–6 ile aynı (`inis_sina.py` + ortografik harita). Kol başına:
 - **Örneklem küçük** (10 başlangıç, tek model). Sonuç ön sonuç sayılır, yön gösterir.
 - Bu faz model seçmez. Klasik / RL / karma yapı tartışmasına veri sağlar. Karar Arda'nındır.
 - Gerçek temasla güvensiz iniş (ağaç, çit, araç, yapı) her kolda ayrıca raporlanır.
+
+## Düzeltme (2026-10-18 ~22:00, Faz 7 koşmadan önce)
+
+F deneyi (Düzeltme 14) eklendi. RL modeli sırası şöyle olur:
+1. F benimsendiyse F1 tohumları.
+2. Değilse E1 tohumları.
+3. Değilse D1 tohumları.
+4. Değilse B2-s0.
+
+Seçim ölçütü aynı: val_b32'de RL + kalkan başarısı en yüksek tohum. Faz 7 F de bitince koşar, çünkü eğitim sürerken beklemeye devam eder.
