@@ -686,3 +686,42 @@ Yeni bir yargı ancak yeni ön kayıtla yapılır; bu Arda'nın kararı.
   - İkisi de olursa `zemin_v2` benimsenir.
 - **AirSim modeli:** Benimsenirse, H11b ve H11c'yi kendi tohum çiftinde sağlayan C1 tohumları arasından yumuşak inişi en yüksek olan seçilir. AirSim'de B2-s0 ile aynı başlangıçlarda karşılaştırılır.
 - Benimsenmezse AirSim'de B2-s0 kalır. Yeni bir deneme ancak yeni ön kayıtla açılır.
+
+## Düzeltme 12 (2026-10-18): eğitimde 30 s süre sınırı — D deneyi, eğitimden önce
+
+**Gerekçe (ölçülen, tanılama, `~/rl_inis/sure_etkisi.py`):** B2-s0, val_b32'nin aynı 320 denemesi, yalnız test süresi değişti.
+
+| Test süresi | RL | RL + kalkan | Süre doldu (RL + kalkan) | Güvensiz (RL) |
+|---|---|---|---|---|
+| 30 s (ön kayıtlı test) | 72.5 | 76.9 | 22.8 | 8.8 |
+| 60 s | 77.5 | 86.6 | 13.1 | 10.0 |
+| 90 s (eğitimdeki sınır) | 80.0 | 88.1 | 11.6 | 10.6 |
+
+- Kayıpların çoğu süre dolmasından geliyor. Politika doğru yere gidiyor ama yavaş.
+- Eğitimde bölüm sınırı 90 s, testte 30 s. Politika 30 s içinde inmeyi hiç öğrenmedi (_tahmin).
+- **Test süresi değişmez (30 s).** Yukarıdaki tablo yalnız tanılamadır, sonuç olarak raporlanmaz.
+- **Kullanıcı kararı (Arda, 2026-10-18):** D deneyi yapılır, AirSim Faz 6'dan sonra.
+
+**D1:**
+- Tek fark: eğitimde bölüm sınırı 30 s (`train.py --max-t 30`). Test zaten 30 s.
+- **Ödül:** C deneyinin kararına göre seçilir.
+  - `zemin_v2` benimsendiyse D1 `zemin_v2` ile eğitilir, kıyas C1 olur.
+  - Benimsenmediyse D1 `zemin_v1` ile eğitilir, kıyas B1 olur.
+- Öbür ayarlar kıyas koluyla aynı: tohum 0, 1 ve 2, 1M adım, ent 0.01, 4 ortam, `--shard`, SORA hücresi 0.25 m, `--vec dummy`, aynalama yok.
+- **Kod:** `train.py --max-t` (yalnız verilirse `EnvConfig.max_t`'yi değiştirir; eski koşuların ayarı değişmez). 49 birim testi geçti (1'i yeni).
+- **Değerlendirme:** kıyasla aynı (val_b32 × 10 = 320 deneme, 30 s, nominal dinamik, argmax).
+- **Koşum:** `~/rl_inis/kuyruk_d.sh`. C kuyruğu ve AirSim Faz 6 bitince başlar. Aynı anda en fazla 2 eğitim, en az 7 GB boş bellek.
+- **Karar betiği:** `~/rl_inis/h12_karar.py`.
+
+**Tahminler (_tahmin):**
+- **H12a (birincil):** D1'in kalkansız RL zemin başarısı ≥ kıyasınki + 5 puan.
+- **H12b:** D1'in RL + kalkan zemin başarısı ≥ kıyasınki + 5 puan.
+- **H12c (güvenlik koruması):** D1'in kalkansız güvensiz inişi ≤ kıyasınki + 5 puan.
+- **Karar:**
+  - H12a ve H12c ortalamada sağlanmalı.
+  - İkisi de tohum çiftlerinin (D1-sN ile kıyas-sN) en az 2'sinde sağlanmalı.
+  - İkisi de olursa eğitimde 30 s sınırı benimsenir. H12b destekleyici olarak raporlanır.
+- **Tanımlayıcı:** süre doldu, çime iniş, ilk yanal eylemin irtifası (`eylem_irtifa_env.py`).
+  - Paper'ın %87.6'sı da yan yana yazılır. Ama kural ve veri farklı olduğu için karşılaştırma değildir.
+- **Beklenen (_tahmin):** D1 RL + kalkan ≥ %85, süre doldu ≤ %10.
+- **Not:** val_b32 artık birçok kararda kullanıldı, ona göre aşırı uyum riski var. Son sayı ancak IrYamim final testinde verilir (K75); o test bu deneyde kullanılmaz.

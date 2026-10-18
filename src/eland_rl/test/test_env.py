@@ -348,3 +348,16 @@ def test_soft_bias_pulls_towards_near_grass_only():
     # grass 15 m away: further than hard ground + 10 m, so no pull
     far = _hard_with_grass(15.0, 25.0)
     assert _shaping_gain(LandingEnv([far], EnvConfig(**v2)), 1, 12) == pytest.approx(0.0, abs=1e-9)
+
+
+# ------------------------------------------------- amendment 12: training under the test's time limit
+def test_training_time_limit_switch():
+    import argparse
+    from eland_rl.train import zemin_extra
+    a = argparse.Namespace(mirror=False, reward='zemin_v1', land_hard=None, max_t=None)
+    assert 'max_t' not in zemin_extra(a)                       # earlier runs: EnvConfig's 90 s
+    a.max_t = 30.0
+    assert zemin_extra(a)['max_t'] == 30.0
+    env = LandingEnv([flat_scene(0)], EnvConfig(**zemin_extra(a)))
+    _, info = _run(env, 0, (0.0, 0.0, 25.0, 0.0))               # hold: times out at the limit
+    assert info['outcome'] == 'timeout' and abs(info['t'] - 30.0) < 0.3

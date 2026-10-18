@@ -39,10 +39,12 @@ def make_env(scene_list, rank, seed, out, binary, reward, obs='sem_depth', n_env
 
 
 def zemin_extra(a):
-    """Amendment 9 switches; empty for the earlier runs, so their configuration is unchanged."""
+    """Amendment 9 (and later) switches; empty for the earlier runs, so their configuration is unchanged."""
     extra = {}
     if a.mirror:
         extra['mirror'] = True
+    if getattr(a, 'max_t', None) is not None:
+        extra['max_t'] = a.max_t            # amendment 12: train under the test's time limit
     if a.reward in ('zemin_v1', 'zemin_v2'):
         extra['sora_metric'] = False        # training needs no 3 m grid; evaluation keeps the metric
         if a.land_hard is not None and a.reward == 'zemin_v1':     # zemin_v2 sets its own hard reward
@@ -76,6 +78,8 @@ def main():
     ap.add_argument('--mirror', action='store_true', help='amendment 9: mirror the scene in half the episodes')
     ap.add_argument('--encoder', default='paper', choices=sorted(ENCODERS), help='amendment 10: policy trunk')
     ap.add_argument('--land-hard', type=float, default=None, help='zemin_v1: reward for landing on hard ground')
+    ap.add_argument('--max-t', type=float, default=None,
+                    help='amendment 12: episode time limit in training, s (default: EnvConfig, 90 s; tests use 30 s)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     lr0 = a.lr
