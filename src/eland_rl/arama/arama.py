@@ -84,6 +84,8 @@ def degerlendirme_args(args):
         out.append('--diag')
     if secenek(args, '--shield-train-m'):
         out += ['--shield-train-m', secenek(args, '--shield-train-m')]
+    if secenek(args, '--kanallar'):                       # amendment 16
+        out += ['--kanallar', secenek(args, '--kanallar')]
     return out
 
 

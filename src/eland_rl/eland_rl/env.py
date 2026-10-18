@@ -32,6 +32,7 @@ import numpy as np
 
 from eland_common import classes
 
+from . import gozlem
 from .camera import Camera, ground_hits, sora_channel
 from .pilots import shield
 from .dynamics import DynamicsParams, Vehicle
@@ -103,6 +104,9 @@ class EnvConfig:
     # Amendment 13: eight more actions that slide and descend together, so that sliding stops costing
     # descent time. Their action reward is a_descend + a_lateral.
     diag_actions: bool = False
+    # Amendment 16: extra observation channels after the usual ones, any of gozlem.KANALLAR
+    # ('risk', 'hedef', 'hafiza'), always in that order.
+    kanallar: tuple = ()
 
 
 def lateral_index(a):
@@ -146,6 +150,11 @@ class LandingEnv(gym.Env):
         self.cam = Camera(self.cfg.image_size)
         n = self.cfg.image_size
         n_ch = 3 if self.cfg.obs_mode == 'sem_depth_sora' else 2
+        unknown = set(self.cfg.kanallar) - set(gozlem.KANALLAR)
+        if unknown:
+            raise ValueError(f'unknown extra channels {sorted(unknown)}')
+        n_ch += len(set(self.cfg.kanallar))
+        self.hafiza = gozlem.RiskHafizasi() if 'hafiza' in self.cfg.kanallar else None
         self.observation_space = gym.spaces.Box(0.0, 1.0, (n_ch, n, n), np.float32)
         self.action_space = gym.spaces.Discrete(18 if self.cfg.diag_actions else 10)
         ang = np.radians(np.arange(8) * 45.0)
@@ -203,6 +212,12 @@ class LandingEnv(gym.Env):
             if cfg.sora_elev_tau >= 0:
                 sora &= elev <= cfg.sora_elev_tau
             chans.append(sora.astype(np.float32))
+        if cfg.kanallar:                    # amendment 16
+            if cfg.obs_mode != 'sem_depth_sora':
+                sora = sora_channel(seen, pos[2], cfg.buffer_m, hazard_classes=cfg.buffer_classes)
+            X, Y, t = ground_hits(self.cam.rays, pos, R)
+            chans += gozlem.ek_kanallar(cfg.kanallar, seen, sora, pos[2], X, Y, np.isfinite(t), pos,
+                                        math.atan2(R[1, 0], R[0, 0]), self.hafiza)
         obs = np.stack(chans)
         return obs, sem, depth
 
@@ -260,6 +275,8 @@ class LandingEnv(gym.Env):
         self.veh = Vehicle(params, pos, yaw)
         self.steps = 0
         self._phi = self._potential(pos)
+        if self.hafiza is not None:         # amendment 16: the memory starts with the episode
+            self.hafiza.sifirla(pos[0], pos[1])
         obs, _, _ = self._observe()
         self._last_obs = obs
         info = {'scene': self.scene.name, 'start': (*pos, yaw),

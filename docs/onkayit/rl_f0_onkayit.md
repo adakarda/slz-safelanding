@@ -906,3 +906,61 @@ Tek tek tam deneyler (3 tohum × 1M) çok yavaş. Bu yüzden ön kayıtlı, aşa
 - **Ağ gövdesi (IMPALA / iki kol):** K79 kilidi. Arda'nın onayını bekler.
 - **2M adım ve tohum seçimi.**
 - **AirSim Faz 7 ve final IrYamim testi:** bir kez.
+
+## Sonuç: Düzeltme 12, D deneyi (2026-10-18 23:02)
+
+3 koşu bitti (D1 = `zemin_v1` + eğitimde 30 s). Değerlendirme: val_b32, 320 deneme / koşu. Kural `h12_karar.py` ile uygulandı. Ölçülen, ortalama ± sapma:
+
+| | B1 (kıyas) | D1 |
+|---|---|---|
+| RL zemin başarısı | 56.9 ± 10.9 | 24.8 ± 4.6 |
+| RL güvensiz iniş | 18.6 ± 10.3 | 59.6 ± 17.2 |
+| RL + kalkan başarısı | 66.7 ± 13.1 | 53.6 ± 18.3 |
+
+- **Karar: eğitimde 30 s benimsenmez.** H12a, H12b ve H12c tutmadı.
+- **Politika çöktü:** D1-s0 eylemlerinin %100'ü "alçal", D1-s1'in %79'u.
+- Başarılı inişler hızlı (10.5–12.3 s), ama güvensiz.
+- **Teşhis (_tahmin):** yola veya ağaca inmek (−40), süre dolmasından (−50) daha ucuz. Düzeltme 14 (F) bunu düzeltmek için açıldı.
+
+## Düzeltme 16 (2026-10-18): gözlem turu — risk hafızası, hedef noktası, kademeli risk — eğitimlerden önce
+
+**Kaynak:** de la Torre-Vanegas ve ark. 2025, "Vision-Based Risk Aware Emergency Landing for UAVs in Complex Urban Environments" (arXiv 2505.20423). Yöntemleri klasik: risk haritası, risk hafızası, irtifaya bağlı genişletme, risk + uzaklık en küçüğü. **Kullanıcı isteği (Arda, 2026-10-18):** bu fikirler RL'ye gözlem kanalı olarak eklensin, iyi planlanıp sıralansın.
+
+**Yeni kanallar** (`gozlem.py`; ortam ve ROS düğümü aynı kodu kullanır, eğitim ve sahada aynı girdi):
+- **`risk`:** her pikselin sınıfına göre kademeli risk (0–1). Çim 0, sert 0.15, asfalt/ağaç 0.5, bina 0.7, su 0.8, araç 0.95, insan 1, bilinmeyen 0.6.
+- **`hedef`:** hedef piksellerinden "1.5 m bulanıklaştırılmış risk + 0.5 × merkeze metrik uzaklık / yarım görüntü genişliği" en küçük olan nokta, küçük bir leke olarak. Görüşte hedef yoksa sıfır. Makaledeki yerel en küçük seçimi.
+- **`hafiza`:** bölüm başından beri her zemin hücresinde (0.25 m) görülen en yüksek risk, makaledeki genel risk haritası. Araç etrafında 48 m'lik, burun yukarı bir harita olarak verilir. Hiç görülmemiş hücre 1 (riskli) sayılır. Yukarıdan görülen alan, alçalınca kameranın görüşü daralsa da haritada kalır.
+  - AirSim'de RL Landing başlayınca sıfırlanır: modun durum konusu 2 s sessizlikten sonra geldiğinde.
+- **Kod:** `env.py` (`kanallar`), `train.py` / `evaluate.py` (`--kanallar`), `policy_node.py`. Ek olarak devam eden koşular yeni dizinde `args.json` da yazar.
+  - 64 birim testi geçti (7'si yeni). Testler hafızanın yönünü, kalıcılığını ve sıfırlanmasını, hedefin doğru tarafı göstermesini kapsıyor. Eski ayarlar değişmedi.
+  - Hız (ölçülen): üç kanal birlikte ortam adımı 745 → 315 adım/s. Eğitim hızında etkisi ~%20 (_hesap).
+
+**Taban:** taramanın (Düzeltme 15) Tur 3'ünde ortalama skoru en yüksek ayar. H15 kabul etmese de bilinen en iyi aday budur. Tabanın koşuları yeniden koşulmaz.
+
+**Turlar** (`~/rl_inis/arama/gozlem_tur.py`; skor ve yer kuralları taramayla aynı; tarama bitince başlar):
+- **G-A:** 4 çeşit (+hafiza, +hedef, +risk, +üçü birden), tohum 0, 400k adım, val_b64 × 5. Kıyas: tabanın Tur 1 koşusu.
+- **G-B:** G-A'nın en iyi 2 çeşidi aynı koşudan 1M'ye, val_b64 × 10. Kıyas: tabanın Tur 2 koşusu.
+- **G-C:** G-B'nin en iyisinin tohum 1 ve 2'si sıfırdan 1M. Üç tohum val_b32 × 10 = 320 denemede tam değerlendirilir. Kıyas: tabanın Tur 3 koşuları.
+
+**Karar (H16, `gozlem_karar.py`):** çeşit benimsenir, eğer şu dördü de tutarsa:
+- **H16a:** ortalama S ≥ taban + 5, ve tohum çiftlerinin en az 2'sinde de.
+- **H16b:** ortalama B_K ≥ taban − 3.
+- **H16c:** ortalama T_K ≤ taban + 0.5 s.
+- **H16d:** ortalama kalkansız güvensiz iniş ≤ taban + 5.
+
+**Tahminler (_tahmin):**
+- `hafiza` en çok kazandıran çeşit olur. Daha erken karar verir, yani daha kısa iniş, ve 5–20 m uzaktaki hedeflerde daha yüksek başarı.
+- `hedef` uzak hedeflerde yardım eder.
+- `risk` küçük bir etki yapar.
+
+**Sıra:**
+1. D/E/F (ön kayıtlı)
+2. Tarama (Düzeltme 15)
+3. Havada başlangıç denemesi (F bitince, ilk boşlukta)
+4. Gözlem turu (Düzeltme 16)
+5. Faz 7, en iyi modelle
+
+**Faz 7'nin RL modeli sırası:**
+1. Gözlem turu benimsediyse onun çeşidi.
+2. Değilse H15 kazananı.
+3. Değilse F, E, D, B2-s0.

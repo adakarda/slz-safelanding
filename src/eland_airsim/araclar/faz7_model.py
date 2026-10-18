@@ -39,7 +39,26 @@ def arama_kazanani():
     return None
 
 
-kazanan = arama_kazanani() if os.path.exists(os.path.expanduser('~/rl_inis/arama/kararla.py')) else None
+def gozlem_kazanani():
+    """Amendment 16: the observation round's variant, if H16 adopted it (it builds on the search's best)."""
+    karar = os.path.expanduser('~/rl_inis/arama/gozlem_karar.py')
+    sonuc = os.path.expanduser('~/rl_inis/arama/gozlem/gozlem_sonuc.json')
+    if not (os.path.exists(karar) and os.path.exists(sonuc)):
+        return None
+    out = subprocess.run(['python3', karar], capture_output=True, text=True).stdout
+    if not any(s.startswith('KARAR:') and 'benimsenir' in s for s in out.splitlines()):
+        return None
+    import json
+
+    def puan(d):
+        rs = [r for r in csv.DictReader(open(os.path.join(d, 'eval_val_b32_10.csv'))) if r['method'] == 'rl_kalkan']
+        return sum(r['zemin_success'] == '1' for r in rs) / len(rs)
+    d = max(json.load(open(sonuc))['dizinler'], key=puan)
+    return os.path.join(d, 'model.zip'), f'{os.path.basename(d)} (gozlem turu kazanani; RL + kalkan val {100 * puan(d):.1f} %)'
+
+
+kazanan = gozlem_kazanani() or (arama_kazanani() if os.path.exists(os.path.expanduser('~/rl_inis/arama/kararla.py'))
+                                else None)
 if kazanan:
     yol, ad = kazanan
 elif benimsendi('h14_karar.py'):          # amendment 14, written before Faz 7 ran: F first

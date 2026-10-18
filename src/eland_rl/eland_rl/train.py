@@ -59,6 +59,8 @@ def zemin_extra(a):
         extra['max_t'] = a.max_t            # amendment 12: train under the test's time limit
     if getattr(a, 'diag', False):
         extra['diag_actions'] = True        # amendment 13: slide while descending
+    if getattr(a, 'kanallar', ''):
+        extra['kanallar'] = tuple(a.kanallar.split(','))   # amendment 16: extra observation channels
     if a.reward in ('zemin_v1', 'zemin_v2', 'zemin_v3'):
         extra['sora_metric'] = False        # training needs no 3 m grid; evaluation keeps the metric
         if a.land_hard is not None and a.reward == 'zemin_v1':     # zemin_v2 sets its own hard reward
@@ -113,6 +115,7 @@ def main():
     ap.add_argument('--max-t', type=float, default=None,
                     help='amendment 12: episode time limit in training, s (default: EnvConfig, 90 s; tests use 30 s)')
     ap.add_argument('--diag', action='store_true', help='amendment 13: eight sliding-descent actions (10..17)')
+    ap.add_argument('--kanallar', default='', help='amendment 16: extra observation channels, e.g. risk,hedef,hafiza')
     ap.add_argument('--env-json', default='', help='amendment 15: EnvConfig overrides as JSON')
     ap.add_argument('--ppo-json', default='', help='amendment 15: PPO arguments as JSON (gamma, n_steps, batch_size, ...)')
     ap.add_argument('--stop-at', type=int, default=0,
@@ -130,6 +133,9 @@ def main():
         tag = f'_devam{done}'
         log_dir, mon = os.path.join(a.out, f'devam{done}'), f'monitor_devam{done}'
     json.dump(vars(a), open(os.path.join(a.out, f'args{tag}.json'), 'w'), indent=1)
+    if tag and not os.path.exists(os.path.join(a.out, 'args.json')):
+        # a resumed run in a new directory (screening round 2): policy_node reads args.json next to the model
+        json.dump(vars(a), open(os.path.join(a.out, 'args.json'), 'w'), indent=1)
 
     venv_cls = DummyVecEnv if a.vec == 'dummy' else SubprocVecEnv
     venv = venv_cls([make_env(a.scenes, r, a.seed + done, a.out, a.binary, a.reward, a.obs, a.envs, a.sora_cell, a.shard,

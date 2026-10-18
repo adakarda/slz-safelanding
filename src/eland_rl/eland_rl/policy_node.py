@@ -46,8 +46,9 @@ from geometry_msgs.msg import PoseStamped, TwistStamped
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
-from std_msgs.msg import Int8
+from std_msgs.msg import Int8, String
 
+from . import gozlem
 from .camera import Camera, ground_hits, nearest_source_index, sora_channel
 from .env import REWARD_PRESETS, EnvConfig, lateral_index
 from .pilots import shield
@@ -137,6 +138,11 @@ class PolicyNode(Node):
         self.safe[[0, 1]] = True
         ang = np.radians(np.arange(8) * 45.0)
         self.lateral = np.stack([np.cos(ang), np.sin(ang)], 1)
+        # amendment 16: risk memory, restarted when RL Landing starts (its state topic wakes up)
+        self.hafiza = gozlem.RiskHafizasi() if 'hafiza' in self.cfg.kanallar else None
+        self.hafiza_sifirla, self.son_durum = True, -1e9
+        if self.hafiza is not None:
+            self.create_subscription(String, '/eland/rl/mod_durumu', self.on_mode_state, 10)
         self.create_timer(float(g('period_s')), self.tick)
         self.get_logger().info(f'policy {g("model_path")}, labels from {self.source}, pose from {pose_from}; '
                                f'{self.cfg_note}; kalkan {"yok" if self.kalkan_m < 0 else f"{self.kalkan_m} m"}')
@@ -148,7 +154,9 @@ class PolicyNode(Node):
             return EnvConfig(), 'args.json yok: eski gozlem (SORA 3 m)'
         a = json.load(open(path))
         cfg = EnvConfig(binary=bool(a.get('binary', False)), obs_mode=a.get('obs', 'sem_depth'),
-                        diag_actions=bool(a.get('diag', False)), **REWARD_PRESETS[a.get('reward', 'paper')])
+                        diag_actions=bool(a.get('diag', False)),
+                        kanallar=tuple(k for k in gozlem.KANALLAR if k in (a.get('kanallar') or '').split(',')),
+                        **REWARD_PRESETS[a.get('reward', 'paper')])
         third = (f'tampon {cfg.buffer_m} m {tuple(cfg.buffer_classes)}' if cfg.success_rule == 'zemin'
                  else f'SORA {cfg.sora_m} m')
         return cfg, (f'egitim: odul {a.get("reward")}, gozlem {cfg.obs_mode}, 3. kanal {third}'
@@ -193,14 +201,30 @@ class PolicyNode(Node):
         cfg = self.cfg
         ch0 = self.safe[sem].astype(np.float32) if cfg.binary else sem.astype(np.float32) / (N_CLASSES - 1)
         chans = [ch0, np.clip(d / self.dnorm, 0, 1).astype(np.float32)]
-        if self.n_channels == 3:                                   # observation v2: + SORA-safe mask
+        if self.n_channels >= 3:                                   # observation v2: + SORA-safe mask
             if cfg.success_rule == 'zemin':                        # as env._observe, amendment 9
                 sora = sora_channel(sem, c[2], cfg.buffer_m, hazard_classes=cfg.buffer_classes)
             else:
                 sora = sora_channel(sem, c[2], cfg.sora_m)
             chans.append(sora.astype(np.float32))
+        if cfg.kanallar:                                           # amendment 16, the same code as env._observe
+            if self.hafiza is not None and self.hafiza_sifirla:
+                self.hafiza.sifirla(c[0], c[1])
+                self.hafiza_sifirla = False
+            X, Y, t = ground_hits(self.cam.rays, c, R)
+            chans += gozlem.ek_kanallar(cfg.kanallar, sem, sora, c[2], X, Y, np.isfinite(t), c,
+                                        math.atan2(R[1, 0], R[0, 0]), self.hafiza)
         obs = np.stack(chans)
         return obs, sem
+
+    def on_mode_state(self, msg):
+        """Amendment 16: the memory starts when RL Landing starts, as the training episode does. The mode
+        publishes its state at least every 0.5 s while active; a message after a 2 s silence is a new start."""
+        now = time.monotonic()
+        if now - self.son_durum > 2.0:
+            self.hafiza_sifirla = True
+            self.get_logger().info('RL Landing basladi: risk hafizasi sifirlaniyor')
+        self.son_durum = now
 
     def publish_view(self, sem, a, altitude_m):
         img = view_image(sem, a, altitude_m, float(self.safe[sem].mean()))
@@ -228,7 +252,7 @@ class PolicyNode(Node):
         a = int(self.model.predict(obs, deterministic=True)[0])
         ms = (time.perf_counter() - t0) * 1000
         overridden = False
-        if self.kalkan_m >= 0 and self.n_channels == 3:
+        if self.kalkan_m >= 0 and self.n_channels >= 3:
             a, overridden = shield(a, obs, c[2], self.kalkan_m)
         yaw = math.atan2(R[1, 0], R[0, 0])
         if a == 9:

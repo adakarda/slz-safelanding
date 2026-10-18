@@ -49,12 +49,14 @@ def main():
     ap.add_argument('--land-hard', type=float, default=None, help='zemin_v1: reward for landing on hard ground')
     ap.add_argument('--diag', action='store_true', help='amendment 13: the model has the sliding-descent actions')
     ap.add_argument('--only-rl', action='store_true', help='amendment 15: evaluate only rl and rl_kalkan')
+    ap.add_argument('--kanallar', default='', help='amendment 16: the model\'s extra observation channels')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
     env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, obs_mode=a.obs, sem_source=a.sem_source,
                                        depth_mode=a.depth_mode, sora_elev_tau=a.sora_elev_tau,
                                        shield_m=a.shield_train_m, diag_actions=a.diag,
+                                       kanallar=tuple(k for k in a.kanallar.split(',') if k),
                                        **{**REWARD_PRESETS[a.reward],
                                           **({'land_rewards': {**ZEMIN_REWARDS, 1: a.land_hard}}
                                              if a.land_hard is not None else {})}))
