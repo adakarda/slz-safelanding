@@ -997,3 +997,37 @@ Orkestratör yeniden başlatıldı. Hiçbir tarama eğitimi koşmamıştı, sade
 - **Karar: kayarken alçal benimsenmez.** H13a (süre) tutmadı. H13b ve H13c tuttu.
 - **E1 ters yönde çöktü:** iniş yerine dolaşıyor. E1-s0'da eylemlerin %97.5'i düz kayma.
 - **Tanılama sürüyor (tanımlayıcı):** eğitimde (olasılıkla eylem seçimi) başarı ~%60, argmax testinde %8–24. 18 eylemde argmax yanıltıcı olabilir. Ayrıntı ayrı bir notta.
+
+## Düzeltme 17 (2026-10-19 01:20): final test protokolü — sonuçlardan önce
+
+**Amaç:** tezde verilecek son sayılar. Bütün seçimler val_b32 ve val_b64 ile yapıldı. Bu yüzden son sayı, hiçbir seçimde kullanılmayan IrYamim karelerinde ölçülür (K75).
+- **Not:** IrYamim, Düzeltme 6'da (A1 / A2b, B deneyinden önce) bir kez test için kullanıldı. O günden beri hiçbir karar IrYamim'e bakılarak verilmedi.
+
+**Final model:** Faz 7'deki sırayla, sonuçlardan önce sabit:
+1. Gözlem turu (H16) benimsediyse onun çeşidi.
+2. Değilse tarama (H15) kazananı.
+3. Değilse F, E, D.
+4. Değilse B2-s0.
+
+Final modelin bütün tohumları raporlanır. "En iyi tohum" ayrıca belirtilir ama ana sayı ortalamadır. B1'in üç tohumu kıyas olarak yanına konur.
+
+**Liste:** `test.txt`: 20 IrYamim karesi × 15 başlangıç = 300 deneme / koşu. Süre sınırı 30 s, nominal dinamik, argmax.
+
+**Yöntemler:**
+- RL ve RL + kalkan.
+- Düz alçalma ve düz alçalma + kalkan.
+- Kanal pilotu.
+- Görüş kâhini (tavan).
+
+**Ölçütler:**
+- Zemin başarısı, güvensiz iniş, süre doldu, çime iniş.
+- Başarılı iniş süresi (ortalama ve medyan).
+- SORA 3 m başarısı.
+- Paper'ın çoğunluk kuralı, tanımlayıcı olarak.
+
+**Kural:**
+- Test bir kez koşulur. Sonuca göre model, ayar ya da ölçüt değiştirilmez.
+- Sonuç ne çıkarsa raporlanır.
+- Final test yalnız gözlem turu ve Faz 7 bittikten sonra, Arda'nın "koş" demesiyle yapılır. Bu adım geri alınamaz.
+
+**Betik:** `~/rl_inis/final_test.sh` (hazırlandı, koşulmadı).
