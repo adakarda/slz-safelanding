@@ -1031,3 +1031,17 @@ Final modelin bütün tohumları raporlanır. "En iyi tohum" ayrıca belirtilir 
 - Final test yalnız gözlem turu ve Faz 7 bittikten sonra, Arda'nın "koş" demesiyle yapılır. Bu adım geri alınamaz.
 
 **Betik:** `~/rl_inis/final_test.sh` (hazırlandı, koşulmadı).
+
+### Not: E1 tanılaması (2026-10-19 01:10, tanımlayıcı)
+
+| Model | Eğitim sırasında (olasılıkla, rastgele dinamik, eğitim sahneleri) | Eğitim sahneleri (argmax, nominal) | val_b32 (argmax) | val_b32 (olasılıkla) |
+|---|---|---|---|---|
+| E1-s0 | 62.5 | 24.7 | 8.4 | 10.9 |
+| E1-s1 | 59.8 | 71.6 | 53.8 | — |
+| B1-s0 | 84.1 | 65.9 | 61.6 | 58.1 |
+
+- **Argmax sebep değil.** E1-s0'da alçalan eylemlerin toplam olasılığı medyan 0.17, yani model gerçekten alçalmıyor.
+- **E1-s0 eğitim sahnelerinde bile düşük.** Bu tohum kararsız bir çözüme oturmuş.
+- **B1 iyi genelleşiyor:** eğitim sahnelerinde 65.9, doğrulamada 61.6.
+- Eğitim sırasındaki başarı ile testteki başarı arasındaki farkın kalanı, rastgele dinamik ve olasılıkla seçimden geliyor (_tahmin).
+- Bu not karar değiştirmez.
