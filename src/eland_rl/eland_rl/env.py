@@ -10,6 +10,7 @@ ACTIONS (2.3), body frame, heading held:
     1..8   lateral, 1 m/s, towards 0, 45, ..., 315 deg from the nose
            (1 = nose = image up, 3 = left, 5 = back, 7 = right)
     9      descend, 2 m/s
+    10..17 (amendment 13, diag_actions) the lateral moves 1..8 while descending at 2 m/s
 
 REWARD (3), R = w_t R_t + w_S R_S + w_C R_C + w_A R_A + R_T:
     R_t  -0.2 per step, 0 on the terminal step
@@ -99,6 +100,19 @@ class EnvConfig:
     # target is more than soft_bias_m farther than the nearest landable one; < 0 keeps zemin_v1's shaping.
     soft_bias_m: float = -1.0
     soft_classes: tuple = (0,)
+    # Amendment 13: eight more actions that slide and descend together, so that sliding stops costing
+    # descent time. Their action reward is a_descend + a_lateral.
+    diag_actions: bool = False
+
+
+def lateral_index(a):
+    """Direction 0..7 (from the nose, counter-clockwise) of a lateral action 1..8 or a sliding descent 10..17."""
+    return a - 10 if a >= 10 else a - 1
+
+
+def descends(a):
+    """True for the plain descent (9) and the sliding descents (10..17)."""
+    return a == 9 or a >= 10
 
 
 #: Reward presets. 'paper' is Bartolomei et al. as pre-registered; 'sora_v1' is ours
@@ -129,7 +143,7 @@ class LandingEnv(gym.Env):
         n = self.cfg.image_size
         n_ch = 3 if self.cfg.obs_mode == 'sem_depth_sora' else 2
         self.observation_space = gym.spaces.Box(0.0, 1.0, (n_ch, n, n), np.float32)
-        self.action_space = gym.spaces.Discrete(10)
+        self.action_space = gym.spaces.Discrete(18 if self.cfg.diag_actions else 10)
         ang = np.radians(np.arange(8) * 45.0)
         self._lateral = np.stack([np.cos(ang), np.sin(ang)], 1) * self.cfg.v_lateral
         self._safe = np.zeros(N_CLASSES, bool)
@@ -144,9 +158,9 @@ class LandingEnv(gym.Env):
             return np.array([0.0, 0.0, -self.cfg.v_descend])
         if a == 0:
             return np.zeros(3)
-        bx, by = self._lateral[a - 1]
+        bx, by = self._lateral[lateral_index(a)]
         c, s = math.cos(self.veh.yaw), math.sin(self.veh.yaw)
-        return np.array([c * bx - s * by, s * bx + c * by, 0.0])
+        return np.array([c * bx - s * by, s * bx + c * by, -self.cfg.v_descend if a >= 10 else 0.0])
 
     def _observe(self):
         cfg, sc = self.cfg, self.scene
@@ -268,6 +282,8 @@ class LandingEnv(gym.Env):
         if cfg.robot_r < d_min < cfg.d_star:
             r_c = -1.0 / (d_min - cfg.robot_r)
         r_a = cfg.a_descend if a == 9 else (cfg.a_halt if a == 0 else cfg.a_lateral)
+        if a >= 10:
+            r_a = cfg.a_descend + cfg.a_lateral        # amendment 13: a sliding descent
 
         outcome, r_t_end = None, 0.0
         landed, majority_ok, point_ok, land_cls = False, False, False, -1

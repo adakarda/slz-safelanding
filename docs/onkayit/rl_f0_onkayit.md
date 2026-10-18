@@ -753,3 +753,46 @@ Kural `~/rl_inis/h11_karar.py` ile uygulandı. Ölçülen, 3 tohumun ortalaması
 - Sert iniş 10 puan azaldı. Ama bunun ancak 4 puanı çime iniş olarak geri döndü. Kalanı süre dolmasına ve güvensiz inişe kaydı.
 - Düzeltme 11'deki risk notu gerçekleşti: ajan çim için daha çok yol gidiyor, 30 s sınırı yetmiyor.
 - `zemin_v2` + eğitimde 30 s birlikte denenmedi. Denenmesi yeni bir ön kayıt gerektirir.
+
+## Düzeltme 13 (2026-10-18): kayarken alçal eylemleri — E deneyi, eğitimden önce
+
+**Gerekçe (ölçülen, B2-s0, val_b32, başarılı inişler):**
+- İniş süresi: RL 16.1 ± 5.1 s, düz alçalma 10.5 ± 1.5 s, görüş kâhini 13.8 ± 4.1 s.
+- Paper Tablo I: RL 11.8 s, düz alçalma 10.3 s (7 sahne ortalaması, _hesap). Düz alçalma iki tarafta neredeyse aynı; fark politikada.
+- Hafif ortamda B2-s0 önce ~9 m'ye alçalıyor (15 m üstünde %100 "alçal"), sonra 5–10 m arasında yana kayıyor. Eylemler ya kayma ya alçalma olduğu için iki süre toplanıyor. Fazladan ~5.6 s, yani ~22 kayma adımı (_hesap).
+- **Kullanıcı isteği (Arda, 2026-10-18):** RL'yi hız için iyileştir, paper'daki gibi hızlı insin. Seçilen yol: kayarken alçal eylemleri.
+
+**E1 = D1 + kayarken alçal:**
+- Eylem uzayı 10'dan 18'e çıkar. Yeni 10–17 eylemleri, 1–8 yönlerinde 1 m/s kayarken aynı anda 2 m/s alçalır. Eski 10 eylem değişmez.
+- Eylem ödülü: alçal (+0.5) + kayma (−0.05) = +0.45. Öbür ödüller `zemin_v1` ile aynı.
+- **Kalkan:** kayarak alçalmayı da alçalma sayar. 10 m altında, merkez güvenli değilse, en yakın güvenli piksele düz kaymaya çevirir.
+- **Öbür ayarlar D1 ile aynı:** `zemin_v1` (C kararı), eğitimde 30 s, tohum 0–2, 1M adım, ent 0.01, 4 ortam, `--shard`, SORA hücresi 0.25 m, `--vec dummy`.
+- **Kod:**
+  - `env.py`: `diag_actions`, `lateral_index`, `descends`.
+  - `pilots.py`: kalkan.
+  - `train.py` / `evaluate.py`: `--diag`.
+  - `policy_node.py`: 10–17'yi 3 boyutlu hıza çevirir, görüş panelinde "ALCAL+YÖN" yazar. PX4 modu zaten 3 boyutlu hız alıyor, değişmez.
+  - `politika_ozet.py`: eylem adları.
+  - Eski ayarlar değişmez: `diag_actions` varsayılanı kapalı, eylem uzayı 10.
+  - 51 birim testi (2'si yeni).
+- **Teori (_hesap):** 20–30 m'den 5 m'ye alçalmak 7.5–12.5 s sürer. Bu sürede 7.5–12.5 m kayılabilir. B2-s0'ın ortalama ~5.6 m kayması tamamen alçalmaya binebilir. Süre düz alçalmaya (10.5 s) yaklaşır.
+
+**E deneyi:**
+- **Kıyas:** D1, aynı tohumlar. Değerlendirme aynı (val_b32 × 10 = 320 deneme, 30 s, nominal dinamik, argmax, `--diag`).
+- **Koşum:** `~/rl_inis/kuyruk_e.sh`. D kuyruğu üç tohumu da başlattıktan sonra boş yer bekler. Aynı anda en fazla 2 eğitim, en az 7 GB boş bellek, AirSim açıkken başlamaz.
+- **Karar betiği:** `~/rl_inis/h13_karar.py`.
+
+**Ölçütler (kalkansız RL birincil):**
+- **İniş süresi:** zemin kuralına göre başarılı bölümlerin ortalama süresi. Paper'ın tanımı: 20–30 m başlangıç, 30 s sınır, yalnız başarılı koşular.
+- Zemin başarısı ve güvensiz iniş, önceki deneylerdeki gibi.
+- **Tanımlayıcı:** RL + kalkan, süre doldu, çime iniş, kayarken alçal eylemlerinin payı, ilk yanal eylemin irtifası. Paper (11.8 s), düz alçalma ve kâhin süreleri yan yana yazılır.
+
+**Tahminler (_tahmin):**
+- **H13a (birincil, hız):** E1'in ortalama iniş süresi ≤ D1'inki − 2 s.
+- **H13b:** E1'in zemin başarısı ≥ D1'inki − 3 puan.
+- **H13c (güvenlik koruması):** E1'in güvensiz inişi ≤ D1'inki + 5 puan.
+- **Karar:**
+  - Üçü de ortalamada sağlanmalı.
+  - Her biri tohum çiftlerinin (E1-sN ile D1-sN) en az 2'sinde de sağlanmalı.
+  - İkisi de olursa kayarken alçal eylemleri benimsenir.
+- **Beklenen (_tahmin):** E1 ortalama iniş süresi 12–13 s.

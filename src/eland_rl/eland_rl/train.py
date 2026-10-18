@@ -45,6 +45,8 @@ def zemin_extra(a):
         extra['mirror'] = True
     if getattr(a, 'max_t', None) is not None:
         extra['max_t'] = a.max_t            # amendment 12: train under the test's time limit
+    if getattr(a, 'diag', False):
+        extra['diag_actions'] = True        # amendment 13: slide while descending
     if a.reward in ('zemin_v1', 'zemin_v2'):
         extra['sora_metric'] = False        # training needs no 3 m grid; evaluation keeps the metric
         if a.land_hard is not None and a.reward == 'zemin_v1':     # zemin_v2 sets its own hard reward
@@ -80,6 +82,7 @@ def main():
     ap.add_argument('--land-hard', type=float, default=None, help='zemin_v1: reward for landing on hard ground')
     ap.add_argument('--max-t', type=float, default=None,
                     help='amendment 12: episode time limit in training, s (default: EnvConfig, 90 s; tests use 30 s)')
+    ap.add_argument('--diag', action='store_true', help='amendment 13: eight sliding-descent actions (10..17)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     lr0 = a.lr

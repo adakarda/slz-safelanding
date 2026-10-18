@@ -8,6 +8,7 @@ import sys
 
 AD = {0: 'dur', 9: 'alcal', 1: 'ileri', 2: 'sol-ileri', 3: 'sol', 4: 'sol-geri', 5: 'geri', 6: 'sag-geri',
       7: 'sag', 8: 'sag-ileri'}
+AD.update({a + 9: 'alcal+' + AD[a] for a in range(1, 9)})   # amendment 13: sliding descents 10..17
 r = list(csv.DictReader(open(sys.argv[1])))
 if not r:
     print('politika.csv bos: politika hic adim atmadi')

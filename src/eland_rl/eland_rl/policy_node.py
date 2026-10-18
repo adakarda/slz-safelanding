@@ -30,7 +30,8 @@ kalkan_m >= 0 puts evaluate.py's SORA shield (pilots.shield) behind the policy.
 
 The action is body-relative (1 = nose = image up, counter-clockwise in 45
 degree steps); it is turned into a world velocity with the vehicle's current
-heading, as the environment does.
+heading, as the environment does. A model trained with --diag (amendment 13)
+also has 10..17: the same eight slides while descending.
 """
 import csv
 import json
@@ -48,7 +49,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Int8
 
 from .camera import Camera, ground_hits, nearest_source_index, sora_channel
-from .env import REWARD_PRESETS, EnvConfig
+from .env import REWARD_PRESETS, EnvConfig, lateral_index
 from .pilots import shield
 from .scene import Scene
 
@@ -147,10 +148,11 @@ class PolicyNode(Node):
             return EnvConfig(), 'args.json yok: eski gozlem (SORA 3 m)'
         a = json.load(open(path))
         cfg = EnvConfig(binary=bool(a.get('binary', False)), obs_mode=a.get('obs', 'sem_depth'),
-                        **REWARD_PRESETS[a.get('reward', 'paper')])
+                        diag_actions=bool(a.get('diag', False)), **REWARD_PRESETS[a.get('reward', 'paper')])
         third = (f'tampon {cfg.buffer_m} m {tuple(cfg.buffer_classes)}' if cfg.success_rule == 'zemin'
                  else f'SORA {cfg.sora_m} m')
-        return cfg, f'egitim: odul {a.get("reward")}, gozlem {cfg.obs_mode}, 3. kanal {third}'
+        return cfg, (f'egitim: odul {a.get("reward")}, gozlem {cfg.obs_mode}, 3. kanal {third}'
+                     f'{", kayarken alcal eylemleri" if cfg.diag_actions else ""}')
 
     def on_pose_topic(self, msg):
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
@@ -234,8 +236,9 @@ class PolicyNode(Node):
         elif a == 0:
             v_enu = np.zeros(3)
         else:
-            bx, by = self.lateral[a - 1] * self.v_lat
-            v_enu = np.array([math.cos(yaw) * bx - math.sin(yaw) * by, math.sin(yaw) * bx + math.cos(yaw) * by, 0.0])
+            bx, by = self.lateral[lateral_index(a)] * self.v_lat
+            v_enu = np.array([math.cos(yaw) * bx - math.sin(yaw) * by, math.sin(yaw) * bx + math.cos(yaw) * by,
+                              -self.v_down if a >= 10 else 0.0])
         vn, ve, vd = float(v_enu[1]), float(v_enu[0]), float(-v_enu[2])
         m = TwistStamped()
         m.header.stamp = self.get_clock().now().to_msg()
@@ -272,11 +275,16 @@ def view_image(sem, a, altitude_m, safe_share):
         for col, w in ((black, 7), (white, 3)):
             cv2.rectangle(img, (226, 226), (286, 286), col, w, cv2.LINE_AA)
     else:
-        th = math.radians((a - 1) * 45.0)          # from the nose (image up), counter-clockwise
+        k = lateral_index(a)
+        th = math.radians(k * 45.0)                # from the nose (image up), counter-clockwise
         tip = (int(256 - 150 * math.sin(th)), int(256 - 150 * math.cos(th)))
-        name = ['ILERI', 'SOL-ILERI', 'SOL', 'SOL-GERI', 'GERI', 'SAG-GERI', 'SAG', 'SAG-ILERI'][a - 1]
+        name = ['ILERI', 'SOL-ILERI', 'SOL', 'SOL-GERI', 'GERI', 'SAG-GERI', 'SAG', 'SAG-ILERI'][k]
         for col, w in ((black, 9), (white, 4)):
             cv2.arrowedLine(img, c, tip, col, w, cv2.LINE_AA, tipLength=0.25)
+        if a >= 10:                                # amendment 13: sliding while descending
+            name = 'ALCAL+' + name
+            for col, w in ((black, 7), (white, 3)):
+                cv2.circle(img, c, 40, col, w, cv2.LINE_AA)
     bar = np.full((64, 512, 3), 24, np.uint8)
     cv2.putText(bar, f'{a} {name}', (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 2, cv2.LINE_AA)
     cv2.putText(bar, f'kamera {altitude_m:5.1f} m   guvenli pay {100 * safe_share:4.1f} %', (10, 54),

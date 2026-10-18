@@ -47,12 +47,13 @@ def main():
     ap.add_argument('--shield-m', type=float, default=10.0)
     ap.add_argument('--oracle', action='store_true', help='add the view oracle (privileged GT upper bound)')
     ap.add_argument('--land-hard', type=float, default=None, help='zemin_v1: reward for landing on hard ground')
+    ap.add_argument('--diag', action='store_true', help='amendment 13: the model has the sliding-descent actions')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
     env = LandingEnv(scenes, EnvConfig(max_t=30.0, randomise_dynamics=False, binary=a.binary, obs_mode=a.obs, sem_source=a.sem_source,
                                        depth_mode=a.depth_mode, sora_elev_tau=a.sora_elev_tau,
-                                       shield_m=a.shield_train_m,
+                                       shield_m=a.shield_train_m, diag_actions=a.diag,
                                        **{**REWARD_PRESETS[a.reward],
                                           **({'land_rewards': {**ZEMIN_REWARDS, 1: a.land_hard}}
                                              if a.land_hard is not None else {})}))

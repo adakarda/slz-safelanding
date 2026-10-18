@@ -361,3 +361,31 @@ def test_training_time_limit_switch():
     env = LandingEnv([flat_scene(0)], EnvConfig(**zemin_extra(a)))
     _, info = _run(env, 0, (0.0, 0.0, 25.0, 0.0))               # hold: times out at the limit
     assert info['outcome'] == 'timeout' and abs(info['t'] - 30.0) < 0.3
+
+
+# ------------------------------------------------- amendment 13: sliding descents
+def test_sliding_descent_actions():
+    from eland_rl.env import descends, lateral_index
+    assert LandingEnv([flat_scene(0)]).action_space.n == 10                   # earlier runs unchanged
+    env = LandingEnv([flat_scene(0)], EnvConfig(diag_actions=True))
+    assert env.action_space.n == 18
+    assert [lateral_index(a) for a in (1, 8, 10, 17)] == [0, 7, 0, 7]
+    assert descends(9) and descends(13) and not descends(0) and not descends(4)
+    env.reset(seed=0, options={'start': (0.0, 0.0, 25.0, 0.0), 'dynamics': NO_LAG})
+    p0 = env.veh.pos.copy()
+    for _ in range(8):
+        info = env.step(10)[4]                                                 # nose (+x) while descending
+    d = env.veh.pos - p0
+    assert d[0] > 1.0 and abs(d[1]) < 0.1 and d[2] < -2.5                     # moved forward and down together
+    assert info['r_a'] == pytest.approx(0.5 * 0 + EnvConfig().a_descend + EnvConfig().a_lateral)
+
+
+def test_shield_treats_a_sliding_descent_as_a_descent():
+    from eland_rl.pilots import shield
+    obs = np.zeros((3, 128, 128), np.float32)
+    obs[2, :, 100:] = 1.0                                                      # safe only on the right
+    for a in (9, 13):
+        b, over = shield(a, obs, 8.0, 10.0)
+        assert over and 1 <= b <= 8                                             # a plain slide instead
+    assert shield(13, obs, 12.0, 10.0) == (13, False)                           # above 10 m: untouched
+    assert shield(4, obs, 8.0, 10.0) == (4, False)                              # slides pass

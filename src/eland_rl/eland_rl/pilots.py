@@ -36,9 +36,9 @@ def channel_pilot(obs):
 
 def shield(action, obs, height_m, below_m=10.0):
     """SORA shield (amendment 5 analysis): below below_m a descend over a centre the SORA channel
-    does not call safe becomes a slide towards the nearest safe pixel (or a hold). Returns
-    (action, overridden)."""
-    if action == 9 and height_m < below_m and not centre_safe(obs):
+    does not call safe becomes a slide towards the nearest safe pixel (or a hold). A sliding
+    descent (10..17, amendment 13) counts as a descent. Returns (action, overridden)."""
+    if (action == 9 or action >= 10) and height_m < below_m and not centre_safe(obs):
         return towards_nearest_safe(obs), True
     return action, False
 
