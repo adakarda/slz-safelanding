@@ -1076,3 +1076,19 @@ Final modelin bütün tohumları raporlanır. "En iyi tohum" ayrıca belirtilir 
    - (`arama.py` `mevcut_hazirla`)
 
 Toplam 25 ayar, 23 yeni eğitim. Tur 2, Tur 3 ve skor ile karar kuralı (H15) değişmedi. Durdurulan c00 eğitimi kullanılmıyor.
+
+## Sonuç: Düzeltme 14, F deneyi (2026-10-19 03:55)
+
+3 koşu bitti (F1 = `zemin_v3` + eğitimde 30 s). Kural `h14_karar.py` ile uygulandı. Ölçülen, ortalama ± sapma:
+
+| | B1 | D1 | F1 |
+|---|---|---|---|
+| RL başarı | 56.9 ± 10.9 | 24.8 ± 4.6 | 35.6 ± 14.2 |
+| RL başarılı iniş süresi (s) | 15.1 ± 0.5 | 12.2 ± 1.7 | 16.7 ± 2.2 |
+| RL güvensiz | 18.6 ± 10.3 | 60.2 ± 16.1 | 14.1 ± 15.5 |
+| RL süre doldu | 24.5 ± 16.3 | 15.0 ± 20.1 | 50.3 ± 27.0 |
+| RL + kalkan başarı | 66.7 ± 13.1 | 53.6 ± 18.3 | 40.3 ± 20.4 |
+
+- **Karar: `zemin_v3` + eğitimde 30 s benimsenmez.** H14a ve H14b tutmadı, H14c tuttu.
+- **Ödül düzeltmesi çöküşün yönünü değiştirdi:** D dümdüz alçalıyordu, F1 süre doldurmaya kaydı.
+- **Tanımlayıcı:** taramanın Tur 1'inde `zemin_v3` 90 s ile de yavaş (c18, 400k: kalkanla %41.9, süre doldu %57.8). Yol/ağaç cezasını süre dolmasının altına indirmek, ajanı belirsiz durumda beklemeye itiyor (_tahmin).
