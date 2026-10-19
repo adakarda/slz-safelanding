@@ -5,6 +5,8 @@
 #                                         [--irtifa 25] [--ruzgar KUZEY,DOGU,ASAGI]
 #
 # BASLANGIC_CSV: x_ned,y_ned[,...] satirlari (baslik satiri atlanir; orto_analiz.py'nin baslangiclar.csv'si).
+# Basligi x_ned,y_ned,hedef_n,hedef_e,irtifa olan liste (scripts/havada_sec.py --n) havada baslangictir:
+# her satira run_airsim.sh --havada N,E,IRTIFA eklenir (kalkis 30 m, sonra hedefe ucus, tetik orada).
 # Her satir icin run_airsim.sh --takeoff --trigger --no-hud --baslangic X,Y [--v3] [--rl ...] acilir, inis
 # olculur, kosu kapatilir. Sonuclar ~/eland_veri/_gunlukler/airsim_inis_<etiket>_<zaman>/sonuc.jsonl.
 # Her kosudan once ve sonra yetim ROS dugumu aranir (ilk Faz 3 kosusunda birikmislerdi).
@@ -34,8 +36,13 @@ yetim_var() { for ad in $DUGUMLER; do pgrep -x "$ad" >/dev/null && return 0; don
 i=0
 # read the list first: tasklist.exe and friends inside the loop would otherwise eat the loop's stdin
 mapfile -t SATIRLAR < <(tail -n +2 "$CSV" | tr -d '\r')
+BASLIK=$(head -n 1 "$CSV" | tr -d '\r')
 for satir in "${SATIRLAR[@]}"; do
-	IFS=, read -r X Y _ <<<"$satir"
+	IFS=, read -r X Y C3 C4 C5 _ <<<"$satir,,,,"
+	HAV=(); KALKIS=$IRTIFA; HAV_AD=""
+	if [[ "$BASLIK" == *hedef_n* ]]; then      # air start: climb to 30 m, fly over, trigger there
+		HAV=(--havada "$C3,$C4,$C5"); KALKIS=30; HAV_AD="$C3,$C4,$C5"
+	fi
 	i=$((i + 1))
 	if yetim_var; then
 		echo "[inis] UYARI: onceki kosudan kalan dugum var, kapatiliyor"
@@ -58,9 +65,9 @@ for satir in "${SATIRLAR[@]}"; do
 			echo "[inis] $(date +%H:%M) Windows bos bellek $WB MB < 2000, bekleniyor"; sleep 60
 		done
 		D=$KOK/k$(printf %02d $i)$([ "$deneme" -gt 1 ] && echo "_$deneme")
-		echo "[inis] $(date +%H:%M) kosu $i (deneme $deneme): baslangic ($X, $Y) $V3 ${RL[*]}"
-		bash "$WS/src/eland_airsim/scripts/run_airsim.sh" --takeoff "$IRTIFA" --trigger --no-hud \
-			--baslangic "$X,$Y" $V3 "${RL[@]}" --log-dir "$D" >"$D.out" 2>&1 &
+		echo "[inis] $(date +%H:%M) kosu $i (deneme $deneme): baslangic ($X, $Y)${HAV_AD:+ havada ($HAV_AD)} $V3 ${RL[*]}"
+		bash "$WS/src/eland_airsim/scripts/run_airsim.sh" --takeoff "$KALKIS" --trigger --no-hud \
+			--baslangic "$X,$Y" "${HAV[@]}" $V3 "${RL[@]}" --log-dir "$D" >"$D.out" 2>&1 &
 		R=$!
 		for _ in $(seq 1 400); do
 			grep -qE "hazir\. Kapatmak|HATA" "$D.out" 2>/dev/null && break
@@ -68,7 +75,7 @@ for satir in "${SATIRLAR[@]}"; do
 			sleep 1
 		done
 		if grep -q "hazir\. Kapatmak" "$D.out"; then
-			grep -E "irtifa|secildi" "$D.out" | sed 's/^/   /'
+			grep -E "irtifa|secildi|havada:" "$D.out" | sed 's/^/   /'
 			PYTHONPATH="$WS/src/eland_airsim:${PYTHONPATH:-}" "$HOME/airsim-venv/bin/python" -m eland_airsim.inis_sina \
 				--out "$D/inis.json" >"$D/inis_sina.log" 2>&1
 			grep '^\[inis\]' "$D/inis_sina.log" | sed 's/^/   /'
@@ -95,8 +102,8 @@ for satir in "${SATIRLAR[@]}"; do
 		fi
 		break
 	done
-	python3 -c "import json,sys; d=json.load(open(sys.argv[1])); d.update(kosu=int(sys.argv[2]), x=float(sys.argv[3]), y=float(sys.argv[4]), kol=sys.argv[5], deneme=int(sys.argv[6]), coken=int(sys.argv[7])); print(json.dumps(d, ensure_ascii=False))" \
-		"$D/inis.json" "$i" "$X" "$Y" "$ETIKET" "$deneme" "$coken" >>"$KOK/sonuc.jsonl"
+	python3 -c "import json,sys; d=json.load(open(sys.argv[1])); d.update(kosu=int(sys.argv[2]), x=float(sys.argv[3]), y=float(sys.argv[4]), kol=sys.argv[5], deneme=int(sys.argv[6]), coken=int(sys.argv[7])); sys.argv[8] and d.update(havada=[float(v) for v in sys.argv[8].split(',')]); print(json.dumps(d, ensure_ascii=False))" \
+		"$D/inis.json" "$i" "$X" "$Y" "$ETIKET" "$deneme" "$coken" "$HAV_AD" >>"$KOK/sonuc.jsonl"
 	yetim_var && echo "[inis] UYARI: kosu $i kapandiktan sonra dugum kaldi"
 done
 echo "[inis] $(date +%H:%M) bitti: $KOK/sonuc.jsonl"

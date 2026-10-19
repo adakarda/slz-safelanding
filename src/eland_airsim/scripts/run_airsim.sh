@@ -15,6 +15,10 @@
 #   --ruzgar     sabit ruzgar, m/s NED (AirSim simSetWind; kopru basinda uygulanir)
 #   --izle       AirSim penceresinde asagi kameranin goruntu + segmentasyon alt pencereleri; ayrica
 #                v3 paneli (--v3) ve politikanin gordugu (--rl) icin goruntu pencereleri
+#   --havada N,E,IRTIFA | rastgele[:TOHUM]
+#                havada baslangic: kalkistan sonra dogma noktasina gore (N, E) m'ye ve IRTIFA m'ye ucar, orada
+#                bekler; tetik (--trigger ya da istasyonda 0) orada verilir. rastgele: dogma noktasi bilinen
+#                guvenli noktalardan, hedef 10-50 m otede, 20-30 m (scripts/havada_sec.py). Kalkis 30 m.
 #
 # Gazebo'ya dokunmaz: eland_sim.launch.py aynen kullanilir (Gazebo kopruleri bosta bekler), PX4 ayri bir
 # rootfs'te calisir (rootfs_airsim) ki Gazebo kosularinin kayitli parametreleri karismasin.
@@ -30,7 +34,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
-YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0
+YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -50,12 +54,25 @@ while [ $# -gt 0 ]; do
 	--kalkan) KALKAN=$2; shift ;;
 	--ruzgar) RUZGAR=$2; shift ;;
 	--izle) IZLE=1 ;;
-	-h | --help) sed -n 2,23p "$0"; exit 0 ;;
+	--havada) HAVADA=$2; shift ;;
+	-h | --help) sed -n 2,27p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
 	shift
 done
 fail() { echo "[run_airsim] HATA: $*"; exit 1; }
+if [[ "$HAVADA" == rastgele* ]]; then      # spawn on known clear ground, target drawn around it
+	SECIM=$(python3 "$WS_DIR/src/eland_airsim/scripts/havada_sec.py" \
+		$([[ "$HAVADA" == rastgele:* ]] && echo "--tohum ${HAVADA#rastgele:}") \
+		$([ -n "$BASLANGIC" ] && echo "--baslangic $BASLANGIC")) || fail "havada_sec.py: hedef secilemedi"
+	[ -n "$BASLANGIC" ] || BASLANGIC=${SECIM% *}
+	HAVADA=${SECIM#* }
+	echo "[run_airsim] rastgele havada baslangic: dogma ($BASLANGIC), hedef (K, D, irtifa) = ($HAVADA)"
+fi
+if [ -n "$HAVADA" ]; then
+	[[ "$HAVADA" =~ ^-?[0-9.]+,-?[0-9.]+,[0-9.]+$ ]] || fail "--havada N,E,IRTIFA ya da rastgele[:TOHUM] olmali: $HAVADA"
+	[ -n "$TAKEOFF_ALT" ] || TAKEOFF_ALT=30     # climb above the trees before flying over to the target
+fi
 EXE="$AIRSIM_DIR/$DUNYA/$DUNYA/WindowsNoEditor/$DUNYA.exe"
 [ -f "$EXE" ] || fail "AirSim dunyasi yok: $EXE"
 [ -x "$PX4_BIN/px4" ] || fail "PX4 derlenmemis: $PX4_BIN/px4"
@@ -190,7 +207,14 @@ MicroXRCEAgent udp4 -p 8888 >"$LOG_DIR/agent.log" 2>&1 &
 AGENT_PID=$!
 set +u
 source /opt/ros/jazzy/setup.bash
-source "$WS_DIR/install/setup.bash"
+if [ -f "$WS_DIR/install/setup.bash" ]; then
+	source "$WS_DIR/install/setup.bash"
+else      # a git worktree has no build of its own: use the main workspace's (px4_msgs, eland_* launch files)
+	echo "[run_airsim] $WS_DIR/install yok; ~/ros2_ws/install kullaniliyor"
+	source "$HOME/ros2_ws/install/setup.bash"
+fi
+command -v ros2 >/dev/null && ros2 interface show px4_msgs/msg/VehicleCommand >/dev/null 2>&1 ||
+	fail "ROS 2 ortami eksik: px4_msgs bulunamadi"
 set -u
 RUZGAR_ARG=()
 if [ -n "$RUZGAR" ]; then      # a ROS double array: "5,0,0" -> [5.00,0.00,0.00]
@@ -266,6 +290,40 @@ if [ -n "$TAKEOFF_ALT" ]; then
 		sleep 1
 	done
 	echo "[run_airsim]   irtifa $(echo "$alt" | tr -d '-') m"
+fi
+if [ -n "$HAVADA" ]; then
+	# Air start: PX4 arms on the ground, so the vehicle climbed at the spawn and now flies to the target with
+	# VEHICLE_CMD_DO_REPOSITION (PX4 holds there in Hold mode): across at the takeoff height, then to the
+	# target height. The local origin stays at the spawn, so inis_sina.py's landing offsets are unchanged.
+	IFS=, read -r H_N H_E H_ALT <<<"$HAVADA"
+	ev() { timeout 10 "$PX4_BIN/px4-listener" home_position 2>/dev/null | awk -v k="$1:" '$1 == k {print $2; exit}'; }
+	LAT0=$(ev lat); LON0=$(ev lon); ALT0=$(ev alt)
+	[ -n "$LAT0" ] && [ -n "$LON0" ] && [ -n "$ALT0" ] || fail "PX4 ev konumu (home_position) okunamadi"
+	konum() {
+		timeout 10 "$PX4_BIN/px4-listener" vehicle_local_position 2>/dev/null |
+			awk '$1 == "x:" && !a {x = $2; a = 1} $1 == "y:" && !b {y = $2; b = 1} $1 == "z:" && !c {z = $2; c = 1}
+			     END {print x, y, z}'
+	}
+	hedefe_uc() {  # N E IRTIFA
+		local ll amsl
+		ll=$(python3 -c "import math, sys; la, lo, n, e = map(float, sys.argv[1:]); r = 6378137.0
+print(f'{la + math.degrees(n / r):.8f} {lo + math.degrees(e / (r * math.cos(math.radians(la)))):.8f}')" "$LAT0" "$LON0" "$1" "$2")
+		amsl=$(awk -v a="$ALT0" -v h="$3" 'BEGIN {printf "%.2f", a + h}')
+		ros2 topic pub -1 /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \
+			"{command: 192, param1: -1.0, param2: 1.0, param4: .nan, param5: ${ll% *}, param6: ${ll#* }, param7: $amsl, target_system: 1, target_component: 1, source_system: 255, source_component: 190, from_external: true}" \
+			--qos-reliability best_effort --qos-durability transient_local >/dev/null 2>&1
+	}
+	vardi() {  # N E IRTIFA: within 2 m across and 1 m in height
+		konum | awk -v n="$1" -v e="$2" -v h="$3" '{exit !(NF == 3 && sqrt(($1 - n)^2 + ($2 - e)^2) < 2.0 && (-$3 - h)^2 < 1.0)}'
+	}
+	echo "[run_airsim] havada baslangica uculuyor: ($H_N, $H_E) m, $H_ALT m"
+	hedefe_uc "$H_N" "$H_E" "$TAKEOFF_ALT"
+	for _ in $(seq 1 90); do vardi "$H_N" "$H_E" "$TAKEOFF_ALT" && break; sleep 1; done
+	hedefe_uc "$H_N" "$H_E" "$H_ALT"
+	for _ in $(seq 1 60); do vardi "$H_N" "$H_E" "$H_ALT" && break; sleep 1; done
+	sleep 3      # settle into the hover the policy was trained to start from
+	vardi "$H_N" "$H_E" "$H_ALT" || fail "havada hedefe varilamadi; konum $(konum)"
+	echo "[run_airsim]   havada: konum $(konum) (x, y, z NED, dogma noktasina gore)"
 fi
 if [ -n "$RL_MODEL" ]; then
 	for kayit in 1 2 3; do      # a registration attempted too early fails; try again after a pause
