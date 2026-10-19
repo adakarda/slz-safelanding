@@ -29,35 +29,40 @@ def olc(yol):
     return m
 
 
-b1 = [olc(f'{K}/b_B1_s{t}/eval_val.csv') for t in (0, 1, 2)]
-ayarlar = {}
-for yol in glob.glob(f'{K}/arama/t2_*/eval_val_b32_10.csv') + glob.glob(f'{K}/arama/t3_*_s[12]/eval_val_b32_10.csv'):
-    d = os.path.basename(os.path.dirname(yol))
-    if d.startswith('t2_'):
-        ad, t = d[3:], 0
+def main():
+    b1 = [olc(f'{K}/b_B1_s{t}/eval_val.csv') for t in (0, 1, 2)]
+    ayarlar = {}
+    for yol in glob.glob(f'{K}/arama/t2_*/eval_val_b32_10.csv') + glob.glob(f'{K}/arama/t3_*_s[12]/eval_val_b32_10.csv'):
+        d = os.path.basename(os.path.dirname(yol))
+        if d.startswith('t2_'):
+            ad, t = d[3:], 0
+        else:
+            ad, t = d[3:].rsplit('_s', 1)
+            t = int(t)
+        ayarlar.setdefault(ad, {})[t] = olc(yol)
+    ort = lambda ms, f: st.mean(f(m) for m in ms)  # noqa: E731
+    print(f'B1: S {ort(b1, lambda m: m["S"]):.1f}, kalkan B {ort(b1, lambda m: m["rl_kalkan"]["B"]):.1f}, '
+          f'kalkan T {ort(b1, lambda m: m["rl_kalkan"]["T"]):.1f} s, RL B {ort(b1, lambda m: m["rl"]["B"]):.1f}, '
+          f'RL guvensiz {ort(b1, lambda m: m["rl"]["U"]):.1f}')
+    tam = {ad: v for ad, v in ayarlar.items() if len(v) == 3}
+    for ad, v in sorted(tam.items(), key=lambda kv: -ort(kv[1].values(), lambda m: m['S'])):
+        ms = [v[t] for t in (0, 1, 2)]
+        print(f'{ad}: S {ort(ms, lambda m: m["S"]):.1f} {[round(m["S"], 1) for m in ms]}, kalkan B {ort(ms, lambda m: m["rl_kalkan"]["B"]):.1f}, '
+              f'kalkan T {ort(ms, lambda m: m["rl_kalkan"]["T"]):.1f} s, RL B {ort(ms, lambda m: m["rl"]["B"]):.1f}, '
+              f'RL T {ort(ms, lambda m: m["rl"]["T"]):.1f} s, RL guvensiz {ort(ms, lambda m: m["rl"]["U"]):.1f}')
+    if not tam:
+        print('Tur 3 tamamlanmadi; karar yok')
     else:
-        ad, t = d[3:].rsplit('_s', 1)
-        t = int(t)
-    ayarlar.setdefault(ad, {})[t] = olc(yol)
-ort = lambda ms, f: st.mean(f(m) for m in ms)  # noqa: E731
-print(f'B1: S {ort(b1, lambda m: m["S"]):.1f}, kalkan B {ort(b1, lambda m: m["rl_kalkan"]["B"]):.1f}, '
-      f'kalkan T {ort(b1, lambda m: m["rl_kalkan"]["T"]):.1f} s, RL B {ort(b1, lambda m: m["rl"]["B"]):.1f}, '
-      f'RL guvensiz {ort(b1, lambda m: m["rl"]["U"]):.1f}')
-tam = {ad: v for ad, v in ayarlar.items() if len(v) == 3}
-for ad, v in sorted(tam.items(), key=lambda kv: -ort(kv[1].values(), lambda m: m['S'])):
-    ms = [v[t] for t in (0, 1, 2)]
-    print(f'{ad}: S {ort(ms, lambda m: m["S"]):.1f} {[round(m["S"], 1) for m in ms]}, kalkan B {ort(ms, lambda m: m["rl_kalkan"]["B"]):.1f}, '
-          f'kalkan T {ort(ms, lambda m: m["rl_kalkan"]["T"]):.1f} s, RL B {ort(ms, lambda m: m["rl"]["B"]):.1f}, '
-          f'RL T {ort(ms, lambda m: m["rl"]["T"]):.1f} s, RL guvensiz {ort(ms, lambda m: m["rl"]["U"]):.1f}')
-if not tam:
-    print('Tur 3 tamamlanmadi; karar yok')
-else:
-    ad, v = max(tam.items(), key=lambda kv: ort(kv[1].values(), lambda m: m['S']))
-    ms = [v[t] for t in (0, 1, 2)]
-    a_t = [ms[t]['S'] >= b1[t]['S'] + 5 for t in (0, 1, 2)]
-    h_a = ort(ms, lambda m: m['S']) >= ort(b1, lambda m: m['S']) + 5 and sum(a_t) >= 2
-    h_b = ort(ms, lambda m: m['rl_kalkan']['B']) >= ort(b1, lambda m: m['rl_kalkan']['B']) - 3
-    h_c = ort(ms, lambda m: m['rl_kalkan']['T']) <= 13.5
-    h_d = ort(ms, lambda m: m['rl']['U']) <= ort(b1, lambda m: m['rl']['U']) + 5
-    print(f'kazanan aday {ad}: H15a {h_a} (tohum {a_t}) | H15b {h_b} | H15c {h_c} | H15d {h_d}')
-    print(f'KARAR: {ad} {"yeni en iyi ayar" if h_a and h_b and h_c and h_d else "B1/B2-s0 yerini almaz"}')
+        ad, v = max(tam.items(), key=lambda kv: ort(kv[1].values(), lambda m: m['S']))
+        ms = [v[t] for t in (0, 1, 2)]
+        a_t = [ms[t]['S'] >= b1[t]['S'] + 5 for t in (0, 1, 2)]
+        h_a = ort(ms, lambda m: m['S']) >= ort(b1, lambda m: m['S']) + 5 and sum(a_t) >= 2
+        h_b = ort(ms, lambda m: m['rl_kalkan']['B']) >= ort(b1, lambda m: m['rl_kalkan']['B']) - 3
+        h_c = ort(ms, lambda m: m['rl_kalkan']['T']) <= 13.5
+        h_d = ort(ms, lambda m: m['rl']['U']) <= ort(b1, lambda m: m['rl']['U']) + 5
+        print(f'kazanan aday {ad}: H15a {h_a} (tohum {a_t}) | H15b {h_b} | H15c {h_c} | H15d {h_d}')
+        print(f'KARAR: {ad} {"yeni en iyi ayar" if h_a and h_b and h_c and h_d else "B1/B2-s0 yerini almaz"}')
+
+
+if __name__ == "__main__":
+    main()

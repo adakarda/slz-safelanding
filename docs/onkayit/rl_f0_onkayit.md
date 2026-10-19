@@ -1130,3 +1130,33 @@ Toplam 25 ayar, 23 yeni eğitim. Tur 2, Tur 3 ve skor ile karar kuralı (H15) de
 **Sıra:** tarama → gözlem turu → birleşim turu → Faz 7 (AirSim, 30 havada başlangıç). Faz 7'nin modeli birleşim turunun final adayıdır (`faz7_model.py`, en önce bu). Final IrYamim testi en sonda, Arda "koş" deyince.
 
 **Not:** tarama Tur 3 sürerken Arda'nın isteğiyle AirSim'de en iyi modelin (c13 tohum 0) gösterimi yapılır: 4 havada rastgele iniş, GT ve v3. Bu bir ölçüm değildir, hiçbir karara girmez.
+
+## Düzeltme 19 (2026-10-19 22:30): B2-s0'ı hızlandırma (ince ayar) — eğitimden önce
+
+**Kullanıcı isteği (Arda):** "B2-s0'ı hızlandırabilir miyiz?"
+- B2-s0 en yüksek kalkanlı başarıya sahip tek model: %76.9. Ama yavaş: 17.4 s.
+- Kayarken alçal eklenemez: eylem uzayı 10'dan 18'e çıkar, çıkış katmanı değişir.
+- PX4'ün alçalma hızı sınırı (2 m/s) değişmez.
+
+**Yöntem:** B2-s0'ın 1M modelinden, B2'nin ayarlarıyla (`zemin_v1` + aynalama), +500k adım ince ayar.
+- `--resume`, `--steps 1500000`. Öğrenme oranı 1e-4'ten 0'a iner.
+- Tek tohum, çünkü B2-s0 tek bir model.
+
+| Ad | Ek |
+|---|---|
+| h1_hiz | adım −0.5, alçal +1 (90 s) |
+| h2_hiz_45s | hız ödülü, eğitimde 45 s |
+| h3_hiz_kalkan | hız ödülü, kalkan eğitimde (10 m) |
+
+**Değerlendirme:** val_b32 × 10 = 320 deneme, tam.
+
+**Karar (H19, `b2hiz_karar.py`):** çeşit kabul edilir, eğer şu üçü de tutarsa:
+- RL + kalkan süresi ≤ 17.4 − 1.5 = 15.9 s.
+- RL + kalkan başarısı ≥ 76.9 − 3 = %73.9.
+- Kalkansız güvensiz iniş ≤ B2-s0 + 5.
+
+Birden çok çeşit kabul edilirse skoru en yüksek olan "hızlandırılmış B2" olur. Bu tek tohumluk bir sonuçtur. Ana karşılaştırmalar 3 tohumla kalır.
+
+**Sıra:** tarama → B2 hızlandırma → gözlem turu → birleşim turu → Faz 7.
+- `kararla.py` içe aktarılınca artık çıktı vermiyor (`main` koruması).
+- Davranış değişmedi.

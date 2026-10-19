@@ -45,7 +45,10 @@ def taban():
 
 
 def main():
-    while not (os.path.exists(f'{AR}/arama.log') and 'arama bitti' in open(f'{AR}/arama.log').read()):
+    def bitti(log, ifade):
+        return os.path.exists(log) and ifade in open(log).read()
+    # amendment 19: B2-s0's fine-tuning runs between the search and this round
+    while not (bitti(f'{AR}/arama.log', 'arama bitti') and bitti(f'{AR}/b2hiz/arama.log', 'b2hiz bitti')):
         time.sleep(300)
     ad, args, s = taban()
     arama.log(f'gozlem turu basladi; taban {ad} (Tur 3 ortalama S {s:.1f}): {" ".join(args)}')
