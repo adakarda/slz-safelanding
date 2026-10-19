@@ -57,8 +57,32 @@ def gozlem_kazanani():
     return os.path.join(d, 'model.zip'), f'{os.path.basename(d)} (gozlem turu kazanani; RL + kalkan val {100 * puan(d):.1f} %)'
 
 
-kazanan = gozlem_kazanani() or (arama_kazanani() if os.path.exists(os.path.expanduser('~/rl_inis/arama/kararla.py'))
-                                else None)
+def birlesim_kazanani():
+    """Amendment 18: the combination round's final candidate: its 2M seeds if H18b chose 2M, else its variant if H18
+    adopted it, else its base (the best before it). The seed with the highest RL + kalkan on val_b32."""
+    karar = os.path.expanduser('~/rl_inis/arama/birlesim_karar.py')
+    sonuc = os.path.expanduser('~/rl_inis/arama/birlesim/birlesim_sonuc.json')
+    if not (os.path.exists(karar) and os.path.exists(sonuc)):
+        return None
+    import json
+    s = json.load(open(sonuc))
+    out = subprocess.run(['python3', karar], capture_output=True, text=True).stdout.splitlines()
+    if any('KARAR2M: 2M kullanilir' in x for x in out):
+        dz, neden = s['uzun_dizinler'], 'birlesim turu, 2M'
+    elif any(x.startswith('KARAR:') and 'benimsenir' in x for x in out):
+        dz, neden = s['dizinler'], f'birlesim turu cesidi {s["cesit"]}'
+    else:
+        dz, neden = s['taban_dizinler'], f'birlesim turunun tabani {s["taban"]}'
+
+    def puan(d):
+        rs = [r for r in csv.DictReader(open(os.path.join(d, 'eval_val_b32_10.csv'))) if r['method'] == 'rl_kalkan']
+        return sum(r['zemin_success'] == '1' for r in rs) / len(rs)
+    d = max(dz, key=puan)
+    return os.path.join(d, 'model.zip'), f'{os.path.basename(d)} ({neden}; RL + kalkan val {100 * puan(d):.1f} %)'
+
+
+kazanan = birlesim_kazanani() or gozlem_kazanani() or (
+    arama_kazanani() if os.path.exists(os.path.expanduser('~/rl_inis/arama/kararla.py')) else None)
 if kazanan:
     yol, ad = kazanan
 elif benimsendi('h14_karar.py'):          # amendment 14, written before Faz 7 ran: F first

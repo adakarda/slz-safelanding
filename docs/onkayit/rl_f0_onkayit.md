@@ -1092,3 +1092,41 @@ Toplam 25 ayar, 23 yeni eğitim. Tur 2, Tur 3 ve skor ile karar kuralı (H15) de
 - **Karar: `zemin_v3` + eğitimde 30 s benimsenmez.** H14a ve H14b tutmadı, H14c tuttu.
 - **Ödül düzeltmesi çöküşün yönünü değiştirdi:** D dümdüz alçalıyordu, F1 süre doldurmaya kaydı.
 - **Tanımlayıcı:** taramanın Tur 1'inde `zemin_v3` 90 s ile de yavaş (c18, 400k: kalkanla %41.9, süre doldu %57.8). Yol/ağaç cezasını süre dolmasının altına indirmek, ajanı belirsiz durumda beklemeye itiyor (_tahmin).
+
+## Düzeltme 18 (2026-10-19 17:30): birleşim turu ve 2M — eğitimlerden önce
+
+**Kullanıcı kararı (Arda, 2026-10-19):** "Tamam, en iyi performansı yakalamak için kullanabildiğin kadar kullan." Bu cevap şu önerilere verildi: birleşim, 2M adım ve IMPALA. IMPALA için "evet demen yeterli" denmişti.
+- Bu cevap K79 için de onay sayıldı.
+- Arda itiraz ederse IMPALA çeşidi (k3) çıkarılır ve sonuçlardan ayrı tutulur.
+
+**Gerekçe (ölçülen, tarama Tur 2 ve Tur 3 tohum 0):**
+- En iyi iki ayar farklı yoldan geliyor:
+  - c13: 30 s + kayarken alçal + kalkan eğitimde. Tur 2 skoru 91.8, val_b32'de 97.4, iniş 13.8 s.
+  - c23: 90 s + adım −0.5 + alçal +1. Tur 2 skoru 87.6.
+- Eğitim eğrileri 1M'de hâlâ hafifçe yükseliyor.
+- Ön elemede IMPALA +3 puan doğruluk vermişti (Düzeltme 10).
+
+**Taban (sonuçtan önce sabit):** gözlem turu (H16) bir çeşidi benimsediyse o çeşit, değilse taramanın Tur 3'ünde ortalama S'si en yüksek ayar.
+
+**Çeşitler** (tabanın argümanları üzerine; tabanda zaten olan değişiklik düşer, `birlesim_tur.py`):
+
+| Ad | Değişiklik |
+|---|---|
+| k1_hiz | + adım cezası −0.5 ve alçal +1 (c23'ün hız ödülü) |
+| k2_odul | ödül değişir: `zemin_v3` ↔ `zemin_v1` |
+| k3_impala | + IMPALA gövdesi |
+| k4_90s_hiz | eğitimde 90 s + hız ödülü |
+
+**Turlar:**
+- K-A: 400k, val_b64 × 5.
+- K-B: en iyi 2, 1M, val_b64 × 10.
+- K-C: en iyisi 3 tohum, val_b32 × 10.
+- K-D: final aday 2M'ye uzatılır. Final aday, H18 kabul ettiyse çeşit, değilse taban. Üç tohum kendi 1M modelinden `--resume`, `--steps 2000000` ile devam eder. Öğrenme oranı 2M programına göre 1.5e-4'ten 0'a iner.
+
+**Kararlar (`birlesim_karar.py`):**
+- **H18:** çeşit benimsenir. Kriterler H16 ile aynı: S ≥ taban + 5 (tohum çiftlerinin en az 2'sinde de), kalkanlı başarı ≥ taban − 3, süre ≤ taban + 0.5 s, kalkansız güvensiz ≤ taban + 5.
+- **H18b:** 2M kullanılır, eğer ortalama S ≥ 1M + 3 ise ve üç tohumun en az 2'sinde S artıyorsa.
+
+**Sıra:** tarama → gözlem turu → birleşim turu → Faz 7 (AirSim, 30 havada başlangıç). Faz 7'nin modeli birleşim turunun final adayıdır (`faz7_model.py`, en önce bu). Final IrYamim testi en sonda, Arda "koş" deyince.
+
+**Not:** tarama Tur 3 sürerken Arda'nın isteğiyle AirSim'de en iyi modelin (c13 tohum 0) gösterimi yapılır: 4 havada rastgele iniş, GT ve v3. Bu bir ölçüm değildir, hiçbir karara girmez.

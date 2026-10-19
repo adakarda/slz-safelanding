@@ -93,3 +93,15 @@ Kollar, başlangıçlar ve tahminler değişmedi.
   - T7d: ≤ 18/30.
 - Ek tanımlayıcı: klasik ile RL arasında zemin kuralı oranları için Fisher kesin testi, GT ve v3 için ayrı ayrı.
 - Süre: ~4–5 saat (_tahmin).
+
+## Düzeltme 4 (2026-10-19 17:30, Faz 7 koşmadan önce)
+
+Faz 7, birleşim turunun (rl_f0 Düzeltme 18) sonuna alındı.
+
+RL modeli sırası:
+1. Birleşim turunun final adayı: 2M seçildiyse 2M, H18 çeşidi benimsediyse çeşit, değilse onun tabanı.
+2. Değilse gözlem turu.
+3. Değilse tarama.
+4. Değilse önceki sıra.
+
+Seçim ölçütü aynı: val_b32'de RL + kalkan başarısı en yüksek tohum.
