@@ -8,6 +8,8 @@ Cesitler (tabanin argumanlari uzerine):
   k2_odul     odul degisir: taban zemin_v3 ise zemin_v1, zemin_v1 ise zemin_v3
   k3_impala   + IMPALA govdesi (Arda'nin onayiyla, K79)
   k4_90s_hiz  egitimde 90 s (--max-t kalkar) + hiz odulu
+  k5_c13_kanal  (Duzeltme 20) c13'un tarifi (zemin_v3, 30 s, --diag, kalkan egitimde) + tabanin --kanallar'i;
+               yalniz taban bir gozlem kanali iceriyorsa (yoksa k5 = c13, taramada olculdu)
   K-A  4 cesit, tohum 0, 400k, val_b64 x 5 | K-B  en iyi 2, 1M, val_b64 x 10 | K-C  en iyisi 3 tohum, val_b32 x 10
   K-D  H18 kazanani (yoksa taban) 3 tohumu 2M'ye uzatilir (--resume, --steps 2000000), val_b32 x 10; H18b.
 
@@ -32,6 +34,7 @@ arama.K = f'{H}/rl_inis/kos/birlesim'
 os.makedirs(arama.A, exist_ok=True)
 os.makedirs(arama.K, exist_ok=True)
 HIZ = {'r_step': -0.5, 'a_descend': 1.0}
+C13 = ['--reward', 'zemin_v3', '--max-t', '30', '--diag', '--shield-train-m', '10']   # amendment 20
 
 
 def taban():
@@ -87,6 +90,9 @@ def cesitler(args):
             ('k2_odul', ayarla(args, odul='zemin_v1' if odul == 'zemin_v3' else 'zemin_v3')),
             ('k3_impala', ayarla(args, cikar=('--encoder',), ekle=('--encoder', 'impala'))),
             ('k4_90s_hiz', ayarla(args, cikar=('--max-t',), env=HIZ))]
+    kanal = arama.secenek(args, '--kanallar')
+    if kanal:   # amendment 20: the fastest recipe of the search (c13) with the base's observation channels
+        aday.append(('k5_c13_kanal', [*C13, '--kanallar', kanal]))
     out, gorulen = [], [args]                 # a variant that changes nothing (base already has it) is dropped
     for c, a in aday:
         if a not in gorulen:

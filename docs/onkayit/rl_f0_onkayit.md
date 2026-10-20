@@ -1238,3 +1238,29 @@ Kural `b2hiz_karar.py` ile uygulandı. Ölçülen:
   rollout tamponu sıfırdan başlar (2026-10-17 yürütme notundaki gibi).
 - Ayarlar, listeler, adım sayıları, tahminler ve karar kuralları değişmedi. Yalnız sıra değişti: G-A'nın kalan iki
   çeşidi aynı anda değil, art arda koşar.
+
+## Düzeltme 20 (2026-10-20 22:30): birleşim turuna k5 — c13 tarifi + gözlem kanalı — eğitimlerden önce
+
+**Kullanıcı kararı (Arda, 2026-10-20):** "Evet, k5'i ekle." Soru şuydu: risk kanalının başarısı c13'ün hızıyla birleşsin
+mi?
+
+**Gerekçe (ölçülen):**
+- Gözlem turunun G-B'sinde `g3_risk` (c23 + risk kanalı, 1M, val_b64 × 10): S 91.9, kalkanlı %74.4, 16.4 s. Taban c23'ün
+  Tur 2'si: S 87.6, %72.5, 16.3 s. Risk kanalı başarıyı artırdı, süreyi değiştirmedi.
+- Taramanın en hızlı tarifi c13: `zemin_v3`, eğitimde 30 s, kayarken alçal, kalkan eğitimde. val_b32'de 3 tohum
+  ortalaması 15.1 s (c23: 16.6 s).
+- Birleşim turunun çeşitleri tabana göre kurulur. Taban c23 + bir kanal olursa k1_hiz ve k4_90s_hiz tabanla aynı çıkar
+  ve düşer. Geriye hız için bir çeşit kalmaz.
+
+**Değişiklik (`birlesim_tur.py`, `cesitler`):**
+- **k5_c13_kanal:** `--reward zemin_v3 --max-t 30 --diag --shield-train-m 10` + tabanın `--kanallar` değeri.
+- Yalnız taban bir gözlem kanalı içeriyorsa eklenir. İçermiyorsa k5, c13'ün kendisidir ve taramada zaten ölçüldü.
+- K-A'da öbür çeşitlerle aynı koşullarla yarışır: 400k, tohum 0, val_b64 × 5. K-B, K-C, K-D ve **H18 / H18b
+  değişmez.**
+- Bu turun eğitimleri tek tek koşar (`arama.EN_COK = 1`, 19:31 yürütme notu).
+
+**Tahmin (_tahmin; karar kuralı değil, tanımlayıcı):**
+- **H20a:** k5, K-A'da tabandan en az 1.5 s hızlı iner (kalkanlı süre).
+- **H20b:** k5'in K-A skoru, c13'ün Tur 1 skorundan (73.6) yüksek çıkar.
+
+**Durum:** birleşim turu henüz başlamadı (gözlem turunu bekliyor). Orkestratör yeni kodla yeniden başlatıldı.

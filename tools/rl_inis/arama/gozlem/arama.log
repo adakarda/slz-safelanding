@@ -9,3 +9,18 @@
 [arama] 20.10 19:33 tur G-A g1_hafiza s0: S 45.4 | kalkan B 49.1 T 19.3 s | RL B 50.9 T 19.5 s U 9.4 TO 39.7
 [arama] 20.10 19:33 tur G-A g2_hedef s0: S 74.2 | kalkan B 67.8 T 17.8 s | RL B 59.4 T 14.7 s U 15.6 TO 25.0
 [arama] 20.10 19:33 tur G-A g3_risk s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk)
+[arama] 20.10 19:35 gozlem turu basladi; taban c23_b1_adim05_alcal1 (Tur 3 ortalama S 88.9): --reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0}
+[arama] 20.10 19:35 tur G-A g1_hafiza s0: S 45.4 | kalkan B 49.1 T 19.3 s | RL B 50.9 T 19.5 s U 9.4 TO 39.7
+[arama] 20.10 19:35 tur G-A g2_hedef s0: S 74.2 | kalkan B 67.8 T 17.8 s | RL B 59.4 T 14.7 s U 15.6 TO 25.0
+[arama] 20.10 19:35 tur G-A g3_risk s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk)
+[arama] 20.10 19:53 tur G-A g4_hepsi s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk,hedef,hafiza)
+[arama] 20.10 19:57 tur G-A g3_risk s0: S 81.5 | kalkan B 72.2 T 17.9 s | RL B 65.9 T 15.3 s U 15.0 TO 19.1
+[arama] 20.10 20:35 tur G-A g4_hepsi s0: S 37.1 | kalkan B 41.9 T 17.9 s | RL B 37.8 T 17.6 s U 25.3 TO 36.9
+[arama] 20.10 20:35 G-A bitti; sira: g3_risk 81.5, g2_hedef 74.2, g1_hafiza 45.4, g4_hepsi 37.1
+[arama] 20.10 20:35 tur G-B g3_risk s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk)
+[arama] 20.10 21:28 tur G-B g2_hedef s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar hedef)
+[arama] 20.10 21:34 tur G-B g3_risk s0: S 91.9 | kalkan B 74.4 T 16.4 s | RL B 70.5 T 14.8 s U 17.5 TO 12.0
+[arama] 20.10 22:37 tur G-B g2_hedef s0: S 53.2 | kalkan B 47.5 T 16.5 s | RL B 47.5 T 15.9 s U 3.3 TO 49.2
+[arama] 20.10 22:37 G-B bitti; en iyi g3_risk S 91.9
+[arama] 20.10 22:37 tur G-C g3_risk s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk)
+[arama] 20.10 22:43 tur G-C g3_risk s0: S 92.3 | kalkan B 73.8 T 16.3 s | RL B 71.9 T 14.7 s U 15.3 TO 12.8

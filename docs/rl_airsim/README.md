@@ -285,6 +285,8 @@ Zincirin her halkası bir öncekinin günlüğünde bir ifade bekler. Hepsi kend
 - **`pkill -f AD` çağıran kabuğu da öldürür.** PID ile kapat ya da deseni betik dosyasına yaz.
 - **Bellek:** eğitimler koşarken başlatılan bir hız ölçümü WSL'i taşırdı (OOM, 2026-10-17). Aynı anda 3
   eğitimde boş bellek 586 MB'a düştü. Aynı anda en çok 2 eğitim.
+- **Ek gözlem kanalları belleği ikiye katlar.** `--kanallar` ile bir eğitim ~6.5 GB RSS + ~2 GB takas tutar. İkisi
+  aynı anda WSL'i taşırdı, dağıtım yeniden başladı (2026-10-20 19:31). Orkestratörde `arama.EN_COK = 1` bunun için.
 - **Saat zıplaması** (timesyncd ile Hyper-V): ROS'ta ~5 s duraklamalar. Süre ölçümünde `time.monotonic()`.
 
 **AirSim**
