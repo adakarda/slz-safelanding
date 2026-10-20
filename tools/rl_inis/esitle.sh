@@ -9,19 +9,15 @@ set -e
 HEDEF=$HOME/ros2_ws/tools/rl_inis
 mkdir -p "$HEDEF"
 rsync -a --delete --delete-excluded --prune-empty-dirs \
-	--filter 'P /README.md' --filter 'P /esitle.sh' --filter 'P /requirements_*.txt' --filter 'P /arama/*/arama.log' \
+	--filter 'P /README.md' --filter 'P /esitle.sh' --filter 'P /requirements_*.txt' \
 	--exclude 'venv/' --exclude 'kos/' --exclude '__pycache__/' --exclude 'hiz/eski/' --exclude 'hiz/yeni/' \
 	--exclude 'izle/' --exclude 'f4/kos/' --exclude 'eslesme/es1*/' \
 	--exclude 'commit_*.sh' --exclude 'durum.json' --exclude 'denetim/*.json' --exclude 'anlat/veri.json' \
-	--exclude '*.yedek' --exclude 'tanilama/messi_acilmis_crc.tsv' --exclude 'b2hiz/' --exclude 'gozlem/' --exclude 'birlesim/' \
+	--exclude '*.yedek' --exclude 'tanilama/messi_acilmis_crc.tsv' \
 	--include '*/' \
 	--include '*.py' --include '*.sh' --include '*.md' --include '*.txt' --include '*.csv' --include '*.tsv' \
-	--include '*.json' --include '*.js' --include 'arama/arama.log' \
+	--include '*.json' --include '*.js' --include 'arama/arama.log' --include 'arama/*/arama.log' \
 	--exclude '*' \
 	"$HOME/rl_inis/" "$HEDEF/"
-# the search's round logs live in subfolders; keep them as text records
-for t in b2hiz gozlem birlesim; do
-	[ -f "$HOME/rl_inis/arama/$t/arama.log" ] && install -D -m 644 "$HOME/rl_inis/arama/$t/arama.log" "$HEDEF/arama/$t/arama.log"
-done
 find "$HEDEF" -type f -size +300k -print -delete | sed 's/^/buyuk, atlandi: /'
 echo "tools/rl_inis: $(find "$HEDEF" -type f | wc -l) dosya, $(du -sh "$HEDEF" | cut -f1)"
