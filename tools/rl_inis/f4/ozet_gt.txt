@@ -1,0 +1,29 @@
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b0 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b1 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b2 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b3 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b4 indi
+SONUC gt_b5 kalkis_yok
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b6 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b7 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b8 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b9 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b10 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b11 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b12 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b13 indi
+[f4] mod secimi deneme 1: hedef 24, nav_state 24
+SONUC gt_b14 indi

@@ -1,0 +1,15 @@
+kayit 101.9 s (sim, program basi 0), basamak bolumu 0-56 s, rastgele bolum 56-102 s
+XY uydurma (basamaklar): tau_xy 0.30 s, a_max 1.00 m/s2, gecikme 0.14 s, RMSE 0.068 m/s; ayni parametre rastgele bolumde RMSE 0.110 m/s
+  (karsilastirma: rastgele bolume uydurulsaydi tau_xy 0.60, a_max 1.75, gecikme 0.22, RMSE 0.056)
+  (tum kayda uydurulsaydi tau_xy 0.55, a_max 1.75, gecikme 0.22; RMSE basamak 0.073, rastgele 0.059, tum 0.067)
+  (rastgele uydurmasi basamaklarda RMSE 0.077)
+  ortamin varsayilani (0.5 s, 3.0, 0): basamak RMSE 0.095, rastgele RMSE 0.198 m/s
+Z uydurma: tau_z 0.50 s, gecikme 0.00 s, RMSE 0.078 m/s; rastgele bolumde 0.087 m/s
+  (rastgele bolume uydurulsaydi tau_z 0.45, gecikme 0.06, RMSE 0.066; basamakta 0.080)
+hover egimi (0.5-3.5 s): ort 0.60 deg
+egim: olculen en cok 11.8 deg (p95 8.5); olculen = 0.96 x atan(a/g) + 0.28 deg; korelasyon 0.993
+yatay ivme: en cok 2.04 m/s2, p95 1.47 m/s2
+  +N 1 m/s: ulasilan hiz [1.17, 0.01, 0.0] (son 2.5 s)
+  +E 1 m/s: ulasilan hiz [0.01, 1.18, 0.0] (son 2.5 s)
+  asagi 2 m/s: ulasilan hiz [0.0, 0.0, 1.64] (son 0.5 s)
+grafik airsim1.png

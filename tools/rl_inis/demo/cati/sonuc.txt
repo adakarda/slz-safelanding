@@ -1,0 +1,27 @@
+[cati] 23:31 6 cati; model /home/arda/rl_inis/kos/arama/t2_c13_f_kayarak_kalkan/model.zip
+[cati] 15:49 6 cati; model /home/arda/rl_inis/kos/arama/t2_c13_f_kayarak_kalkan/model.zip
+[cati] 15:49 1: dogma (-8.9, -0.7), cati (-58.7, -22.1) m otede, 30.0 m | cati 541 m2, ic yaricap 9.3 m, en yakin uygun hucre 17.8 m; Windows bos 3859 MB
+   [run_airsim]   havada: konum -58.25680 -21.97043 -29.93171 (x, y, z NED, dogma noktasina gore)
+   [run_airsim]   RL Landing secildi (nav_state 24)
+   sonuc indi | sure 17.2 s | sinif 1 | alt siniflar {'1': 6912} | temas Driveway_21
+[cati] 15:51 2: dogma (-71.1, 130.3), cati (45.1, -21.1) m otede, 30.0 m | cati 505 m2, ic yaricap 8.0 m, en yakin uygun hucre 11.0 m; Windows bos 2107 MB
+   [run_airsim]   havada: konum 45.11016 -21.18358 -30.10171 (x, y, z NED, dogma noktasina gore)
+   [run_airsim]   RL Landing secildi (nav_state 24)
+   sonuc indi | sure 19.1 s | sinif 0 | alt siniflar {'0': 6912} | temas Landscape_0
+[cati] 15:53 3: dogma (-130.7, 41.1), cati (-38.9, -43.9) m otede, 30.0 m | cati 416 m2, ic yaricap 7.2 m, en yakin uygun hucre 10.4 m; Windows bos 2300 MB
+   [run_airsim]   havada: konum -38.59920 -43.70403 -30.07188 (x, y, z NED, dogma noktasina gore)
+   [run_airsim]   RL Landing secildi (nav_state 24)
+   sonuc indi | sure 17.1 s | sinif 0 | alt siniflar {'0': 6912} | temas Landscape_0
+[cati] 15:55 4: dogma (29.5, 123.1), cati (-1.7, -51.7) m otede, 30.0 m | cati 410 m2, ic yaricap 7.2 m, en yakin uygun hucre 10.0 m; Windows bos 2602 MB
+   [run_airsim]   havada: konum -1.96275 -51.52165 -29.94224 (x, y, z NED, dogma noktasina gore)
+   [run_airsim]   RL Landing secildi (nav_state 24)
+   sonuc indi | sure 16.8 s | sinif 0 | alt siniflar {'0': 6912} | temas Landscape_0
+[cati] 15:57 5: dogma (-124.1, -64.3), cati (13.3, 38.3) m otede, 30.0 m | cati 394 m2, ic yaricap 6.6 m, en yakin uygun hucre 24.2 m; Windows bos 2059 MB
+   [run_airsim]   havada: konum 13.54233 38.69766 -30.08560 (x, y, z NED, dogma noktasina gore)
+   [run_airsim]   RL Landing secildi (nav_state 24)
+   sonuc indi | sure 18.0 s | sinif 0 | alt siniflar {'0': 6087, '1': 825} | temas Landscape_0
+[cati] 15:58 6: dogma (-4.3, -132.3), cati (-83.7, -18.3) m otede, 30.0 m | cati 371 m2, ic yaricap 7.4 m, en yakin uygun hucre 10.6 m; Windows bos 2167 MB
+   [run_airsim]   havada: konum -83.34251 -18.42114 -29.95919 (x, y, z NED, dogma noktasina gore)
+   [run_airsim]   RL Landing secildi (nav_state 24)
+   sonuc indi | sure 17.9 s | sinif 1 | alt siniflar {'1': 6912} | temas Driveway_54
+[cati] 16:00 bitti

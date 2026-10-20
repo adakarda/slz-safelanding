@@ -1,0 +1,6 @@
+# Pilot (Duzeltme 2): yereldeki 5 MESSI fotosu. v3 egitiminde de kullanildi; nihai test setine girmez.
+/home/arda/v3_test/foto/fotoo/DJI_0097.JPG /home/arda/v3_test/maske/fotomask/DJI_0097.png
+/home/arda/v3_test/foto/fotoo/DJI_0109.JPG /home/arda/v3_test/maske/fotomask/DJI_0109.png
+/home/arda/v3_test/foto/fotoo/DJI_0116.JPG /home/arda/v3_test/maske/fotomask/DJI_0116.png
+/home/arda/v3_test/foto/fotoo/DJI_0266.JPG /home/arda/v3_test/maske/fotomask/DJI_0266.png
+/home/arda/v3_test/foto/fotoo/DJI_0332.JPG /home/arda/v3_test/maske/fotomask/DJI_0332.png

@@ -1,0 +1,128 @@
+[arama] 18.10 22:25 basladi: tur 1, 16 ayar
+[arama] 18.10 22:32 referans b_B1_s0 (val_b64 x 5): S 85.7 | kalkan B 72.5 T 16.7 s | RL B 64.1 T 15.0 s U 28.8
+[arama] 18.10 22:36 referans b_B2_s0 (val_b64 x 5): S 85.6 | kalkan B 75.9 T 18.2 s | RL B 68.8 T 17.0 s U 12.2
+[arama] 18.10 22:40 referans d_D1_s0 (val_b64 x 5): S 63.3 | kalkan B 66.6 T 16.1 s | RL B 26.2 T 11.7 s U 73.8
+[arama] 19.10 00:30 Duzeltme 15b: Tur 1 listesine 4 ayar eklendi (60 s ve 90 s), yeniden baslatiliyor
+[arama] 19.10 00:30 basladi: tur 1, 20 ayar
+[arama] 19.10 00:30 referans b_B1_s0 (val_b64 x 5): S 85.7 | kalkan B 72.5 T 16.7 s | RL B 64.1 T 15.0 s U 28.8
+[arama] 19.10 00:30 referans b_B2_s0 (val_b64 x 5): S 85.6 | kalkan B 75.9 T 18.2 s | RL B 68.8 T 17.0 s U 12.2
+[arama] 19.10 00:30 referans d_D1_s0 (val_b64 x 5): S 63.3 | kalkan B 66.6 T 16.1 s | RL B 26.2 T 11.7 s U 73.8
+[arama] 19.10 02:22 tur 1 c00_b1_kontrol s0: egitim basladi (--reward zemin_v1)
+[arama] 19.10 02:45 c00_b1_kontrol: t1_c00_b1_kontrol <- mevcut b_B1_s0/ckpt/model_400000_steps.zip
+[arama] 19.10 02:45 c00_b1_kontrol: t2_c00_b1_kontrol <- mevcut b_B1_s0/model.zip
+[arama] 19.10 02:45 c00_b1_kontrol: t3_c00_b1_kontrol_s1 <- mevcut b_B1_s1/model.zip
+[arama] 19.10 02:45 c00_b1_kontrol: t3_c00_b1_kontrol_s2 <- mevcut b_B1_s2/model.zip
+[arama] 19.10 02:45 c01_f_temel: t1_c01_f_temel <- mevcut f_F1_s0/ckpt/model_400000_steps.zip
+[arama] 19.10 02:45 c01_f_temel: t2_c01_f_temel <- mevcut f_F1_s0/model.zip
+[arama] 19.10 02:45 c01_f_temel: t3_c01_f_temel_s1 <- mevcut f_F1_s1/model.zip
+[arama] 19.10 02:45 basladi: tur 1, 25 ayar
+[arama] 19.10 02:45 referans b_B1_s0 (val_b64 x 5): S 85.7 | kalkan B 72.5 T 16.7 s | RL B 64.1 T 15.0 s U 28.8
+[arama] 19.10 02:45 referans b_B2_s0 (val_b64 x 5): S 85.6 | kalkan B 75.9 T 18.2 s | RL B 68.8 T 17.0 s U 12.2
+[arama] 19.10 02:45 referans d_D1_s0 (val_b64 x 5): S 63.3 | kalkan B 66.6 T 16.1 s | RL B 26.2 T 11.7 s U 73.8
+[arama] 19.10 02:45 tur 1 c18_v3_90s s0: egitim basladi (--reward zemin_v3)
+[arama] 19.10 03:00 tur 1 c00_b1_kontrol s0: S 75.6 | kalkan B 67.5 T 18.5 s | RL B 67.8 T 17.2 s U 4.7 TO 27.5
+[arama] 19.10 03:01 tur 1 c01_f_temel s0: S 16.8 | kalkan B 30.6 T 19.2 s | RL B 29.7 T 18.3 s U 3.1 TO 67.2
+[arama] 19.10 03:26 tur 1 c19_v3_90s_kayarak s0: egitim basladi (--reward zemin_v3 --diag)
+[arama] 19.10 03:30 tur 1 c18_v3_90s s0: S 35.9 | kalkan B 41.9 T 18.5 s | RL B 39.7 T 17.9 s U 2.5 TO 57.8
+[arama] 19.10 03:56 tur 1 c12_b1_kayarak s0: egitim basladi (--reward zemin_v1 --diag)
+[arama] 19.10 04:06 tur 1 c19_v3_90s_kayarak s0: S 53.9 | kalkan B 46.2 T 15.9 s | RL B 46.2 T 14.9 s U 0.6 TO 53.1
+[arama] 19.10 04:31 tur 1 c12_b1_kayarak s0: S 5.6 | kalkan B 23.4 T 19.3 s | RL B 22.8 T 19.0 s U 1.6 TO 75.6
+[arama] 19.10 04:36 tur 1 c20_b1_adim05 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5})
+[arama] 19.10 04:39 tur 1 c21_b1_alcal1 s0: egitim basladi (--reward zemin_v1 --env-json {"a_descend": 1.0})
+[arama] 19.10 05:09 tur 1 c22_b1_gamma098 s0: egitim basladi (--reward zemin_v1 --ppo-json {"gamma": 0.98})
+[arama] 19.10 05:13 tur 1 c20_b1_adim05 s0: S 54.0 | kalkan B 55.0 T 18.7 s | RL B 51.9 T 17.8 s U 13.8 TO 34.4
+[arama] 19.10 05:14 tur 1 c23_b1_adim05_alcal1 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 19.10 05:18 tur 1 c21_b1_alcal1 s0: S 57.7 | kalkan B 52.5 T 18.2 s | RL B 59.7 T 17.4 s U 7.5 TO 32.8
+[arama] 19.10 05:45 tur 1 c24_b1_kayarak_adim05 s0: egitim basladi (--reward zemin_v1 --diag --env-json {"r_step": -0.5})
+[arama] 19.10 05:49 tur 1 c22_b1_gamma098 s0: S 28.7 | kalkan B 37.2 T 17.9 s | RL B 30.0 T 15.3 s U 4.1 TO 65.9
+[arama] 19.10 05:49 tur 1 c16_v3_60s s0: egitim basladi (--reward zemin_v3 --max-t 60)
+[arama] 19.10 05:53 tur 1 c23_b1_adim05_alcal1 s0: S 81.2 | kalkan B 65.3 T 17.1 s | RL B 72.8 T 16.6 s U 8.1 TO 19.1
+[arama] 19.10 06:20 tur 1 c17_v3_60s_kayarak s0: egitim basladi (--reward zemin_v3 --max-t 60 --diag)
+[arama] 19.10 06:24 tur 1 c24_b1_kayarak_adim05 s0: S 46.5 | kalkan B 45.0 T 17.7 s | RL B 48.4 T 17.4 s U 6.2 TO 45.3
+[arama] 19.10 06:24 tur 1 c03_f_kayarak_45s s0: egitim basladi (--reward zemin_v3 --max-t 45 --diag)
+[arama] 19.10 06:29 tur 1 c16_v3_60s s0: S 27.6 | kalkan B 37.2 T 18.7 s | RL B 34.7 T 17.4 s U 2.2 TO 63.1
+[arama] 19.10 10:46 tur 1 c02_f_kayarak s0: egitim basladi (--reward zemin_v3 --max-t 30 --diag)
+[arama] 19.10 10:51 tur 1 c17_v3_60s_kayarak s0: S 30.0 | kalkan B 38.1 T 19.4 s | RL B 43.1 T 18.6 s U 2.5 TO 54.4
+[arama] 19.10 10:51 tur 1 c04_f_ceza80 s0: egitim basladi (--reward zemin_v3 --max-t 30 --env-json {"land_rewards": {"2": -80, "7": -80}})
+[arama] 19.10 10:56 tur 1 c03_f_kayarak_45s s0: S 47.4 | kalkan B 39.1 T 14.8 s | RL B 39.4 T 14.4 s U 0.0 TO 60.6
+[arama] 19.10 11:23 tur 1 c05_f_adim05 s0: egitim basladi (--reward zemin_v3 --max-t 30 --env-json {"r_step": -0.5})
+[arama] 19.10 11:28 tur 1 c06_f_alcal2 s0: egitim basladi (--reward zemin_v3 --max-t 30 --env-json {"a_descend": 2.0})
+[arama] 19.10 11:31 tur 1 c02_f_kayarak s0: S 22.0 | kalkan B 31.9 T 18.5 s | RL B 32.2 T 18.5 s U 0.3 TO 67.5
+[arama] 19.10 11:33 tur 1 c04_f_ceza80 s0: S -18.4 | kalkan B 8.1 T 19.5 s | RL B 7.2 T 18.4 s U 1.6 TO 91.2
+[arama] 19.10 12:02 tur 1 c07_f_sekil4 s0: egitim basladi (--reward zemin_v3 --max-t 30 --env-json {"shaping_k": 4.0})
+[arama] 19.10 12:06 tur 1 c05_f_adim05 s0: S 65.7 | kalkan B 64.1 T 17.5 s | RL B 46.9 T 15.3 s U 24.4 TO 28.8
+[arama] 19.10 12:06 tur 1 c08_f_kalkanli s0: egitim basladi (--reward zemin_v3 --max-t 30 --shield-train-m 10)
+[arama] 19.10 12:11 tur 1 c06_f_alcal2 s0: S 59.0 | kalkan B 58.8 T 18.5 s | RL B 52.2 T 16.3 s U 23.1 TO 24.7
+[arama] 19.10 12:46 tur 1 c09_f_gorus05 s0: egitim basladi (--reward zemin_v3 --max-t 30 --env-json {"w_s": 0.5})
+[arama] 19.10 12:49 tur 1 c07_f_sekil4 s0: S 14.6 | kalkan B 29.7 T 18.3 s | RL B 20.0 T 15.8 s U 5.9 TO 74.1
+[arama] 19.10 12:49 tur 1 c10_f_gamma098 s0: egitim basladi (--reward zemin_v3 --max-t 30 --ppo-json {"gamma": 0.98})
+[arama] 19.10 12:55 tur 1 c08_f_kalkanli s0: S 52.1 | kalkan B 50.0 T 17.7 s | RL B 50.0 T 17.7 s U 9.4 TO 40.6
+[arama] 19.10 13:34 tur 1 c11_f_ent002 s0: egitim basladi (--reward zemin_v3 --max-t 30 --ent-coef 0.02)
+[arama] 19.10 13:38 tur 1 c09_f_gorus05 s0: S 51.7 | kalkan B 56.2 T 19.3 s | RL B 49.7 T 17.3 s U 38.1 TO 12.2
+[arama] 19.10 13:38 tur 1 c13_f_kayarak_kalkan s0: egitim basladi (--reward zemin_v3 --max-t 30 --diag --shield-train-m 10)
+[arama] 19.10 13:41 tur 1 c10_f_gamma098 s0: S -21.2 | kalkan B 9.1 T 20.7 s | RL B 9.1 T 20.3 s U 6.6 TO 84.4
+[arama] 19.10 14:09 tur 1 c14_f_kayarak_adim05 s0: egitim basladi (--reward zemin_v3 --max-t 30 --diag --env-json {"r_step": -0.5})
+[arama] 19.10 14:12 tur 1 c15_f_n1024_b128 s0: egitim basladi (--reward zemin_v3 --max-t 30 --ppo-json {"n_steps": 1024, "batch_size": 128})
+[arama] 19.10 14:16 tur 1 c11_f_ent002 s0: S -8.7 | kalkan B 8.8 T 17.1 s | RL B 5.6 T 13.6 s U 14.7 TO 79.7
+[arama] 19.10 14:17 tur 1 c13_f_kayarak_kalkan s0: S 73.6 | kalkan B 63.4 T 17.4 s | RL B 63.4 T 17.4 s U 9.4 TO 27.2
+[arama] 19.10 15:00 tur 1 c15_f_n1024_b128 s0: S 49.9 | kalkan B 48.1 T 16.4 s | RL B 38.4 T 15.1 s U 23.1 TO 38.4
+[arama] 19.10 15:04 tur 1 c14_f_kayarak_adim05 s0: S 37.7 | kalkan B 41.2 T 18.8 s | RL B 47.2 T 16.8 s U 4.7 TO 48.1
+[arama] 19.10 15:04 tur 1 bitti; sira: c23_b1_adim05_alcal1 81.2, c00_b1_kontrol 75.6, c13_f_kayarak_kalkan 73.6, c05_f_adim05 65.7, c06_f_alcal2 59.0, c21_b1_alcal1 57.7, c20_b1_adim05 54.0, c19_v3_90s_kayarak 53.9, c08_f_kalkanli 52.1, c09_f_gorus05 51.7, c15_f_n1024_b128 49.9, c03_f_kayarak_45s 47.4, c24_b1_kayarak_adim05 46.5, c14_f_kayarak_adim05 37.7, c18_v3_90s 35.9, c17_v3_60s_kayarak 30.0, c22_b1_gamma098 28.7, c16_v3_60s 27.6, c02_f_kayarak 22.0, c01_f_temel 16.8, c07_f_sekil4 14.6, c12_b1_kayarak 5.6, c11_f_ent002 -8.7, c04_f_ceza80 -18.4, c10_f_gamma098 -21.2
+[arama] 19.10 15:04 c01_f_temel: t3_c01_f_temel_s2 <- mevcut f_F1_s2/model.zip
+[arama] 19.10 15:04 tur 2 c23_b1_adim05_alcal1 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 19.10 15:08 tur 2 c13_f_kayarak_kalkan s0: egitim basladi (--reward zemin_v3 --max-t 30 --diag --shield-train-m 10)
+[arama] 19.10 15:12 tur 2 c00_b1_kontrol s0: S 86.5 | kalkan B 71.6 T 16.1 s | RL B 62.8 T 14.5 s U 27.0 TO 10.2
+[arama] 19.10 16:03 tur 2 c05_f_adim05 s0: egitim basladi (--reward zemin_v3 --max-t 30 --env-json {"r_step": -0.5})
+[arama] 19.10 16:08 tur 2 c23_b1_adim05_alcal1 s0: S 87.6 | kalkan B 72.5 T 16.3 s | RL B 64.8 T 15.2 s U 21.7 TO 13.4
+[arama] 19.10 16:12 tur 2 c13_f_kayarak_kalkan s0: S 91.8 | kalkan B 66.2 T 13.9 s | RL B 66.2 T 13.9 s U 7.7 TO 26.1
+[arama] 19.10 16:59 tur 2 c05_f_adim05 s0: S 76.0 | kalkan B 67.7 T 17.8 s | RL B 63.4 T 17.1 s U 13.6 TO 23.0
+[arama] 19.10 16:59 tur 2 bitti; sira: c13_f_kayarak_kalkan 91.8, c23_b1_adim05_alcal1 87.6, c00_b1_kontrol 86.5, c05_f_adim05 76.0
+[arama] 19.10 16:59 tur 3 c13_f_kayarak_kalkan s1: egitim basladi (--reward zemin_v3 --max-t 30 --diag --shield-train-m 10)
+[arama] 19.10 17:03 tur 3 c13_f_kayarak_kalkan s2: egitim basladi (--reward zemin_v3 --max-t 30 --diag --shield-train-m 10)
+[arama] 19.10 17:08 tur 3 c23_b1_adim05_alcal1 s0: S 87.7 | kalkan B 71.6 T 16.0 s | RL B 64.1 T 14.8 s U 21.6 TO 14.4
+[arama] 19.10 17:08 tur 3 c13_f_kayarak_kalkan s0: S 97.4 | kalkan B 69.7 T 13.8 s | RL B 69.7 T 13.8 s U 7.2 TO 23.1
+[arama] 19.10 23:16 tur 3 c13_f_kayarak_kalkan s1: S 93.4 | kalkan B 68.8 T 14.4 s | RL B 68.8 T 14.4 s U 8.8 TO 22.5
+[arama] 19.10 23:19 tur 3 c13_f_kayarak_kalkan s2: S 71.1 | kalkan B 60.6 T 16.9 s | RL B 60.6 T 16.9 s U 15.3 TO 24.1
+[arama] 19.10 23:23 tur 3 c23_b1_adim05_alcal1 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 19.10 23:27 tur 3 c23_b1_adim05_alcal1 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 20.10 15:49 basladi: tur 1, 25 ayar
+[arama] 20.10 15:49 referans b_B1_s0 (val_b64 x 5): S 85.7 | kalkan B 72.5 T 16.7 s | RL B 64.1 T 15.0 s U 28.8
+[arama] 20.10 15:49 referans b_B2_s0 (val_b64 x 5): S 85.6 | kalkan B 75.9 T 18.2 s | RL B 68.8 T 17.0 s U 12.2
+[arama] 20.10 15:49 referans d_D1_s0 (val_b64 x 5): S 63.3 | kalkan B 66.6 T 16.1 s | RL B 26.2 T 11.7 s U 73.8
+[arama] 20.10 15:49 tur 1 c00_b1_kontrol s0: S 75.6 | kalkan B 67.5 T 18.5 s | RL B 67.8 T 17.2 s U 4.7 TO 27.5
+[arama] 20.10 15:49 tur 1 c18_v3_90s s0: S 35.9 | kalkan B 41.9 T 18.5 s | RL B 39.7 T 17.9 s U 2.5 TO 57.8
+[arama] 20.10 15:49 tur 1 c19_v3_90s_kayarak s0: S 53.9 | kalkan B 46.2 T 15.9 s | RL B 46.2 T 14.9 s U 0.6 TO 53.1
+[arama] 20.10 15:49 tur 1 c12_b1_kayarak s0: S 5.6 | kalkan B 23.4 T 19.3 s | RL B 22.8 T 19.0 s U 1.6 TO 75.6
+[arama] 20.10 15:49 tur 1 c20_b1_adim05 s0: S 54.0 | kalkan B 55.0 T 18.7 s | RL B 51.9 T 17.8 s U 13.8 TO 34.4
+[arama] 20.10 15:49 tur 1 c21_b1_alcal1 s0: S 57.7 | kalkan B 52.5 T 18.2 s | RL B 59.7 T 17.4 s U 7.5 TO 32.8
+[arama] 20.10 15:49 tur 1 c22_b1_gamma098 s0: S 28.7 | kalkan B 37.2 T 17.9 s | RL B 30.0 T 15.3 s U 4.1 TO 65.9
+[arama] 20.10 15:49 tur 1 c23_b1_adim05_alcal1 s0: S 81.2 | kalkan B 65.3 T 17.1 s | RL B 72.8 T 16.6 s U 8.1 TO 19.1
+[arama] 20.10 15:49 tur 1 c24_b1_kayarak_adim05 s0: S 46.5 | kalkan B 45.0 T 17.7 s | RL B 48.4 T 17.4 s U 6.2 TO 45.3
+[arama] 20.10 15:49 tur 1 c16_v3_60s s0: S 27.6 | kalkan B 37.2 T 18.7 s | RL B 34.7 T 17.4 s U 2.2 TO 63.1
+[arama] 20.10 15:49 tur 1 c17_v3_60s_kayarak s0: S 30.0 | kalkan B 38.1 T 19.4 s | RL B 43.1 T 18.6 s U 2.5 TO 54.4
+[arama] 20.10 15:49 tur 1 c03_f_kayarak_45s s0: S 47.4 | kalkan B 39.1 T 14.8 s | RL B 39.4 T 14.4 s U 0.0 TO 60.6
+[arama] 20.10 15:49 tur 1 c01_f_temel s0: S 16.8 | kalkan B 30.6 T 19.2 s | RL B 29.7 T 18.3 s U 3.1 TO 67.2
+[arama] 20.10 15:49 tur 1 c02_f_kayarak s0: S 22.0 | kalkan B 31.9 T 18.5 s | RL B 32.2 T 18.5 s U 0.3 TO 67.5
+[arama] 20.10 15:49 tur 1 c04_f_ceza80 s0: S -18.4 | kalkan B 8.1 T 19.5 s | RL B 7.2 T 18.4 s U 1.6 TO 91.2
+[arama] 20.10 15:49 tur 1 c05_f_adim05 s0: S 65.7 | kalkan B 64.1 T 17.5 s | RL B 46.9 T 15.3 s U 24.4 TO 28.8
+[arama] 20.10 15:49 tur 1 c06_f_alcal2 s0: S 59.0 | kalkan B 58.8 T 18.5 s | RL B 52.2 T 16.3 s U 23.1 TO 24.7
+[arama] 20.10 15:49 tur 1 c07_f_sekil4 s0: S 14.6 | kalkan B 29.7 T 18.3 s | RL B 20.0 T 15.8 s U 5.9 TO 74.1
+[arama] 20.10 15:49 tur 1 c08_f_kalkanli s0: S 52.1 | kalkan B 50.0 T 17.7 s | RL B 50.0 T 17.7 s U 9.4 TO 40.6
+[arama] 20.10 15:49 tur 1 c09_f_gorus05 s0: S 51.7 | kalkan B 56.2 T 19.3 s | RL B 49.7 T 17.3 s U 38.1 TO 12.2
+[arama] 20.10 15:49 tur 1 c10_f_gamma098 s0: S -21.2 | kalkan B 9.1 T 20.7 s | RL B 9.1 T 20.3 s U 6.6 TO 84.4
+[arama] 20.10 15:49 tur 1 c11_f_ent002 s0: S -8.7 | kalkan B 8.8 T 17.1 s | RL B 5.6 T 13.6 s U 14.7 TO 79.7
+[arama] 20.10 15:49 tur 1 c13_f_kayarak_kalkan s0: S 73.6 | kalkan B 63.4 T 17.4 s | RL B 63.4 T 17.4 s U 9.4 TO 27.2
+[arama] 20.10 15:49 tur 1 c14_f_kayarak_adim05 s0: S 37.7 | kalkan B 41.2 T 18.8 s | RL B 47.2 T 16.8 s U 4.7 TO 48.1
+[arama] 20.10 15:49 tur 1 c15_f_n1024_b128 s0: S 49.9 | kalkan B 48.1 T 16.4 s | RL B 38.4 T 15.1 s U 23.1 TO 38.4
+[arama] 20.10 15:49 tur 1 bitti; sira: c23_b1_adim05_alcal1 81.2, c00_b1_kontrol 75.6, c13_f_kayarak_kalkan 73.6, c05_f_adim05 65.7, c06_f_alcal2 59.0, c21_b1_alcal1 57.7, c20_b1_adim05 54.0, c19_v3_90s_kayarak 53.9, c08_f_kalkanli 52.1, c09_f_gorus05 51.7, c15_f_n1024_b128 49.9, c03_f_kayarak_45s 47.4, c24_b1_kayarak_adim05 46.5, c14_f_kayarak_adim05 37.7, c18_v3_90s 35.9, c17_v3_60s_kayarak 30.0, c22_b1_gamma098 28.7, c16_v3_60s 27.6, c02_f_kayarak 22.0, c01_f_temel 16.8, c07_f_sekil4 14.6, c12_b1_kayarak 5.6, c11_f_ent002 -8.7, c04_f_ceza80 -18.4, c10_f_gamma098 -21.2
+[arama] 20.10 15:49 tur 2 c23_b1_adim05_alcal1 s0: S 87.6 | kalkan B 72.5 T 16.3 s | RL B 64.8 T 15.2 s U 21.7 TO 13.4
+[arama] 20.10 15:49 tur 2 c00_b1_kontrol s0: S 86.5 | kalkan B 71.6 T 16.1 s | RL B 62.8 T 14.5 s U 27.0 TO 10.2
+[arama] 20.10 15:49 tur 2 c13_f_kayarak_kalkan s0: S 91.8 | kalkan B 66.2 T 13.9 s | RL B 66.2 T 13.9 s U 7.7 TO 26.1
+[arama] 20.10 15:49 tur 2 c05_f_adim05 s0: S 76.0 | kalkan B 67.7 T 17.8 s | RL B 63.4 T 17.1 s U 13.6 TO 23.0
+[arama] 20.10 15:49 tur 2 bitti; sira: c13_f_kayarak_kalkan 91.8, c23_b1_adim05_alcal1 87.6, c00_b1_kontrol 86.5, c05_f_adim05 76.0
+[arama] 20.10 15:49 tur 3 c13_f_kayarak_kalkan s0: S 97.4 | kalkan B 69.7 T 13.8 s | RL B 69.7 T 13.8 s U 7.2 TO 23.1
+[arama] 20.10 15:49 tur 3 c13_f_kayarak_kalkan s1: S 93.4 | kalkan B 68.8 T 14.4 s | RL B 68.8 T 14.4 s U 8.8 TO 22.5
+[arama] 20.10 15:49 tur 3 c13_f_kayarak_kalkan s2: S 71.1 | kalkan B 60.6 T 16.9 s | RL B 60.6 T 16.9 s U 15.3 TO 24.1
+[arama] 20.10 15:49 tur 3 c23_b1_adim05_alcal1 s0: S 87.7 | kalkan B 71.6 T 16.0 s | RL B 64.1 T 14.8 s U 21.6 TO 14.4
+[arama] 20.10 16:01 tur 3 c23_b1_adim05_alcal1 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 20.10 16:04 tur 3 c23_b1_adim05_alcal1 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0})

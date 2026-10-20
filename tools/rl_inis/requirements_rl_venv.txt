@@ -1,0 +1,29 @@
+# ~/rl_inis/venv (python3 -m venv --system-site-packages), pip freeze --local, 2026-10-20.
+# Kullanici dizininden (pip install --user) gelenler bu listede yok: torch==2.13.0+cu130, numpy==2.5.1,
+# opencv-python==4.14.0. Python 3.12.3, Ubuntu 24.04. transformers/tokenizers/huggingface_hub yalniz
+# Depth Anything deneyi (Duzeltme 7) icin.
+annotated-doc==0.0.5
+anyio==4.15.1
+click==8.5.0
+cloudpickle==3.1.2
+Farama-Notifications==0.0.6
+gymnasium==1.4.0
+h11==0.16.0
+hf-xet==1.7.0
+httpcore2==2.13.1
+httpx2==2.13.1
+huggingface_hub==2.2.0
+idna==3.20
+regex==2026.9.29
+rich==15.0.0
+safetensors==0.8.0
+scipy==1.18.1
+setuptools==84.0.0
+shellingham==1.5.4
+stable_baselines3==2.9.0
+tokenizers==0.23.3
+tqdm==4.70.1
+transformers==5.20.1
+truststore==0.10.5
+typer==0.27.3
+typing_extensions==4.16.0

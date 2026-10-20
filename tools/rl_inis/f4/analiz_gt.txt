@@ -1,0 +1,20 @@
+  b | ortam sonuc         t yanal  kayma | gazebo sonuc        t yanal  kayma  egim | inis farki
+  0 | unsafe_landing   10.3     0   0.00 | unsafe_landing   10.2     0   0.03   0.2 |      0.06
+  1 | unsafe_landing    8.2     1   0.21 | unsafe_landing    8.0     1   0.34   6.8 |      0.15
+  2 | unsafe_landing    8.7     0   0.00 | unsafe_landing    8.7     0   0.08   0.2 |      0.10
+  3 | unsafe_landing   10.0     0   0.00 | unsafe_landing    9.9     0   0.07   0.4 |      0.10
+  4 | unsafe_landing    9.0     0   0.00 | unsafe_landing    9.1     0   0.08   0.3 |      0.12
+  5 | unsafe_landing   11.3     0   0.00 | kayit_yok         nan     0    nan   nan |       nan
+  6 | unsafe_landing   12.8    12   2.46 | safe_landing     11.4     7   1.94   7.4 |      0.77
+  7 | unsafe_landing   10.5     0   0.00 | unsafe_landing   10.5     0   0.10   0.4 |      0.11
+  8 | safe_landing      9.2     5   1.00 | safe_landing      8.7     4   0.92   6.9 |      0.14
+  9 | unsafe_landing    9.2     0   0.00 | unsafe_landing    9.1     0   0.07   0.2 |      0.10
+ 10 | unsafe_landing    8.5     0   0.00 | unsafe_landing    8.7     0   0.03   0.2 |      0.05
+ 11 | unsafe_landing    8.0     0   0.00 | unsafe_landing    7.9     0   0.08   0.2 |      0.05
+ 12 | unsafe_landing   10.0     0   0.00 | unsafe_landing   10.0     0   0.02   0.2 |      0.03
+ 13 | unsafe_landing   10.5     0   0.00 | unsafe_landing   10.7     0   0.06   0.4 |      0.05
+ 14 | unsafe_landing   11.8     0   0.00 | unsafe_landing   11.9     0   0.06   0.3 |      0.05
+
+basari: ortam 1/15, gazebo 2/15; ayni sonuc 13/15; SORA uyumlu: ortam 0/15, gazebo 0/15
+inis noktasi farki (ortam - gazebo): medyan 0.10 m, en cok 0.77 m
+gazebo politika cikarim suresi medyan 3.5 ms

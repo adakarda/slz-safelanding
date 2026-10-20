@@ -1,0 +1,4 @@
+# ~/airsim-venv: airsim paketi --no-deps kurulur (eski msgpack-rpc-python Python 3.10+ ile calismaz);
+# yerine src/eland_airsim/data/msgpackrpc_shim.py. Kurulum: airsim_pilot/venv_kur.sh. 2026-10-20.
+airsim==1.8.1
+msgpack==1.2.3
