@@ -13,7 +13,7 @@ rsync -a --delete --delete-excluded --prune-empty-dirs \
 	--exclude 'venv/' --exclude 'kos/' --exclude '__pycache__/' --exclude 'hiz/eski/' --exclude 'hiz/yeni/' \
 	--exclude 'izle/' --exclude 'f4/kos/' --exclude 'eslesme/es1*/' \
 	--exclude 'commit_*.sh' --exclude 'durum.json' --exclude 'denetim/*.json' --exclude 'anlat/veri.json' \
-	--exclude '*.yedek' --exclude 'tanilama/messi_acilmis_crc.tsv' \
+	--exclude '*.yedek' --exclude 'yedek_gel/' --exclude 'tanilama/messi_acilmis_crc.tsv' \
 	--include '*/' \
 	--include '*.py' --include '*.sh' --include '*.md' --include '*.txt' --include '*.csv' --include '*.tsv' \
 	--include '*.json' --include '*.js' --include 'arama/arama.log' --include 'arama/*/arama.log' \

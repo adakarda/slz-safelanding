@@ -1264,3 +1264,49 @@ mi?
 - **H20b:** k5'in K-A skoru, c13'ün Tur 1 skorundan (73.6) yüksek çıkar.
 
 **Durum:** birleşim turu henüz başlamadı (gözlem turunu bekliyor). Orkestratör yeni kodla yeniden başlatıldı.
+
+## Düzeltme 21 (2026-10-20 23:00): süre dolmadan yedek iniş — ölçümden önce
+
+**Kullanıcı kararı (Arda, 2026-10-20):** "Yedek iniş kuralı." Soru şuydu: süre aşımları için hangisi ön kayıtla denensin
+(yedek iniş kuralı, kalan süre kanalı, ikisi, hiçbiri)?
+
+**Gerekçe (ölçülen):**
+- Başarısızlığın çoğu süre aşımı. c13 s0: 320 denemede 74 süre aşımı, 23 güvensiz iniş.
+- Süre aşımlarının çoğu daha uzun sürede inilebilir. B2-s0 + kalkan 30 s'de %76.9, 90 s'de %88.1.
+- Kalkan, güvensiz inişi süre aşımına çeviriyor. B2-s0'a kalkan eklenince güvensiz 28 → 1, süre aşımı 60 → 73.
+- Politikanın gözleminde saat yok. Çoğu model 90 s ile eğitildi, test 30 s.
+
+**Kural (`eland_rl/yedek.py`, değerlendirmede bir yöntem; kalkan gibi, eğitim yok):**
+- Kalan süre ≤ (kamera yüksekliği − 5 m) / 2 m/s + 2 s olunca politika geçersiz kılınır:
+  - hedef kanalı (gözlemin 3. kanalı) merkezi güvenli diyorsa → alçal (9);
+  - görüşte güvenli piksel varsa → en yakınına: model kayarken alçalabiliyorsa (`--diag`) kayarak alçal (10–17), değilse
+    kay (1–8);
+  - görüşte güvenli piksel yoksa → politikanın kendi eylemi.
+- Güvensiz zemine zorla indirmez. Kalkan varsa bu kuraldan sonra yine uygulanır.
+- Kullandığı bilgi: gözlem, kamera yüksekliği, bölümün saati. Ayrıcalıklı bilgi yok.
+- Pay 2 s (komut gecikmesi, PX4 gecikmesi, ivmelenme). Ölçümden önce sabit.
+
+**Kod (onaylı, varsayılan kapalı):**
+- Yeni dosya `eland_rl/yedek.py` ve `test/test_yedek.py` (5 test).
+- `evaluate.py`'ye `--yedek` ve `--yalniz-yedek` bayrakları: yeni yöntemler `rl_yedek` ve `rl_kalkan_yedek`.
+- **Kapalıyken davranış bire bir eski** (ölçülen): B2-s0, val_b32 × 1. Eski kod ile yeni kodun CSV'si bayrak kapalıyken
+  bit bit aynı. Bayrak açıkken `rl` ve `rl_kalkan` satırları yine aynı.
+
+**Ölçüm:** var olan modeller, val_b32 × 10 (320 deneme), 30 s, argmax, nominal dinamik.
+- Birincil: c13 ve c23 (taramanın Tur 3'ü, 3'er tohum). Tanımlayıcı: B2-s0.
+- Yalnız yeni yöntemler koşar (`--yalniz-yedek`). Kıyas, aynı modelin eski CSV'sindeki `rl_kalkan` satırları. Aynı
+  başlangıçlar, eşli kıyas.
+- Betik `~/rl_inis/yedek/kos.sh`. Yanında bir eğitim koşarken tek tek ve en az 3 GB boş bellekle.
+
+**Karar (H21, `~/rl_inis/yedek/h21_karar.py`):** her ayar için tohum başına dB = B(rl_kalkan_yedek) − B(rl_kalkan),
+dU = güvensizdeki fark (yüzde puan).
+- **H21a:** ortalama dB ≥ +3, ve tohumların en az 2'sinde dB ≥ +3.
+- **H21b:** ortalama dU ≤ +2.
+- **Yedek iniş benimsenir**, eğer H21a ve H21b c13'te **ve** c23'te tutarsa.
+- Benimsenirse: final testte (Düzeltme 17) `rl_kalkan_yedek` ek yöntem olarak raporlanır. AirSim'e taşınması
+  (`policy_node`) ayrı bir iş, Arda'nın onayıyla.
+
+**Tahminler (_tahmin):**
+- c13'te H21a tutar: süre aşımlarının en az dörtte biri başarıya döner.
+- Başarılı inişlerin ortalama süresi 1–3 s uzar: yeni başarılar bölümün sonunda iner.
+- Güvensiz iniş az artar: kural güvensiz zemine zorla indirmez, ama hedef kanalı her zaman doğru değil.

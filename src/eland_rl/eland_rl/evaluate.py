@@ -50,6 +50,10 @@ def main():
     ap.add_argument('--diag', action='store_true', help='amendment 13: the model has the sliding-descent actions')
     ap.add_argument('--only-rl', action='store_true', help='amendment 15: evaluate only rl and rl_kalkan')
     ap.add_argument('--kanallar', default='', help='amendment 16: the model\'s extra observation channels')
+    ap.add_argument('--yedek', action='store_true',
+                    help='amendment 21: also rl_yedek and rl_kalkan_yedek (deadline fallback, eland_rl.yedek)')
+    ap.add_argument('--yalniz-yedek', action='store_true',
+                    help='amendment 21: only the fallback methods (rl and rl_kalkan exist in earlier CSVs)')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
@@ -81,8 +85,20 @@ def main():
             def rl_shield(o):
                 return shield(rl(o), o, env.veh.delayed_pose()[0][2], a.shield_m)[0]
             methods = {'rl': rl, 'rl_kalkan': rl_shield, **{k: v for k, v in methods.items() if k != 'rl'}}
+            if a.yedek or a.yalniz_yedek:     # amendment 21: deadline fallback first, then the shield
+                from .yedek import yedek
+
+                def rl_yedek(o):
+                    return yedek(rl(o), o, env.veh.delayed_pose()[0][2], env.veh.t, env.cfg.max_t, a.diag)[0]
+
+                def rl_kalkan_yedek(o):
+                    h = env.veh.delayed_pose()[0][2]
+                    return shield(yedek(rl(o), o, h, env.veh.t, env.cfg.max_t, a.diag)[0], o, h, a.shield_m)[0]
+                methods.update(rl_yedek=rl_yedek, rl_kalkan_yedek=rl_kalkan_yedek)
         if a.only_rl:                       # amendment 15 screening: the baselines do not change between models
-            methods = {k: v for k, v in methods.items() if k in ('rl', 'rl_kalkan')}
+            methods = {k: v for k, v in methods.items() if k in ('rl', 'rl_kalkan', 'rl_yedek', 'rl_kalkan_yedek')}
+        if a.yalniz_yedek:
+            methods = {k: v for k, v in methods.items() if k in ('rl_yedek', 'rl_kalkan_yedek')}
     rows, hists = [], collections.defaultdict(collections.Counter)
     for name, act in methods.items():
         for i, sc in enumerate(scenes):
