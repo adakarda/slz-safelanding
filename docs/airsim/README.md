@@ -102,6 +102,11 @@ Ayrıntılı tablolar ve görseller: AirSim Taşıma Yol Haritası sayfası. Ön
 - `docs/onkayit/airsim_faz4_onkayit.md`
 - `docs/onkayit/airsim_faz5_onkayit.md`
 
+**Sonrası (2026-10-18 – 10-20):** Faz 6 (v3 maskesiyle RL 10 inişin 9'unda yola indi), havada başlangıç
+(`run_airsim.sh --havada`) ve çatı üstü gösterim (c13 s0, 6/6 çatıdan kayıp güvenli zemine indi). Tablolar ve
+yorum: [`../rl_airsim/RAPOR.md`](../rl_airsim/RAPOR.md) §5.2. Çalıştırma ve kurulum:
+[`../rl_airsim/README.md`](../rl_airsim/README.md).
+
 ## Açık konular
 
 - **Dünya seçimi (Arda).** AirSimNH ile devam, UE5 (Colosseum ya da Cosys-AirSim), fotogrametri, ya da v3 ince

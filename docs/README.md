@@ -28,6 +28,7 @@ Yeni gelen biri (insan ya da AI ajanı):
 | Ne yapıldı, ne bekliyor | [`YAPILACAKLAR.md`](YAPILACAKLAR.md) | `VERI_TOPLAMA.md`'nin son "Tur" bölümü |
 | Algı, karar, harita, engeller | [`DURUM.md`](DURUM.md) (dizin §3) | [`TEZ_NOTLARI.md`](TEZ_NOTLARI.md) §3 |
 | Tez / poster | [`TEZ_NOTLARI.md`](TEZ_NOTLARI.md) | [`ARASTIRMA_KONTROL_SEGMENTASYON.md`](ARASTIRMA_KONTROL_SEGMENTASYON.md) |
+| RL ile acil iniş, AirSim (dal `airsim`) | [`rl_airsim/README.md`](rl_airsim/README.md) | [`rl_airsim/RAPOR.md`](rl_airsim/RAPOR.md), [`onkayit/rl_f0_onkayit.md`](onkayit/rl_f0_onkayit.md), [`airsim/README.md`](airsim/README.md) |
 
 ---
 
@@ -124,6 +125,18 @@ Kontrolcü, proje sahibinin ayrı bir sohbetinde (Simulink) tasarlanıyor.
 2026-10-05'e kadar `docs/` kökündeydiler. Etiketli GitHub bağlantıları
 (`.../blob/v6.2.../docs/VERI_TOPLAMA_...`) eski yerle çalışmaya devam eder.
 
+### RL ile acil iniş ve AirSim (dal `airsim`)
+
+| Dosya | Ne | Güncel mi |
+|---|---|---|
+| [`rl_airsim/README.md`](rl_airsim/README.md) | **devir rehberi:** mimari, kurulum, komutlar, ölçüm, koşan zincir, kurallar, tuzaklar, açık kararlar | güncel (2026-10-20) |
+| [`rl_airsim/RAPOR.md`](rl_airsim/RAPOR.md) | **sonuç raporu:** bütün deneylerin tabloları, tanılamalar, AirSim, yorum, öneriler, sınırlar | güncel (2026-10-20); taramanın Tur 3'ü sürüyor |
+| [`onkayit/rl_f0_onkayit.md`](onkayit/rl_f0_onkayit.md) | RL ön kaydı, Düzeltme 1–19 ve sonuçları | her deneyle büyür |
+| [`onkayit/airsim_faz3..7_onkayit.md`](onkayit/) | AirSim fazlarının ön kayıtları ve sonuçları | Faz 7 koşmadı |
+| [`airsim/README.md`](airsim/README.md) | AirSim hattı: Gazebo karşılıkları, çalıştırma, bulunan hatalar | güncel (2026-10-18; sonraki sonuçlar `rl_airsim/RAPOR.md`'de) |
+| [`rl_veri/`](rl_veri/) | MESSI veri paketinin keşfi, çözünürlük planı, v3 kullanımı | 2026-10-17 |
+| [`../tools/rl_inis/README.md`](../tools/rl_inis/README.md) | RL ve AirSim betiklerinin dizini (`~/rl_inis` aynası) | güncel |
+
 ### Plan, gereksinim, araştırma
 
 | Dosya | Ne | Güncel mi |
@@ -157,6 +170,7 @@ Kontrolcü, proje sahibinin ayrı bir sohbetinde (Simulink) tasarlanıyor.
 | Yeni araç | `../tools/README.md` ya da `../tools/veri/README.md`'ye bir satır |
 | Kayda sütun ekleyen değişiklik | `../tools/veri/data_dictionary.md` |
 | Varsayılanı değişen parametre | `eland_params.yaml` yorumu ve ilgili doküman ("varsayılan değişti" açıkça) |
+| RL ya da AirSim deneyi | eğitimden önce `onkayit/` altına ön kayıt; sonuç aynı dosyaya ve `rl_airsim/RAPOR.md`'ye |
 
 **Biçim:**
 - Her sayının yanında nasıl ölçüldüğü.

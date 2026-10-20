@@ -25,6 +25,13 @@ Claude Code, Codex, Cursor, Copilot ya da başka bir ajanla bu depoda
   - O sohbetin kararları `docs/VERI_TOPLAMA.md`'de "Tur N" bölümlerinde;
     özeti `docs/KONTROLCU_TASARIM_DURUMU.md`'de.
   - Simulink modeli depoda değil.
+- **İkinci hat (dal `airsim`):** RL ile acil iniş ve AirSim test dünyası.
+  - Politika hafif bir ortamda PPO ile eğitilir, PX4'te "RL Landing" moduyla
+    uçar.
+  - AirSim (Windows) Gazebo'nun yanında ikinci test dünyası.
+  - Her deney eğitimden önce `docs/onkayit/rl_f0_onkayit.md`'ye ön kayıt
+    olarak yazılır.
+  - Giriş `docs/rl_airsim/README.md`, sonuçlar `docs/rl_airsim/RAPOR.md`.
 - **Bilgi kaynağı:** projeye katılanlar için tek kaynak GitHub. Yeni bir
   karar, ölçüm ya da durum değişikliği depoya yazılmadıkça başkası onu
   bilemez.
@@ -41,7 +48,10 @@ Claude Code, Codex, Cursor, Copilot ya da başka bir ajanla bu depoda
    - **veri setini kullanmak:** `docs/VERI_SETI.md`;
    - **veri toplamak:** `docs/VERI_TOPLAMA.md` (son tur en altta) ve
      `tools/veri/README.md`;
-   - **sistem:** `docs/DEVIR.md`.
+   - **sistem:** `docs/DEVIR.md`;
+   - **RL iniş ve AirSim:** `docs/rl_airsim/README.md` (kurulum, komutlar,
+     koşan zincir, tuzaklar), sonra `docs/rl_airsim/RAPOR.md`. Betikler
+     `tools/rl_inis/`.
 
 Bir insanı yönlendiriyorsan: `docs/YENI_KATILAN.md`.
 
@@ -207,6 +217,11 @@ PYTHONPATH=/usr/lib/python3/dist-packages python3 tools/veri/birlestir.py
 | **v_tavan** | alçalma hızı tavanı, `clamp(0.20·√A, 0.3, 1.5)` |
 | **devir** | veri kipinde politikanın moda bıraktığı an (Gazebo hedef yüksekliği < 2.5 m) |
 | **diğer sohbet** | proje sahibinin kontrolcü tasarım sohbeti; kararlar oradan gelir |
+| **Düzeltme N, H…** (RL) | `docs/onkayit/rl_f0_onkayit.md`'deki ön kayıt maddesi ve tahminleri; karar kuralı eğitimden önce yazılır |
+| **zemin kuralı** (RL) | iniş başarılı: aracın altındaki sınıf çim ya da sert zemin, 2 m içinde insan/araç yok |
+| **kalkan** (RL) | 10 m'nin altında, altındaki nokta güvenli değilse "alçal"ı engelleyen kural (`eland_rl.pilots`) |
+| **c13, c23, B1, B2 s0** (RL) | taramanın ayarları ve deney kolları; `docs/rl_airsim/RAPOR.md` |
+| **val_b32** (RL) | doğrulama listesi: 32 sahne × 10 başlangıç = 320 deneme |
 
 ---
 
@@ -219,7 +234,9 @@ Tablo: `docs/README.md` §3. Kısaca:
 - veri işi → `docs/VERI_TOPLAMA.md` yeni tur;
 - sistem işi → `docs/DURUM.md` yeni bölüm;
 - yeni araç → `tools/README.md` ya da `tools/veri/README.md`;
-- yeni sütun → `tools/veri/data_dictionary.md`.
+- yeni sütun → `tools/veri/data_dictionary.md`;
+- RL ya da AirSim deneyi → önce `docs/onkayit/` altına ön kayıt, sonuç aynı
+  yere ve `docs/rl_airsim/RAPOR.md`'ye.
 
 ## 8. Yedek ve geri dönüş
 

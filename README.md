@@ -45,6 +45,10 @@ Tezin iki ana hattı:
 2. **Görüntüden ölçülen büyüklüklerle dikey iniş kontrolcüsü:** tasarım
    sürüyor; veri toplandı.
 
+Ek hat (dal `airsim`): **pekiştirmeli öğrenmeyle (RL) acil iniş** ve
+**AirSim test dünyası**. Giriş [`docs/rl_airsim/README.md`](docs/rl_airsim/README.md),
+sonuçlar [`docs/rl_airsim/RAPOR.md`](docs/rl_airsim/RAPOR.md).
+
 ## Şu an nerede (2026-10-05)
 
 | | Durum |
@@ -56,6 +60,8 @@ Tezin iki ana hattı:
 | Mod `/eland/rho` (ρ, 10 Hz) kullanımı | yayın hazır (varsayılan kapalı); modda kullanımı tasarım doğrulanınca |
 | Yükseltilmiş hedef (W5) | bilinen sınır: EKF irtifası hedefin ~4 m üstünde, temas ~1.5 m/s; gözlemci tasarlanacak |
 | Gerçek segmentasyon modeli | ertelendi; maske şu an Gazebo'nun kusursuz etiketi |
+| RL acil iniş (dal `airsim`, 2026-10-20) | PPO politikası hafif ortamda eğitiliyor, PX4'te "RL Landing" moduyla uçuyor. En iyi skor c13 s0: %69.7 başarı, 13.8 s; en yüksek başarı B2 s0 + kalkan: %76.9, 17.4 s (val_b32, 320 deneme, ölçülen). Ön kayıtlı turlar sürüyor. [`docs/rl_airsim/`](docs/rl_airsim/README.md) |
+| AirSim hattı (dal `airsim`) | AirSimNH + PX4 SITL; klasik mod ve RL kod değişmeden çalışıyor. AirSim etiketiyle RL güvenli iniyor (çatı üstü başlangıç 6/6), v3 maskesiyle 10 inişin 9'u yola. [`docs/airsim/README.md`](docs/airsim/README.md) |
 
 - **Son sürüm:** `v6.8-veri-seti` (veri seti Release'i ve yeni katılan
   dokümanları).
@@ -148,14 +154,21 @@ src/
   eland_viz/           HUD ve kontrol istasyonu
   eland_sim/           Gazebo modelleri ve dünyaları, launch, config/eland_params.yaml,
                        scripts/ (run_sim.sh, dene.sh, link_px4_assets.sh, ...)
+  eland_rl/            RL ortamı, PPO eğitimi, değerlendirme, policy_node   (dal airsim)
+  eland_rl_mode/       C++ PX4 modu "RL Landing"                            (dal airsim)
+  eland_airsim/        AirSim köprüsü, run_airsim.sh, iniş ölçümü           (dal airsim)
 tools/                 ölçüm ve analiz araçları          -> tools/README.md
   veri/                veri toplama ve veri seti          -> tools/veri/README.md
+  rl_inis/             RL ve AirSim çalışma betikleri    -> tools/rl_inis/README.md
 docs/                  dokümanlar                         -> docs/README.md
   YENI_KATILAN.md          yeni katılan için başlangıç
   KONTROLCU_TASARIM_DURUMU.md  kontrolcü işi nerede, kararlar, sıradaki
   KONTROLCU_OLCUMLERI.md   kontrolcü için ölçülmüş her şey
   VERI_SETI.md             veri seti: indirme, yapı, okuma, tuzaklar
   geri_bildirim/       kontrolcüyü tasarlayan sohbete giden promptlar
+  rl_airsim/           RL ve AirSim: devir rehberi, sonuç raporu
+  onkayit/             deneylerin ön kayıtları ve sonuçları
+  airsim/              AirSim hattı
 ```
 
 - **Depoda olmayanlar** (`.gitignore`): `build/`, `install/`, `log/`,
@@ -181,6 +194,8 @@ Harita: [`docs/README.md`](docs/README.md).
 | Veri toplama, turlar, kararlar | [`docs/VERI_TOPLAMA.md`](docs/VERI_TOPLAMA.md) |
 | Mühendislik günlüğü | [`docs/DURUM.md`](docs/DURUM.md) |
 | Teze girecek sayılar | [`docs/TEZ_NOTLARI.md`](docs/TEZ_NOTLARI.md) |
+| RL acil iniş ve AirSim: kurulum, çalıştırma, durum | [`docs/rl_airsim/README.md`](docs/rl_airsim/README.md) |
+| RL ve AirSim sonuçları | [`docs/rl_airsim/RAPOR.md`](docs/rl_airsim/RAPOR.md) |
 
 ## Çalışma kuralları (özet)
 
@@ -222,6 +237,11 @@ mesajı neyin neden yapıldığını söyler. Tamamı:
 | `yedek-calisan-2026-10-05` | doküman düzenlemesinden önceki çalışan sürüm (yedek; aynı adlı dal da var) |
 | `v6.7-dokuman-duzeni` | README, AGENTS/CLAUDE, doküman haritası, kontrolcü ölçümleri tek dosyada |
 | `v6.8-veri-seti` | veri seti Release'i (218 bölüm), yeni katılan ve kontrolcü durum dokümanları |
+| `v7.0-p-kestirici` | hedef yüzey yüksekliği bölgenin büyümesinden (salt okunur) |
+| `v7.1-gozlemci-cevrimdisi` | gözlemci aşama 0, çevrimdışı |
+| `v7.2-inis-yasasi` | seçilebilir iniş yasası, aşama 1 |
+| `v8.0-airsim-hatti` | AirSim hattı: PX4 ↔ AirSimNH, algı zinciri ve modlar kod değişmeden (dal `airsim`) |
+| `v8.1-rl-airsim-devir` | RL ve AirSim devir paketi: rehber, rapor, `tools/rl_inis` (dal `airsim`) |
 
 Geri dönmek için: `git checkout <etiket>`.
 
