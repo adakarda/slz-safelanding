@@ -24,3 +24,4 @@
 [arama] 20.10 22:37 G-B bitti; en iyi g3_risk S 91.9
 [arama] 20.10 22:37 tur G-C g3_risk s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk)
 [arama] 20.10 22:43 tur G-C g3_risk s0: S 92.3 | kalkan B 73.8 T 16.3 s | RL B 71.9 T 14.7 s U 15.3 TO 12.8
+[arama] 21.10 00:16 tur G-C g3_risk s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk)

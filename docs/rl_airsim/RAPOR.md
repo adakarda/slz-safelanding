@@ -1,8 +1,8 @@
 # RL iniş ve AirSim — sonuç raporu
 
-> **Güncel:** 2026-10-20 18:30. **Durum:** tarama bitti (H15: c23 B1/B2-s0'ın yerini almaz). B2 hızlandırma bitti
-> (H19: hiçbir çeşit şartı sağlamadı, B2-s0 aynen kalır). Gözlem turu başlıyor; birleşim turu ve AirSim Faz 7 sırada.
-> Bu rapor her karardan sonra güncellenmeli.
+> **Güncel:** 2026-10-21 00:30. **Durum:** tarama bitti (H15: c23 B1/B2-s0'ın yerini almaz). B2 hızlandırma bitti
+> (H19: B2-s0 aynen kalır). Yedek iniş ölçüldü (H21: benimsenmez; teşhis: alçak irtifada salınım). Gözlem turu sürüyor;
+> birleşim turu (k5 eklendi, Düzeltme 20) ve AirSim Faz 7 sırada. Bu rapor her karardan sonra güncellenmeli.
 > **Kim için:** tezi yazan, deneyi devralan ya da sonuçları kullanan herkes.
 > **Nasıl kurulur, nasıl çalıştırılır:** [`README.md`](README.md).
 > **Kaynak:** her sonucun ön kaydı ve sonucu [`../onkayit/rl_f0_onkayit.md`](../onkayit/rl_f0_onkayit.md)'de.
@@ -259,6 +259,22 @@ En kötüler: c10 (`gamma` 0.98, S −21.2), c04 (yol cezası −80, S −18.4),
 - İnce ayar süreyi en çok 0.6 s kısalttı. Eğitilmiş bir politikanın hızı, ödülü sonradan değiştirerek az değişiyor.
 - h2 kalkanlı başarıda B2-s0'ı geçti (%77.8), ama kalkansız güvensiz inişi %20.0. Tek tohum.
 
+### 4.7c Yedek iniş (Düzeltme 21; değerlendirmede bir kural, eğitim yok)
+
+Süre yetmeyecek hâle gelince politikayı geçersiz kılıp en yakın güvenli piksele kaydıran kural. Kalkanlı başarı (ölçülen,
+val_b32, eşli kıyas):
+
+| Ayar | Önce | Sonra | Fark |
+|---|---|---|---|
+| c13, 3 tohum | 66.4 | 67.1 | +0.7 |
+| c23, 3 tohum | 72.5 | 73.7 | +1.2 |
+| B2 s0 (tanımlayıcı) | 76.9 | 82.2 | +5.3 |
+
+- **Karar (H21): benimsenmez.** Gereken +3 puan, iki ayarda da.
+- **Neden işe yaramadı (teşhis):** kalan süre aşımlarında araç 5–10 m'de, güvenli zeminin 0.6–3 m yanında, kalkan
+  alçalmayı engellediği için kenarda zikzak çiziyor. c13'te son 10 s'de 40 adımda 11 kez yön tersine dönüyor. Sorun saat
+  değil, alçak irtifada "son metre" kontrolü.
+
 ### 4.8 Tanılamalar (tanımlayıcı, karar değiştirmez)
 
 | Soru | Sonuç | Betik |
@@ -383,9 +399,10 @@ Kurallar ve sahneler farklı. Sayılar doğrudan karşılaştırılamaz, yalnız
 
 ## 7. Öneriler (önceliğe göre)
 
-1. **Ön kayıtlı zinciri bitir:** H16 (gözlem; tabanı c23), H18 (birleşim), Faz 7. H15 ve H19 bitti.
-2. **Süre dolmadan yedek iniş** (yeni ön kayıt). Son birkaç saniyede kalkanın onayladığı en yakın güvenli
-   noktaya in. Hedef havuz: c13 s0'ın %23.1'lik süre aşımı. Risk: güvensiz iniş artabilir.
+1. **Ön kayıtlı zinciri bitir:** H16 (gözlem; tabanı c23), H18 (birleşim, k5 dahil), Faz 7. H15, H19 ve H21 bitti.
+2. **"Son metre" salınımını çöz** (yeni ön kayıt). Yedek iniş (H21) tutmadı; teşhise göre kalan süre aşımları alçak
+   irtifada güvenli zeminin 0.6–3 m yanında zikzak. Kalkan, her adım en yakın pikseli yeniden seçmek yerine bir hedefe
+   kilitlenmeli (zemindeki noktayı tutup oraya gitmek) ve bölgenin içine (kenara değil) yönelmeli.
 3. **Tohum çeşitliliği** (yeni ön kayıt): 3 tohumun oylaması ya da doğrulamayla tohum seçimi. Zayıf tohumun
    etkisini azaltır.
 4. **Kolaydan zora eğitim** (yeni ön kayıt): önce güvenli alana yakın başlangıçlar.

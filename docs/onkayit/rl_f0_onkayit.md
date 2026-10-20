@@ -1310,3 +1310,34 @@ dU = güvensizdeki fark (yüzde puan).
 - c13'te H21a tutar: süre aşımlarının en az dörtte biri başarıya döner.
 - Başarılı inişlerin ortalama süresi 1–3 s uzar: yeni başarılar bölümün sonunda iner.
 - Güvensiz iniş az artar: kural güvensiz zemine zorla indirmez, ama hedef kanalı her zaman doğru değil.
+
+## Sonuç: Düzeltme 21, yedek iniş (2026-10-21 00:16)
+
+7 değerlendirme bitti (val_b32 × 10, yalnız yeni yöntemler; kıyas aynı modelin eski `rl_kalkan` satırları). Kural
+`h21_karar.py` ile uygulandı. Ölçülen, kalkanlı:
+
+| Model | Başarı | Güvensiz | Süre aşımı | Süre | Süre aşımları neye döndü |
+|---|---|---|---|---|---|
+| c13 s0 | 69.7 → 70.0 | 7.2 → 7.2 | 23.1 → 22.8 | 13.8 → 13.8 s | 1 başarı, 73 yine süre aşımı |
+| c13 s1 | 68.8 → 70.0 | 8.8 → 8.4 | 22.5 → 21.6 | 14.4 → 14.7 s | 3 başarı, 69 |
+| c13 s2 | 60.6 → 61.2 | 15.3 → 14.7 | 24.1 → 24.1 | 16.9 → 17.1 s | 1 başarı, 1 güvensiz, 75 |
+| c23 s0 | 71.6 → 73.1 | 2.2 → 2.2 | 26.2 → 24.7 | 16.0 → 16.3 s | 5 başarı, 79 |
+| c23 s1 | 73.4 → 75.0 | 2.2 → 3.1 | 24.4 → 21.9 | 17.4 → 17.6 s | 6 başarı, 3 güvensiz, 69 |
+| c23 s2 | 72.5 → 73.1 | 4.4 → 4.4 | 23.1 → 22.5 | 16.6 → 16.7 s | 3 başarı, 1 güvensiz, 70 |
+| B2 s0 (tanımlayıcı) | 76.9 → **82.2** | 0.3 → 1.6 | 22.8 → 16.2 | 17.4 → 18.1 s | 17 başarı, 4 güvensiz, 52 |
+
+- **H21a tutmadı:** ortalama dB c13'te +0.7 (+0.3, +1.2, +0.6), c23'te +1.2 (+1.6, +1.6, +0.6). Gereken +3.
+- **H21b tuttu:** ortalama dU c13'te −0.3, c23'te +0.3.
+- **Karar (ön kayıtlı kurala göre): yedek iniş benimsenmez.** Tahmin ("c13'te H21a tutar") tutmadı.
+- B2 s0'da etki büyük (+5.3 puan), ama tek model ve tanımlayıcı.
+
+**Teşhis (tanımlayıcı, `~/rl_inis/yedek/teshis.py`, `teshis2.py`; kalan süre aşımları, son 10 s):**
+- Araç 5–10 m arasında, kalkanın alçalmayı engellediği bölgede takılı (bitiş yüksekliği medyan 8.8 m; c13'te 73/73).
+- Görüşte güvenli piksel var (görüşün boş kaldığı adım payı medyan 0) ve merkez blok sığacak yer var.
+- En yakın güvenli piksel çok yakın: c13 ~1.6 m, c23 ~0.6 m, B2 ~3 m (8.8 m'de 1 piksel ~0.16 m).
+- **Araç salınıyor:** c13'te 40 adımda medyan 11 ters yöne dönüş, net yer değiştirme / yol 0.36. Aracın altındaki gerçek
+  nokta neredeyse hiç hedef değil (adım payı medyan 0). Eğim yanılması değil, gerçekten üstüne geçemiyor.
+- Yedek kural 26.3 s'de (medyan) tetikleniyor: 8.8 m'de gereken süre 3.9 s. Bu, salınımı çözmeye yetmiyor.
+- **Yorum (_tahmin):** kalkan her adımda "en yakın güvenli pikseli" yeniden seçiyor. Araç hareket ettikçe bu piksel bir
+  yandan öbür yana geçiyor (dar şerit, 0.24 s komut gecikmesi) ve araç kenarda zikzak çiziyor. Kalan süre aşımları bir
+  saat sorunu değil, alçak irtifada "son metre" kontrol sorunu.
