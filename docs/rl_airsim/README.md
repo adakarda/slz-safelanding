@@ -40,8 +40,8 @@ yazılmaz.
 
 - **Tarama bitti (H15):** c23 en yüksek ortalama skoru aldı ama ön kayıtlı kuralı geçmedi; B1/B2-s0 yerinde
   kalır.
-- **Şu an koşan zincir:** B2 hızlandırma (H19, 16:49'da başladı) → gözlem turu (H16, tabanı c23) → birleşim turu
-  (H18) → AirSim Faz 7. Ayrıntı §7.
+- **B2 hızlandırma bitti (H19):** hiçbir ince ayar çeşidi süreyi 1.5 s kısaltamadı; B2-s0 aynen kalır.
+- **Şu an koşan zincir:** gözlem turu (H16, tabanı c23) → birleşim turu (H18) → AirSim Faz 7. Ayrıntı §7.
 
 ---
 
@@ -255,8 +255,8 @@ Zincirin her halkası bir öncekinin günlüğünde bir ifade bekler. Hepsi kend
 | 5 | `airsim_pilot/faz7_sonra.sh` → `faz7_havada.sh` | "birlesim bitti" | Faz 7 ön kaydı | `airsim_faz7_onkayit.md` |
 | — | `gorsel/son_islem.sh` | — | saatte bir tez çıktıları | — |
 
-**2026-10-20 17:30 durumu (ölçülen):** tarama 16:45'te bitti, karar H15: c23 yerini almaz. B2 hızlandırmanın üç
-çeşidi (`h1_hiz`, `h2_hiz_45s`, `h3_hiz_kalkan`) eğitimde; en çok ikisi aynı anda.
+**2026-10-20 18:30 durumu (ölçülen):** tarama 16:45'te bitti (H15: c23 yerini almaz). B2 hızlandırma 18:23'te bitti
+(H19: B2-s0 kalır). Gözlem turu "b2hiz bitti"yi görüp başlıyor.
 
 **Yeniden başlatma** (bilgisayar uyuduysa ya da oturum kapandıysa):
 1. `uptime` (WSL) ve `tail ~/rl_inis/arama/arama.log` ile bak.

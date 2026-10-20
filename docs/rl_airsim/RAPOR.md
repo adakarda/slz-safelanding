@@ -1,8 +1,8 @@
 # RL iniş ve AirSim — sonuç raporu
 
-> **Güncel:** 2026-10-20 17:30. **Durum:** tarama bitti (H15: c23 B1/B2-s0'ın yerini almaz). B2 hızlandırma
-> (H19) 16:49'da başladı. Gözlem turu, birleşim turu ve AirSim Faz 7 sırada bekliyor. Bu rapor her karardan sonra
-> güncellenmeli.
+> **Güncel:** 2026-10-20 18:30. **Durum:** tarama bitti (H15: c23 B1/B2-s0'ın yerini almaz). B2 hızlandırma bitti
+> (H19: hiçbir çeşit şartı sağlamadı, B2-s0 aynen kalır). Gözlem turu başlıyor; birleşim turu ve AirSim Faz 7 sırada.
+> Bu rapor her karardan sonra güncellenmeli.
 > **Kim için:** tezi yazan, deneyi devralan ya da sonuçları kullanan herkes.
 > **Nasıl kurulur, nasıl çalıştırılır:** [`README.md`](README.md).
 > **Kaynak:** her sonucun ön kaydı ve sonucu [`../onkayit/rl_f0_onkayit.md`](../onkayit/rl_f0_onkayit.md)'de.
@@ -26,6 +26,7 @@ Etiketler: **ölçülen** (koşuldu), **_hesap** (formül), **_tahmin** (varsay�
    - c13 s0'ın 320 denemesi: 223 başarı, 74 süre aşımı, 23 güvensiz.
    - B2 s0 + kalkan aynı başlangıçlarda 90 s verilince %76.9 → %88.1.
    - Politika güvenli yeri buluyor ama 30 s'ye sığmıyor. 30 s sınırında hız ile başarı aynı problem.
+   - Eğitilmiş B2-s0'ı hız ödülüyle ince ayarlamak süreyi en çok 0.6 s kısalttı (H19, gereken 1.5 s).
 3. **Eğitimde 30 s sınırı, kalkan eğitimin içinde değilse politikayı çökertiyor.**
    - D: hep alçalıyor, %59.6 güvensiz.
    - E ve F: dolaşıyor, %50–70 süre aşımı.
@@ -103,7 +104,7 @@ Etiketler: **ölçülen** (koşuldu), **_hesap** (formül), **_tahmin** (varsay�
 | 2026-10-17 | MESSI eğitimleri (A1, A2b). Depth Anything deneyi (PA–PD). B deneyi (`zemin_v1`, aynalama). Kodlayıcı vekil görevi. Hız yaması (sonuç bit bit aynı). İki kesinti: uyku ve bellek taşması |
 | 2026-10-18 | B, Depth Anything ve C sonuçları. D deneyi. AirSim Faz 3–6. Tarama ön kaydı (Düzeltme 15) |
 | 2026-10-19 | E ve F sonuçları. Tarama Tur 1–2 ve Tur 3'ün c13 tohumları. Final test protokolü (Düzeltme 17). Gözlem, birleşim ve B2 hızlandırma ön kayıtları. Havada başlangıç (`--havada`) |
-| 2026-10-20 | 00:31'de bilgisayar uyudu, zincir 15 saat durdu, 16:01'de kayıt noktasından sürdü. AirSim çatı gösterimi 6/6. Tarama bitti (H15: c23 yerini almaz). B2 hızlandırma başladı |
+| 2026-10-20 | 00:31'de bilgisayar uyudu, zincir 15 saat durdu, 16:01'de kayıt noktasından sürdü. AirSim çatı gösterimi 6/6. Tarama bitti (H15: c23 yerini almaz). B2 hızlandırma bitti (H19: B2-s0 kalır). Gözlem turu başladı |
 
 ---
 
@@ -244,6 +245,20 @@ En kötüler: c10 (`gamma` 0.98, S −21.2), c04 (yol cezası −80, S −18.4),
 - **c13 ve c23 farklı şeyler satıyor.** c13 hızlı ve az güvensiz, ama süre aşımı yüksek ve tohuma duyarlı. c23
   daha başarılı ve tohumlara karşı kararlı (87.7–90.7), ama yavaş. Hiçbiri 13.5 s'nin altına inmedi.
 
+### 4.7b B2-s0 hızlandırma (Düzeltme 19; B2-s0'dan +500k ince ayar, tek tohum, val_b32)
+
+| Çeşit | S | Kalkan B | Kalkan T | RL B | RL güvensiz |
+|---|---|---|---|---|---|
+| B2-s0 (kıyas) | 91.6 | 76.9 | 17.4 s | 72.5 | 8.8 |
+| h1: hız ödülü (adım −0.5, alçal +1) | 75.7 | 63.4 | 17.3 s | 67.2 | 2.8 |
+| h2: hız ödülü + eğitimde 45 s | 91.2 | 77.8 | 17.0 s | 66.9 | 20.0 |
+| h3: hız ödülü + kalkan eğitimde | 89.8 | 72.8 | 16.8 s | 72.8 | 4.1 |
+
+- **Karar (H19): hiçbir çeşit şartı sağlamadı, B2-s0 aynen kalır.** Şartlar: kalkanlı süre en az 1.5 s kısa,
+  kalkanlı başarı en çok 3 puan düşük, kalkansız güvensiz en çok 5 puan fazla.
+- İnce ayar süreyi en çok 0.6 s kısalttı. Eğitilmiş bir politikanın hızı, ödülü sonradan değiştirerek az değişiyor.
+- h2 kalkanlı başarıda B2-s0'ı geçti (%77.8), ama kalkansız güvensiz inişi %20.0. Tek tohum.
+
 ### 4.8 Tanılamalar (tanımlayıcı, karar değiştirmez)
 
 | Soru | Sonuç | Betik |
@@ -368,8 +383,7 @@ Kurallar ve sahneler farklı. Sayılar doğrudan karşılaştırılamaz, yalnız
 
 ## 7. Öneriler (önceliğe göre)
 
-1. **Ön kayıtlı zinciri bitir:** H19 (B2 hızlandırma, sürüyor), H16 (gözlem; tabanı c23), H18 (birleşim),
-   Faz 7. H15 bitti.
+1. **Ön kayıtlı zinciri bitir:** H16 (gözlem; tabanı c23), H18 (birleşim), Faz 7. H15 ve H19 bitti.
 2. **Süre dolmadan yedek iniş** (yeni ön kayıt). Son birkaç saniyede kalkanın onayladığı en yakın güvenli
    noktaya in. Hedef havuz: c13 s0'ın %23.1'lik süre aşımı. Risk: güvensiz iniş artabilir.
 3. **Tohum çeşitliliği** (yeni ön kayıt): 3 tohumun oylaması ya da doğrulamayla tohum seçimi. Zayıf tohumun

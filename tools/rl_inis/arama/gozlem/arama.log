@@ -1,0 +1,2 @@
+[arama] 20.10 18:24 gozlem turu basladi; taban c23_b1_adim05_alcal1 (Tur 3 ortalama S 88.9): --reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0}
+[arama] 20.10 18:24 tur G-A g1_hafiza s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar hafiza)

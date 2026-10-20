@@ -1,3 +1,8 @@
 [arama] 20.10 16:49 B2-s0 hizlandirma basladi (ince ayar, +500k)
 [arama] 20.10 16:49 tur H h1_hiz s0: egitim basladi (--reward zemin_v1 --mirror --steps 1500000 --env-json {"r_step": -0.5, "a_descend": 1.0})
 [arama] 20.10 16:52 tur H h2_hiz_45s s0: egitim basladi (--reward zemin_v1 --mirror --steps 1500000 --env-json {"r_step": -0.5, "a_descend": 1.0} --max-t 45)
+[arama] 20.10 17:37 tur H h3_hiz_kalkan s0: egitim basladi (--reward zemin_v1 --mirror --steps 1500000 --env-json {"r_step": -0.5, "a_descend": 1.0} --shield-train-m 10)
+[arama] 20.10 17:42 tur H h1_hiz s0: S 75.7 | kalkan B 63.4 T 17.3 s | RL B 67.2 T 16.9 s U 2.8 TO 30.0
+[arama] 20.10 17:46 tur H h2_hiz_45s s0: S 91.2 | kalkan B 77.8 T 17.0 s | RL B 66.9 T 15.2 s U 20.0 TO 13.1
+[arama] 20.10 18:23 tur H h3_hiz_kalkan s0: S 89.8 | kalkan B 72.8 T 16.8 s | RL B 72.8 T 16.8 s U 4.1 TO 23.1
+[arama] 20.10 18:23 b2hiz bitti

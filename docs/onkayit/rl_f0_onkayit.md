@@ -1197,3 +1197,27 @@ Kural `kararla.py` ile uygulandı. Tam tablo `tools/rl_inis/arama/ozet.md`, gün
 - Hiçbir ayar 13.5 s'nin altına inmedi.
 - Zincir sürüyor: B2 hızlandırma (Düzeltme 19) 16:49'da başladı. Gözlem turunun tabanı, `gozlem_tur.taban()`'ın kuralıyla
   Tur 3'te ortalama S'si en yüksek ayar, yani c23.
+
+## Sonuç: Düzeltme 19, B2-s0 hızlandırma (2026-10-20 18:23)
+
+Üç çeşit, B2-s0'ın 1M modelinden +500k adım (1.5M), tek tohum. Değerlendirme: val_b32 × 10, 320 deneme, 30 s.
+Kural `b2hiz_karar.py` ile uygulandı. Ölçülen:
+
+| Çeşit | S | Kalkan B | Kalkan T | RL B | RL T | RL güvensiz | RL süre doldu |
+|---|---|---|---|---|---|---|---|
+| B2-s0 (kıyas) | 91.6 | 76.9 | 17.4 s | 72.5 | 16.1 s | 8.8 | 18.8 |
+| h1_hiz (adım −0.5, alçal +1, 90 s) | 75.7 | 63.4 | 17.3 s | 67.2 | 16.9 s | 2.8 | 30.0 |
+| h2_hiz_45s (+ eğitimde 45 s) | 91.2 | **77.8** | 17.0 s | 66.9 | 15.2 s | 20.0 | 13.1 |
+| h3_hiz_kalkan (+ kalkan eğitimde) | 89.8 | 72.8 | 16.8 s | 72.8 | 16.8 s | 4.1 | 23.1 |
+
+**Şartlar** (B2-s0'a göre: kalkanlı T ≤ 15.9 s, kalkanlı B ≥ 73.9, kalkansız güvensiz ≤ 13.8):
+- h1: süre tutmadı (17.3), başarı tutmadı (63.4), güvensiz tuttu (2.8).
+- h2: süre tutmadı (17.0), başarı tuttu (77.8), güvensiz tutmadı (20.0).
+- h3: süre tutmadı (16.8), başarı tutmadı (72.8), güvensiz tuttu (4.1).
+
+**Karar (ön kayıtlı kurala göre): hiçbir çeşit H19'u sağlamadı. B2-s0 aynen kalır.**
+
+**Tanımlayıcı:**
+- Hız ödülüyle ince ayar kalkanlı süreyi en çok 0.6 s kısalttı (17.4 → 16.8 s). Gereken 1.5 s.
+- h2 kalkanlı başarıda B2-s0'ı geçti (%77.8). Ama kalkansız güvensiz inişi %20.0'ye çıktı. Tek tohum.
+- Gözlem turu (Düzeltme 16) "b2hiz bitti"yi gördü ve sıradaki adım olarak başlıyor.
