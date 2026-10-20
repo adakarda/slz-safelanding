@@ -30,15 +30,18 @@ yazılmaz.
 | | Başarı | Süre | Güvensiz | Kaynak |
 |---|---|---|---|---|
 | **En iyi skor:** c13 s0 (`zemin_v3`, eğitimde 30 s, kayarak alçalma, kalkan eğitimde) | %69.7 | 13.8 s | %7.2 | tarama Tur 3 |
-| c13, 3 tohum ortalaması | %66.4 | 15.0 s | — | tarama Tur 3 |
+| c13, 3 tohum ortalaması | %66.4 | 15.1 s | %10.4 (kalkansız) | tarama Tur 3 |
+| **En yüksek ortalama skor:** c23, 3 tohum (`zemin_v1`, adım −0.5, alçal +1) | %72.5 (kalkanlı) | 16.6 s | %13.9 (kalkansız) | tarama Tur 3; H15'i geçmedi |
 | **En yüksek başarı:** B2 s0 + kalkan | %76.9 | 17.4 s | %0.3 | B deneyi |
 | Aynı B2 s0 + kalkan, test süresi 90 s | %88.1 | — | — | tanılama |
 | Makale (Bartolomei 2022) | %87.6 | 11.8 s | — | farklı sahne ve kural, doğrudan kıyaslanamaz |
 | AirSim, çatı üstünden havada başlangıç (c13 s0, AirSim etiketi) | 6/6 | ort. 17.7 s | 0 | gösterim, ölçüm değil |
 | AirSim, yoldan tetik, v3 maskesi (B2 s0 + kalkan) | 1/10 | — | 9 yol | Faz 6 |
 
-- **Şu an koşan zincir:** tarama Tur 3'ün son iki tohumu → karar H15 → B2 hızlandırma (H19) → gözlem turu
-  (H16) → birleşim turu (H18) → AirSim Faz 7. Ayrıntı §7.
+- **Tarama bitti (H15):** c23 en yüksek ortalama skoru aldı ama ön kayıtlı kuralı geçmedi; B1/B2-s0 yerinde
+  kalır.
+- **Şu an koşan zincir:** B2 hızlandırma (H19, 16:49'da başladı) → gözlem turu (H16, tabanı c23) → birleşim turu
+  (H18) → AirSim Faz 7. Ayrıntı §7.
 
 ---
 
@@ -118,8 +121,9 @@ ve [`../DEVIR.md`](../DEVIR.md). Bellek: WSL'e 12 GB verildi. 16 GB'lık makined
    `val_b64.txt` 64, `test.txt` final test).
    - Kaynak MESSI veri paketi **özel**. Erişim için Arda'ya sor. Veri ve token depoya girmez.
    - Paketten sahne üretimi: `tools/rl_inis/messi/hazirla.py` (Düzeltme 6). Keşif: `docs/rl_veri/`.
-4. **Modeller:** eğitilmiş modeller depoda değil. Sahibinin makinesinde `~/rl_inis/kos/<koşu>/model.zip`; her
-   modelin yanında `args.json` var (`policy_node` gözlemi buradan kurar). En iyi modellerin yolu §5'te.
+4. **Modeller:** en iyi 4 model depoda, [`../../modeller/`](../../modeller/README.md) altında (c13 s0–s2, B2 s0;
+   her biri `model.zip` + `args.json`). `policy_node` gözlemi `args.json`'dan kurar, ikisi aynı klasörde
+   durmalı. Öbür modeller sahibinin makinesinde `~/rl_inis/kos/<koşu>/`.
 5. **AirSim (Windows):**
    - `C:\Users\<kullanıcı>\airsim\` altına GitHub `microsoft/AirSim` v1.8.1 sürümünün AirSimNH (ve istenirse
      CityEnviron) Windows paketini aç.
@@ -204,14 +208,17 @@ bash ~/rl_inis/demo/cati/havada_sonra.sh                                  # 6 ç
 - **Skor:** `S = B_kalkan + 0.5·B_RL − 4·max(0, T_kalkan − 12)`. 12 s makalenin süresi.
 - 320 denemede Wilson %95 aralığı yaklaşık ±5 puan (_hesap). Kararlar 3 tohumun ortalamasıyla verilir.
 
-**Modeller** (sahibinin makinesinde, `~/rl_inis/kos/`):
+**Modeller:**
 
-| Model | Klasör | Ne için |
-|---|---|---|
-| c13 s0 | `arama/t2_c13_f_kayarak_kalkan` | en iyi skor, AirSim gösterimleri |
-| c13 s1, s2 | `arama/t3_c13_f_kayarak_kalkan_s1`, `_s2` | tohum tekrarı |
-| B2 s0 | `b_B2_s0` | en yüksek kalkanlı başarı; AirSim Faz 3–6'nın varsayılan modeli |
-| B1 s0–s2 | `b_B1_s*` | taramanın kıyası |
+| Model | Depoda | Sahibinin makinesinde (`~/rl_inis/kos/`) | Ne için |
+|---|---|---|---|
+| c13 s0 | `modeller/c13_s0/` | `arama/t2_c13_f_kayarak_kalkan` | tek tohumda en iyi skor, AirSim gösterimleri |
+| c13 s1, s2 | `modeller/c13_s1/`, `c13_s2/` | `arama/t3_c13_f_kayarak_kalkan_s1`, `_s2` | tohum tekrarı |
+| B2 s0 | `modeller/b2_s0/` | `b_B2_s0` | en yüksek kalkanlı başarı; AirSim Faz 3–6'nın varsayılan modeli |
+| c23 s0–s2 | — | `arama/t2_c23_b1_adim05_alcal1`, `arama/t3_c23_..._s1`, `_s2` | en yüksek ortalama skor |
+| B1 s0–s2 | — | `b_B1_s*` | taramanın kıyası |
+
+Depodaki bir modelle AirSim: `run_airsim.sh --rl ~/ros2_ws/modeller/c13_s0/model.zip --kalkan 10 ...`.
 
 ---
 
@@ -248,8 +255,8 @@ Zincirin her halkası bir öncekinin günlüğünde bir ifade bekler. Hepsi kend
 | 5 | `airsim_pilot/faz7_sonra.sh` → `faz7_havada.sh` | "birlesim bitti" | Faz 7 ön kaydı | `airsim_faz7_onkayit.md` |
 | — | `gorsel/son_islem.sh` | — | saatte bir tez çıktıları | — |
 
-**2026-10-20 16:05 durumu (ölçülen):** Tur 3'te c13'ün 3 tohumu ve c23'ün tohum 0'ı bitti. c23 tohum 1 ve 2
-600k kayıt noktasından sürüyor.
+**2026-10-20 17:30 durumu (ölçülen):** tarama 16:45'te bitti, karar H15: c23 yerini almaz. B2 hızlandırmanın üç
+çeşidi (`h1_hiz`, `h2_hiz_45s`, `h3_hiz_kalkan`) eğitimde; en çok ikisi aynı anda.
 
 **Yeniden başlatma** (bilgisayar uyuduysa ya da oturum kapandıysa):
 1. `uptime` (WSL) ve `tail ~/rl_inis/arama/arama.log` ile bak.

@@ -126,3 +126,7 @@
 [arama] 20.10 15:49 tur 3 c23_b1_adim05_alcal1 s0: S 87.7 | kalkan B 71.6 T 16.0 s | RL B 64.1 T 14.8 s U 21.6 TO 14.4
 [arama] 20.10 16:01 tur 3 c23_b1_adim05_alcal1 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0})
 [arama] 20.10 16:04 tur 3 c23_b1_adim05_alcal1 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 20.10 16:43 tur 3 c23_b1_adim05_alcal1 s1: S 88.3 | kalkan B 73.4 T 17.4 s | RL B 72.8 T 16.2 s U 5.3 TO 21.9
+[arama] 20.10 16:45 tur 3 c23_b1_adim05_alcal1 s2: S 90.7 | kalkan B 72.5 T 16.6 s | RL B 72.8 T 15.6 s U 14.7 TO 12.5
+[arama] 20.10 16:45 tur 3 bitti
+[arama] 20.10 16:45 arama bitti

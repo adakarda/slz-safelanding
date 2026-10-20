@@ -157,6 +157,7 @@ src/
   eland_rl/            RL ortamı, PPO eğitimi, değerlendirme, policy_node   (dal airsim)
   eland_rl_mode/       C++ PX4 modu "RL Landing"                            (dal airsim)
   eland_airsim/        AirSim köprüsü, run_airsim.sh, iniş ölçümü           (dal airsim)
+modeller/              eğitilmiş en iyi 4 RL politikası   -> modeller/README.md   (dal airsim)
 tools/                 ölçüm ve analiz araçları          -> tools/README.md
   veri/                veri toplama ve veri seti          -> tools/veri/README.md
   rl_inis/             RL ve AirSim çalışma betikleri    -> tools/rl_inis/README.md

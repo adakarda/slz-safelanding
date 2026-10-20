@@ -1,7 +1,8 @@
 # RL iniş ve AirSim — sonuç raporu
 
-> **Güncel:** 2026-10-20 16:30. **Durum:** tarama Tur 3'ün son iki tohumu sürüyor. B2 hızlandırma, gözlem turu,
-> birleşim turu ve AirSim Faz 7 sırada bekliyor. Bu rapor her karardan sonra güncellenmeli.
+> **Güncel:** 2026-10-20 17:30. **Durum:** tarama bitti (H15: c23 B1/B2-s0'ın yerini almaz). B2 hızlandırma
+> (H19) 16:49'da başladı. Gözlem turu, birleşim turu ve AirSim Faz 7 sırada bekliyor. Bu rapor her karardan sonra
+> güncellenmeli.
 > **Kim için:** tezi yazan, deneyi devralan ya da sonuçları kullanan herkes.
 > **Nasıl kurulur, nasıl çalıştırılır:** [`README.md`](README.md).
 > **Kaynak:** her sonucun ön kaydı ve sonucu [`../onkayit/rl_f0_onkayit.md`](../onkayit/rl_f0_onkayit.md)'de.
@@ -17,8 +18,10 @@ Etiketler: **ölçülen** (koşuldu), **_hesap** (formül), **_tahmin** (varsay�
 1. **En iyi model iki ölçüte göre ayrışıyor.** Doğrulama seti `val_b32`, 320 deneme, 30 s.
    - Skor: c13 s0. %69.7 başarı, 13.8 s, %7.2 güvensiz.
    - Başarı: B2 s0 + kalkan. %76.9 başarı, 17.4 s, %0.3 güvensiz.
-   - c13'ün 3 tohum ortalaması %66.4 ve 15.0 s. B1'in kalkanlı ortalaması %66.7 ve 16.6 s. Yani c13 aynı
-     başarıda ~1.6 s daha hızlı.
+   - 3 tohum ortalamasında (kalkanlı): c23 %72.5 ve 16.6 s, c13 %66.4 ve 15.1 s, B1 %66.7 ve 16.6 s. c23 en
+     yüksek ortalama skoru aldı (88.9) ama ön kayıtlı kuralı geçmedi: hız şartı (≤ 13.5 s) ve tohum şartı
+     tutmadı. B1/B2-s0 yerinde kalır.
+   - c13, B1 ile aynı başarıda ~1.5 s daha hızlı ama tohuma duyarlı.
 2. **Kaybın çoğu süre aşımı.**
    - c13 s0'ın 320 denemesi: 223 başarı, 74 süre aşımı, 23 güvensiz.
    - B2 s0 + kalkan aynı başlangıçlarda 90 s verilince %76.9 → %88.1.
@@ -100,7 +103,7 @@ Etiketler: **ölçülen** (koşuldu), **_hesap** (formül), **_tahmin** (varsay�
 | 2026-10-17 | MESSI eğitimleri (A1, A2b). Depth Anything deneyi (PA–PD). B deneyi (`zemin_v1`, aynalama). Kodlayıcı vekil görevi. Hız yaması (sonuç bit bit aynı). İki kesinti: uyku ve bellek taşması |
 | 2026-10-18 | B, Depth Anything ve C sonuçları. D deneyi. AirSim Faz 3–6. Tarama ön kaydı (Düzeltme 15) |
 | 2026-10-19 | E ve F sonuçları. Tarama Tur 1–2 ve Tur 3'ün c13 tohumları. Final test protokolü (Düzeltme 17). Gözlem, birleşim ve B2 hızlandırma ön kayıtları. Havada başlangıç (`--havada`) |
-| 2026-10-20 | 00:31'de bilgisayar uyudu, zincir 15 saat durdu, 16:01'de kayıt noktasından sürdü. AirSim çatı gösterimi 6/6 |
+| 2026-10-20 | 00:31'de bilgisayar uyudu, zincir 15 saat durdu, 16:01'de kayıt noktasından sürdü. AirSim çatı gösterimi 6/6. Tarama bitti (H15: c23 yerini almaz). B2 hızlandırma başladı |
 
 ---
 
@@ -218,23 +221,28 @@ En kötüler: c10 (`gamma` 0.98, S −21.2), c04 (yol cezası −80, S −18.4),
 | c00 | 86.5 | 71.6 | 16.1 s | 62.8 | 27.0 | 10.2 |
 | c05 | 76.0 | 67.7 | 17.8 s | 63.4 | 13.6 | 23.0 |
 
-**Tur 3** (val_b32 × 10, 3 tohum; sürüyor):
+**Tur 3** (val_b32 × 10, 3 tohum):
 
-| Ayar, tohum | S | Kalkan B | Kalkan T | RL güvensiz | RL süre doldu |
-|---|---|---|---|---|---|
-| c13 s0 | 97.4 | 69.7 | 13.8 s | 7.2 | 23.1 |
-| c13 s1 | 93.4 | 68.8 | 14.4 s | 8.8 | 22.5 |
-| c13 s2 | 71.1 | 60.6 | 16.9 s | 15.3 | 24.1 |
-| **c13 ortalama** | **87.3** | **66.4** | **15.0 s** | 10.4 | 23.2 |
-| c23 s0 | 87.7 | 71.6 | 16.0 s | 21.6 | 14.4 |
-| c23 s1, s2 | eğitimde | | | | |
-| B1 (3 tohum, kıyas) | 76.8 | 66.7 | 16.6 s | 18.6 | 24.5 |
+| Ayar, tohum | S | Kalkan B | Kalkan T | RL B | RL güvensiz | RL süre doldu |
+|---|---|---|---|---|---|---|
+| c13 s0 | 97.4 | 69.7 | 13.8 s | 69.7 | 7.2 | 23.1 |
+| c13 s1 | 93.4 | 68.8 | 14.4 s | 68.8 | 8.8 | 22.5 |
+| c13 s2 | 71.1 | 60.6 | 16.9 s | 60.6 | 15.3 | 24.1 |
+| **c13 ortalama** | **87.3** | **66.4** | **15.1 s** | 66.4 | 10.4 | 23.2 |
+| c23 s0 | 87.7 | 71.6 | 16.0 s | 64.1 | 21.6 | 14.4 |
+| c23 s1 | 88.3 | 73.4 | 17.4 s | 72.8 | 5.3 | 21.9 |
+| c23 s2 | 90.7 | 72.5 | 16.6 s | 72.8 | 14.7 | 12.5 |
+| **c23 ortalama** | **88.9** | **72.5** | **16.6 s** | 69.9 | 13.9 | 16.3 |
+| B1 (3 tohum, kıyas) | 76.7 | 66.7 | 16.6 s | 56.9 | 18.6 | 24.5 |
 
-- **H15 kuralı** (Düzeltme 15, `kararla.py` uygular): Tur 3'te ortalama skoru en yüksek ayar B1 ile kıyaslanır.
-  Koşullardan biri: ortalama skor B1'inkinden en az 5 puan yüksek ve 3 tohumun en az 2'sinde de öyle. c23'ün
-  tohumları bitince karar verilecek.
-- **c13 ve c23 farklı şeyler satıyor.** c13 hızlı ve az güvensiz, ama süre aşımı yüksek. c23 daha başarılı
-  (kalkanla), ama yavaş ve kalkansız hâli %21.6 güvensiz.
+- **H15 sonucu** (Düzeltme 15, `kararla.py`): aday c23 (ortalama S en yüksek).
+  - H15a tutmadı: ortalama +12.2 puan, ama tohum çiftlerinin yalnız birinde ≥ +5.
+  - H15b tuttu: kalkanlı başarı 72.5 ≥ 63.7.
+  - H15c tutmadı: 16.6 s > 13.5 s.
+  - H15d tuttu: kalkansız güvensiz 13.9 ≤ 23.6.
+  - **Karar: c23, B1/B2-s0'ın yerini almaz.**
+- **c13 ve c23 farklı şeyler satıyor.** c13 hızlı ve az güvensiz, ama süre aşımı yüksek ve tohuma duyarlı. c23
+  daha başarılı ve tohumlara karşı kararlı (87.7–90.7), ama yavaş. Hiçbiri 13.5 s'nin altına inmedi.
 
 ### 4.8 Tanılamalar (tanımlayıcı, karar değiştirmez)
 
@@ -360,8 +368,8 @@ Kurallar ve sahneler farklı. Sayılar doğrudan karşılaştırılamaz, yalnız
 
 ## 7. Öneriler (önceliğe göre)
 
-1. **Ön kayıtlı zinciri bitir:** H15 (tarama), H19 (B2 hızlandırma), H16 (gözlem), H18 (birleşim), Faz 7.
-   Hepsi sırada.
+1. **Ön kayıtlı zinciri bitir:** H19 (B2 hızlandırma, sürüyor), H16 (gözlem; tabanı c23), H18 (birleşim),
+   Faz 7. H15 bitti.
 2. **Süre dolmadan yedek iniş** (yeni ön kayıt). Son birkaç saniyede kalkanın onayladığı en yakın güvenli
    noktaya in. Hedef havuz: c13 s0'ın %23.1'lik süre aşımı. Risk: güvensiz iniş artabilir.
 3. **Tohum çeşitliliği** (yeni ön kayıt): 3 tohumun oylaması ya da doğrulamayla tohum seçimi. Zayıf tohumun

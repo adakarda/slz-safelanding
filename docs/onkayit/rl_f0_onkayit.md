@@ -1160,3 +1160,40 @@ Birden çok çeşit kabul edilirse skoru en yüksek olan "hızlandırılmış B2
 **Sıra:** tarama → B2 hızlandırma → gözlem turu → birleşim turu → Faz 7.
 - `kararla.py` içe aktarılınca artık çıktı vermiyor (`main` koruması).
 - Davranış değişmedi.
+
+## Sonuç: Düzeltme 15, tarama (2026-10-20 16:45)
+
+Üç tur bitti:
+- Tur 1: 25 ayar, 400k adım, val_b64 × 5.
+- Tur 2: ilk 4 ayar, 1M adım, val_b64 × 10.
+- Tur 3: ilk 2 ayar × 3 tohum, val_b32 × 10.
+
+Kural `kararla.py` ile uygulandı. Tam tablo `tools/rl_inis/arama/ozet.md`, günlük `tools/rl_inis/arama/arama.log`.
+
+**Kesinti:** 2026-10-20 00:31'de bilgisayar uyudu ("Application API"). c23'ün tohum 1 ve 2'si 600k kayıt noktasından
+16:01'de sürdü. Ayarlar ve listeler değişmedi.
+
+**Tur 3** (ölçülen, val_b32, 320 deneme / koşu, 3 tohum ortalaması):
+
+| Ayar | S (tohum 0, 1, 2) | Kalkan B | Kalkan T | RL B | RL güvensiz |
+|---|---|---|---|---|---|
+| c23 (`zemin_v1`, adım −0.5, alçal +1, 90 s) | **88.9** (87.7, 88.3, 90.7) | 72.5 | 16.6 s | 69.9 | 13.9 |
+| c13 (`zemin_v3`, 30 s, kayarak alçal, kalkan eğitimde) | 87.3 (97.4, 93.4, 71.1) | 66.4 | 15.1 s | 66.4 | 10.4 |
+| B1 (kıyas) | 76.7 | 66.7 | 16.6 s | 56.9 | 18.6 |
+
+**Tahminler** (aday: ortalama S'si en yüksek ayar, c23):
+- **H15a tutmadı.** Ortalama S +12.2 puan (gereken +5), ama tohum çiftlerinden yalnız birinde ≥ +5 (gereken 2).
+- **H15b tuttu.** Kalkanlı başarı 72.5 ≥ 63.7.
+- **H15c tutmadı.** Kalkanlı süre 16.6 s > 13.5 s.
+- **H15d tuttu.** Kalkansız güvensiz iniş 13.9 ≤ 23.6.
+
+**Karar (ön kayıtlı kurala göre): c23, B1/B2-s0'ın yerini almaz.**
+
+**Tanımlayıcı:**
+- c23 tohumlara karşı kararlı (87.7–90.7). c13 dağınık (71.1–97.4).
+- c23'te hız ödülü (adım −0.5, alçal +1) kalkansız başarıyı B1'e göre 13 puan artırdı (69.9 / 56.9) ve güvensiz inişi
+  4.7 puan azalttı. Kalkanlı süre değişmedi (16.6 s).
+- c13 daha hızlı (15.1 s) ama tohuma duyarlı.
+- Hiçbir ayar 13.5 s'nin altına inmedi.
+- Zincir sürüyor: B2 hızlandırma (Düzeltme 19) 16:49'da başladı. Gözlem turunun tabanı, `gozlem_tur.taban()`'ın kuralıyla
+  Tur 3'te ortalama S'si en yüksek ayar, yani c23.
