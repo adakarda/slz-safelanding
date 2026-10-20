@@ -57,10 +57,15 @@ def bos_mb():
     return int(sh("free -m | awk 'NR==2 {print $7}'") or 0)
 
 
+# Trainings at once. The observation-channel rounds set 1: with --kanallar a run peaks at ~6.5 GB RSS + 2 GB swap;
+# two of them filled WSL's 12 GB and the distro restarted (2026-10-20 19:31, yurutme notu in rl_f0_onkayit.md).
+EN_COK = 2
+
+
 def yer_var():
     if DUMAN:
         return bos_mb() > 1500
-    if egitim_sayisi() >= 2 or bos_mb() < 7000:
+    if egitim_sayisi() >= EN_COK or bos_mb() < 7000:
         return False
     if sh("pgrep -f '[r]un_airsim\\.sh|[i]nis_sina\\.sh'"):
         return False

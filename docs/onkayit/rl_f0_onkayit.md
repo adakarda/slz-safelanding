@@ -1221,3 +1221,20 @@ Kural `b2hiz_karar.py` ile uygulandı. Ölçülen:
 - Hız ödülüyle ince ayar kalkanlı süreyi en çok 0.6 s kısalttı (17.4 → 16.8 s). Gereken 1.5 s.
 - h2 kalkanlı başarıda B2-s0'ı geçti (%77.8). Ama kalkansız güvensiz inişi %20.0'ye çıktı. Tek tohum.
 - Gözlem turu (Düzeltme 16) "b2hiz bitti"yi gördü ve sıradaki adım olarak başlıyor.
+
+## Yürütme notu (2026-10-20 19:31): gözlem turunda bellek taştı, eğitimler artık tek tek
+
+**Olay (ölçülen, `dmesg` ve `journalctl`):**
+- G-A'nın g3_risk ve g4_hepsi çeşitleri aynı anda eğitiliyordu. Ek gözlem kanallarıyla bir eğitim ~6.5 GB RSS ve ~2 GB
+  takas tuttu (önceki eğitimler 3–4 GB).
+- WSL'in 12 GB'ı doldu. Çekirdek bir eğitimi öldürdü (OOM), ardından Ubuntu dağıtımı yeniden başladı ve zincirin bütün
+  süreçleri kapandı.
+- Kalanlar: g1_hafiza ve g2_hedef'in sonuçları yazılmıştı. g3_risk 200k, g4_hepsi 100k kayıt noktasındaydı.
+
+**Önlem (sonucu değiştirmez):**
+- `arama.py`'ye `EN_COK` (aynı anda en çok kaç eğitim) eklendi, varsayılan 2 (eskisi gibi).
+- `gozlem_tur.py` bunu 1 yapar. `birlesim_tur.py` de tabanı `--kanallar` içeriyorsa 1 yapar.
+- Zincir 19:33'te yeniden başladı. g3 ve g4 kayıt noktalarından sürer (`--resume`). Öğrenme oranı programı korunur,
+  rollout tamponu sıfırdan başlar (2026-10-17 yürütme notundaki gibi).
+- Ayarlar, listeler, adım sayıları, tahminler ve karar kuralları değişmedi. Yalnız sıra değişti: G-A'nın kalan iki
+  çeşidi aynı anda değil, art arda koşar.

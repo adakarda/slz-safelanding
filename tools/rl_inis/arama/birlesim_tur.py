@@ -99,6 +99,8 @@ def main():
     while not (os.path.exists(f'{AR}/gozlem/arama.log') and 'gozlem bitti' in open(f'{AR}/gozlem/arama.log').read()):
         time.sleep(300)
     ad, args, cA, cB, cC, dz = taban()
+    if '--kanallar' in args:
+        arama.EN_COK = 1    # observation channels: ~8.5 GB per run at peak, one at a time (yurutme notu 2026-10-20)
     sA, sB = arama.olc(cA)['S'], arama.olc(cB)['S']
     arama.log(f'birlesim turu basladi; taban {ad} ({" ".join(args)}); taban S: 400k {sA:.1f}, 1M {sB:.1f}')
     tA = [arama.Is('K-A', c, a, 0, f'{arama.K}/a_{c}', stop_at=400_000) for c, a in cesitler(args)]

@@ -25,6 +25,7 @@ H = os.path.expanduser('~')
 AR = f'{H}/rl_inis/arama'
 arama.A = f'{H}/rl_inis/arama/gozlem'
 arama.K = f'{H}/rl_inis/kos/gozlem'
+arama.EN_COK = 1    # every run here has --kanallar (~8.5 GB at peak): one at a time (yurutme notu 2026-10-20)
 os.makedirs(arama.A, exist_ok=True)
 os.makedirs(arama.K, exist_ok=True)
 CESIT = [('g1_hafiza', 'hafiza'), ('g2_hedef', 'hedef'), ('g3_risk', 'risk'), ('g4_hepsi', 'risk,hedef,hafiza')]
