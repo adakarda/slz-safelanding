@@ -1391,3 +1391,44 @@ Taban c23 (H16 benimsenmedi). k1_hiz ve k4_90s_hiz tabanla aynı olduğu için, 
   - c23 s2'nin 2M modeli şimdiye kadarki en iyi tek model: kalkanlı %84.4, 17.3 s, kalkansız güvensiz %7.2, S 103.1.
     Tek tohum; kural dışı, yalnız bilgi.
   - 2M, kalkansız güvensizi 13.9'dan 8.6'ya indirdi (3 tohum ortalaması).
+
+## Düzeltme 22 (2026-10-21 14:30): kilitli kalkan — ölçümden önce
+
+**Kullanıcı kararı (Arda, 2026-10-21):** "Evet, dene." Soru şuydu: kilitlenen kalkan (`rl_kalkan2`) ön kayıtla denensin
+mi; eski kalkan değişmez.
+
+**Gerekçe:** Düzeltme 21'in teşhisi. Kalan süre aşımlarında araç 5–10 m'de, güvenli zeminin 0.6–3 m yanında zikzak
+çiziyor (c13 s0: 40 adımda medyan 11 ters dönüş). Kalkan her 0.25 s'de en yakın güvenli pikseli yeniden seçiyor; bu
+piksel güvenli alanın kenarında.
+
+**Kural (`eland_rl/kilitli_kalkan.py`, değerlendirmede bir yöntem, eğitim yok):**
+- Kalkan 10 m'nin altında bir alçalmayı ilk kez durdurmak zorunda kalınca bir hedef seçer:
+  - güvenli alanın kenarından en az min(0.5 m + merkez bloğun yarısı, alanın en derin noktası) içerideki pikseller
+    arasından görüntü merkezine en yakını;
+  - bu pikseli kamera pozuyla yerdeki bir noktaya çevirir (kameranın kullandığı ışın–düzlem izdüşümü).
+- O noktaya uçar (yön sabit) ve araç noktanın 0.4 m yakınına gelene kadar politikayı geçersiz kılar.
+- Vardığında merkez güvenliyse alçalır. Değilse ya da kilit 8 s'den eskiyse bırakır, bir sonraki durdurulan alçalmada
+  yeniden seçer.
+- Görüşte güvenli bir şey yoksa bekler (eski kalkan gibi).
+- Kullandığı bilgi: gözlem, aracın kendi poz kestirimi, kamera modeli. Ayrıcalıklı bilgi yok.
+- Sabitler ölçümden önce: 10 m, 0.5 m pay, 0.4 m varış, 8 s ömür.
+
+**Kod (onaylı, varsayılan kapalı):**
+- Yeni dosya `eland_rl/kilitli_kalkan.py` ve `test/test_kilitli_kalkan.py` (4 test: düz zeminde ve 1.2 m'lik şeritte
+  iner, güvenli yer yoksa inmez).
+- `evaluate.py`'ye `--kalkan2` ve `--yalniz-kalkan2` bayrakları, yeni yöntem `rl_kalkan2`.
+- **Kapalıyken davranış bire bir eski** (ölçülen, B2-s0, val_b32 × 1): bayrak kapalıyken CSV bit bit aynı; açıkken eski
+  yöntemlerin satırları aynı.
+- Yapay sahnelerde (tanımlayıcı): geniş çimde ve 1.2 m şeritte eski kalkan da iniyor (yeni kalkan 1–2 s daha yavaş);
+  0.8 m'lik şeritte eski kalkan asfalta indi, yenisi beklerken süre doldu.
+
+**Ölçüm ve karar:** Düzeltme 21 ile aynı modeller, aynı liste, aynı eşli kıyas ve aynı kural.
+- `~/rl_inis/yedek/kos2.sh` (Faz 7 bitince koşar), `~/rl_inis/yedek/h22_karar.py`.
+- **H22a:** her ayar (c13, c23) için ortalama dB = B(rl_kalkan2) − B(rl_kalkan) ≥ +3, ve tohumların en az 2'sinde.
+- **H22b:** ortalama dU ≤ +2.
+- **Kilitli kalkan benimsenir**, eğer H22a ve H22b c13'te ve c23'te tutarsa. Benimsenirse final testte ek yöntem olarak
+  raporlanır; AirSim'e (`policy_node`) taşınması ayrı iş, Arda'nın onayıyla.
+
+**Tahminler (_tahmin):**
+- c13 ve c23'te süre aşımlarının en az üçte biri başarıya döner, H22a tutar.
+- Başarılı iniş süresi biraz uzar (kilitlenen hedefe gidiş).

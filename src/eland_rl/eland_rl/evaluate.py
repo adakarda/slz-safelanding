@@ -54,6 +54,10 @@ def main():
                     help='amendment 21: also rl_yedek and rl_kalkan_yedek (deadline fallback, eland_rl.yedek)')
     ap.add_argument('--yalniz-yedek', action='store_true',
                     help='amendment 21: only the fallback methods (rl and rl_kalkan exist in earlier CSVs)')
+    ap.add_argument('--kalkan2', action='store_true',
+                    help='amendment 22: also rl_kalkan2 (target-locking shield, eland_rl.kilitli_kalkan)')
+    ap.add_argument('--yalniz-kalkan2', action='store_true',
+                    help='amendment 22: only rl_kalkan2 (rl and rl_kalkan exist in earlier CSVs)')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
@@ -95,10 +99,23 @@ def main():
                     h = env.veh.delayed_pose()[0][2]
                     return shield(yedek(rl(o), o, h, env.veh.t, env.cfg.max_t, a.diag)[0], o, h, a.shield_m)[0]
                 methods.update(rl_yedek=rl_yedek, rl_kalkan_yedek=rl_kalkan_yedek)
+            if a.kalkan2 or a.yalniz_kalkan2:  # amendment 22: the shield locks onto one ground target
+                from .kilitli_kalkan import KilitliKalkan
+                kk = KilitliKalkan(below_m=a.shield_m)
+
+                def rl_kalkan2(o):
+                    if env.veh.t < 1e-9:      # a new episode
+                        kk.sifirla()
+                    pos, R = env.veh.delayed_pose()
+                    return kk(rl(o), o, pos[2], env.veh.t, pos, R, env.veh.pos[:2], env.veh.yaw, env.cam.rays)[0]
+                methods['rl_kalkan2'] = rl_kalkan2
         if a.only_rl:                       # amendment 15 screening: the baselines do not change between models
-            methods = {k: v for k, v in methods.items() if k in ('rl', 'rl_kalkan', 'rl_yedek', 'rl_kalkan_yedek')}
+            methods = {k: v for k, v in methods.items()
+                       if k in ('rl', 'rl_kalkan', 'rl_yedek', 'rl_kalkan_yedek', 'rl_kalkan2')}
         if a.yalniz_yedek:
             methods = {k: v for k, v in methods.items() if k in ('rl_yedek', 'rl_kalkan_yedek')}
+        if a.yalniz_kalkan2:
+            methods = {k: v for k, v in methods.items() if k == 'rl_kalkan2'}
     rows, hists = [], collections.defaultdict(collections.Counter)
     for name, act in methods.items():
         for i, sc in enumerate(scenes):
