@@ -25,3 +25,6 @@
 [arama] 20.10 22:37 tur G-C g3_risk s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk)
 [arama] 20.10 22:43 tur G-C g3_risk s0: S 92.3 | kalkan B 73.8 T 16.3 s | RL B 71.9 T 14.7 s U 15.3 TO 12.8
 [arama] 21.10 00:16 tur G-C g3_risk s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --kanallar risk)
+[arama] 21.10 00:27 tur G-C g3_risk s1: S 87.1 | kalkan B 73.1 T 16.4 s | RL B 62.8 T 13.8 s U 24.7 TO 12.5
+[arama] 21.10 01:49 tur G-C g3_risk s2: S 64.3 | kalkan B 57.8 T 17.9 s | RL B 60.0 T 17.8 s U 3.1 TO 36.9
+[arama] 21.10 01:49 gozlem bitti

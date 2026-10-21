@@ -96,6 +96,7 @@ echo "[run_airsim] gunlukler: $LOG_DIR; Windows: $GW"
 
 AIRSIM_PID=""; PX4_PID=""; AGENT_PID=""; KOPRU_PID=""; LAUNCH_PID=""; BEKCI_PID=""; V3_PID=""; RLM_PID=""; POL_PID=""; RLT_PID=""
 temizle() {
+	trap '' INT TERM     # a TERM during cleanup cut it short and left PX4 running (Faz 7, 2026-10-21)
 	echo "[run_airsim] kapatiliyor..."
 	[ -n "$BEKCI_PID" ] && kill "$BEKCI_PID" 2>/dev/null
 	for p in $RLT_PID $POL_PID $RLM_PID $LAUNCH_PID $KOPRU_PID $AGENT_PID $V3_PID; do kill -INT "$p" 2>/dev/null; done
@@ -317,10 +318,19 @@ print(f'{la + math.degrees(n / r):.8f} {lo + math.degrees(e / (r * math.cos(math
 		konum | awk -v n="$1" -v e="$2" -v h="$3" '{exit !(NF == 3 && sqrt(($1 - n)^2 + ($2 - e)^2) < 2.0 && (-$3 - h)^2 < 1.0)}'
 	}
 	echo "[run_airsim] havada baslangica uculuyor: ($H_N, $H_E) m, $H_ALT m"
+	# the command is one best-effort message and can be lost (Faz 7, 2026-10-21): sent again every 5 s until there
 	hedefe_uc "$H_N" "$H_E" "$TAKEOFF_ALT"
-	for _ in $(seq 1 90); do vardi "$H_N" "$H_E" "$TAKEOFF_ALT" && break; sleep 1; done
+	for s in $(seq 1 90); do
+		vardi "$H_N" "$H_E" "$TAKEOFF_ALT" && break
+		[ $((s % 5)) = 0 ] && hedefe_uc "$H_N" "$H_E" "$TAKEOFF_ALT"
+		sleep 1
+	done
 	hedefe_uc "$H_N" "$H_E" "$H_ALT"
-	for _ in $(seq 1 60); do vardi "$H_N" "$H_E" "$H_ALT" && break; sleep 1; done
+	for s in $(seq 1 60); do
+		vardi "$H_N" "$H_E" "$H_ALT" && break
+		[ $((s % 5)) = 0 ] && hedefe_uc "$H_N" "$H_E" "$H_ALT"
+		sleep 1
+	done
 	sleep 3      # settle into the hover the policy was trained to start from
 	vardi "$H_N" "$H_E" "$H_ALT" || fail "havada hedefe varilamadi; konum $(konum)"
 	echo "[run_airsim]   havada: konum $(konum) (x, y, z NED, dogma noktasina gore)"

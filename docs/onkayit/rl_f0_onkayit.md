@@ -1341,3 +1341,53 @@ dU = güvensizdeki fark (yüzde puan).
 - **Yorum (_tahmin):** kalkan her adımda "en yakın güvenli pikseli" yeniden seçiyor. Araç hareket ettikçe bu piksel bir
   yandan öbür yana geçiyor (dar şerit, 0.24 s komut gecikmesi) ve araç kenarda zikzak çiziyor. Kalan süre aşımları bir
   saat sorunu değil, alçak irtifada "son metre" kontrol sorunu.
+
+## Sonuç: Düzeltme 16, gözlem turu (2026-10-21 01:49)
+
+Taban c23 (taramanın Tur 3'ünde ortalama S'si en yüksek ayar). Eğitimler 19:31 yürütme notundan sonra tek tek koştu.
+Ölçülen:
+
+| Aşama | Çeşit | S | Kalkan B | Kalkan T |
+|---|---|---|---|---|
+| G-A (400k, val_b64 × 5) | g3_risk | 81.5 | 72.2 | 17.9 s |
+| | g2_hedef | 74.2 | 67.8 | 17.8 s |
+| | g1_hafiza | 45.4 | 49.1 | 19.3 s |
+| | g4_hepsi | 37.1 | 41.9 | 17.9 s |
+| G-B (1M, val_b64 × 10) | g3_risk | 91.9 | 74.4 | 16.4 s |
+| | g2_hedef | 53.2 | 47.5 | 16.5 s |
+| G-C (val_b32 × 10) | g3_risk s0 / s1 / s2 | 92.3 / 87.1 / 64.3 | 73.8 / 73.1 / 57.8 | 16.3 / 16.4 / 17.9 s |
+| | **g3_risk ortalama** | **81.2** | **68.2** | **16.9 s** |
+| | taban c23 ortalama | 88.9 | 72.5 | 16.6 s |
+
+- **H16a tutmadı** (hiçbir tohum çiftinde +5), **H16b tutmadı** (68.2 < 69.5), **H16c tuttu**, **H16d tuttu**.
+- **Karar (ön kayıtlı kurala göre): `risk` kanalı benimsenmez.** Birleşim turunun tabanı c23 kalır; k5 (Düzeltme 20) bu
+  yüzden düşer.
+- **Tanımlayıcı:** tohum 0 ve 1'de risk kanalı tabanla aynı ya da üstünde, tohum 2 çöktü (S 64.3, süre aşımı %36.9).
+  Hafıza ve üç kanal birden 400k'da zayıftı.
+
+## Sonuç: Düzeltme 18, birleşim turu ve 2M (2026-10-21 09:17)
+
+Taban c23 (H16 benimsenmedi). k1_hiz ve k4_90s_hiz tabanla aynı olduğu için, k5 taban kanal içermediği için düştü.
+Ölçülen:
+
+| Aşama | Çeşit | S | Kalkan B | Kalkan T | RL güvensiz | RL süre doldu |
+|---|---|---|---|---|---|---|
+| K-A (400k, val_b64 × 5) | k2_odul (`zemin_v3`) | 66.2 | 61.9 | 18.6 s | 15.3 | 23.4 |
+| | k3_impala | 63.3 | 66.6 | 16.1 s | 73.8 | 0.0 |
+| | taban | 81.2 | | | | |
+| K-B (1M, val_b64 × 10) | k2_odul | 69.8 | 62.7 | 18.1 s | 3.9 | 32.7 |
+| | k3_impala | 62.0 | 62.8 | 15.3 s | 75.3 | 0.0 |
+| K-C (val_b32 × 10) | k2_odul s0 / s1 / s2 | 73.7 / 97.2 / 63.4 | 65.6 / 79.4 / 55.9 | 18.0 / 16.9 / 17.7 s | | |
+| | **k2_odul ortalama** | **78.1** | **67.0** | **17.5 s** | 10.7 | |
+| K-D (2M, val_b32 × 10) | taban c23 s0 / s1 / s2 | 82.3 / 85.3 / **103.1** | 67.8 / 71.9 / **84.4** | 17.2 / 17.0 / 17.3 s | 7.2 / 11.6 / 7.2 | 21.9 / 21.2 / 13.1 |
+| | **2M ortalama** | **90.3** | **74.7** | **17.2 s** | 8.6 | |
+| | 1M ortalama (kıyas) | 88.9 | 72.5 | 16.6 s | 13.9 | |
+
+- **H18 (k2_odul): tutmadı.** a (S +5, tohumların 2'sinde) tutmadı, b ve c tutmadı, d tuttu. **Karar: benimsenmez.**
+- **H18b (2M): tutmadı.** Ortalama S +1.4 (gereken +3); S yalnız tohum 2'de arttı. **Karar: 2M kullanılmaz.** Faz 7'nin
+  modeli tabanın en iyi 1M tohumu (c23 s1, `faz7_model.py`).
+- **Tanımlayıcı:**
+  - IMPALA, kalkansız hâlinde düz alçalmaya çöktü (güvensiz %74–75, süre aşımı 0). Kalkanla %63–67.
+  - c23 s2'nin 2M modeli şimdiye kadarki en iyi tek model: kalkanlı %84.4, 17.3 s, kalkansız güvensiz %7.2, S 103.1.
+    Tek tohum; kural dışı, yalnız bilgi.
+  - 2M, kalkansız güvensizi 13.9'dan 8.6'ya indirdi (3 tohum ortalaması).

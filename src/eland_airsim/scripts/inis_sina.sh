@@ -64,6 +64,14 @@ for satir in "${SATIRLAR[@]}"; do
 			[ -z "$WB" ] || [ "$WB" -ge 2000 ] && break
 			echo "[inis] $(date +%H:%M) Windows bos bellek $WB MB < 2000, bekleniyor"; sleep 60
 		done
+		# a PX4 left by an earlier attempt blocks every later start (Faz 7, 2026-10-21). Only AirSim's own PX4
+		# (working directory rootfs_airsim) is closed; a Gazebo session is never touched.
+		for p in $(pgrep -x px4); do
+			case "$(readlink /proc/$p/cwd 2>/dev/null)" in
+			*rootfs_airsim*) echo "[inis] UYARI: onceki denemeden kalan AirSim PX4'u ($p) kapatiliyor"
+				kill $p 2>/dev/null; sleep 3; kill -9 $p 2>/dev/null; sleep 5 ;;
+			esac
+		done
 		D=$KOK/k$(printf %02d $i)$([ "$deneme" -gt 1 ] && echo "_$deneme")
 		echo "[inis] $(date +%H:%M) kosu $i (deneme $deneme): baslangic ($X, $Y)${HAV_AD:+ havada ($HAV_AD)} $V3 ${RL[*]}"
 		bash "$WS/src/eland_airsim/scripts/run_airsim.sh" --takeoff "$KALKIS" --trigger --no-hud \

@@ -105,3 +105,28 @@ RL modeli sırası:
 4. Değilse önceki sıra.
 
 Seçim ölçütü aynı: val_b32'de RL + kalkan başarısı en yüksek tohum.
+
+## Yürütme notu (2026-10-21 14:00): ilk Faz 7 koşusu geçersiz, düzeltilip yeniden koşuluyor
+
+**Olay (ölçülen, `_gunlukler/airsim_inis_f7_*_20261021_*`):**
+- Faz 7 09:20'de başladı (model c23 s1, Düzeltme 4'ün sırasıyla: birleşim turunun tabanı, val_b32'de kalkanlı başarısı en
+  yüksek tohum, %73.4).
+- 120 koşudan yalnız ilki uçtu (klasik + AirSim etiketi, çime indi, 28.5 s).
+- Koşu 2: araç hedef noktaya vardı ama hedef yüksekliğe inmedi (konum z −28.7 m, hedef 26.2 m; "havada hedefe
+  varılamadı"). Yükseklik komutu tek bir best-effort mesaj ve kaybolabiliyor.
+- Koşu 2'nin temizliği yarıda kesildi. `inis_sina.sh`, HATA satırını görünce TERM gönderiyordu; temizlik zaten
+  başlamıştı ve TERM tuzağı onu PX4 kapanmadan bitirdi. Kalan PX4 yüzünden sonraki 119 koşunun hepsi "çalışan bir sim
+  var" diyerek başlamadı, 4 kolun hepsinde.
+
+**Düzeltme (Arda'nın onayıyla, `src/eland_airsim/scripts`):**
+- `run_airsim.sh`: havada başlangıçta konum ve yükseklik komutu, araç varana kadar 5 s'de bir yeniden gönderilir.
+- `run_airsim.sh`: temizlik INT ve TERM'i yok sayar, yarıda kesilmez.
+- `inis_sina.sh`: her denemeden önce AirSim'in kendi PX4'ü (çalışma dizini `rootfs_airsim`) kalmışsa kapatılır. Gazebo
+  PX4'üne dokunulmaz.
+
+**Doğrulama (ölçülen):**
+- Koşu 2'nin başlangıcı (130.5, 125.7) → (35.4, −31.5, 26.2) yeniden uçuldu: 26.4 m'ye indi, çime indi (23.8 s).
+- `run_airsim.sh`'e temizlik sırasında art arda üç TERM: kalan PX4 0, AirSim 0.
+
+**Yeniden koşu:** aynı 30 başlangıç (tohum 2026), aynı 4 kol, aynı model (c23 s1). Tahminler, ölçütler ve karar kuralı
+değişmedi. Geçersiz koşunun sonuçları `airsim_faz3/f7_*_gecersiz_20261021.jsonl` olarak saklandı, hiçbir karara girmez.

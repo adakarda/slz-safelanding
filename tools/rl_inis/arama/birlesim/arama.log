@@ -1,0 +1,23 @@
+[arama] 21.10 01:52 birlesim turu basladi; taban c23_b1_adim05_alcal1 (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0}); taban S: 400k 81.2, 1M 87.6
+[arama] 21.10 01:52 tur K-A k2_odul s0: egitim basladi (--reward zemin_v3 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 21.10 01:56 tur K-A k3_impala s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --encoder impala)
+[arama] 21.10 02:31 tur K-A k2_odul s0: S 66.2 | kalkan B 61.9 T 18.6 s | RL B 61.2 T 16.9 s U 15.3 TO 23.4
+[arama] 21.10 02:57 tur K-A k3_impala s0: S 63.3 | kalkan B 66.6 T 16.1 s | RL B 26.2 T 11.7 s U 73.8 TO 0.0
+[arama] 21.10 02:57 K-A bitti; sira: k2_odul 66.2, k3_impala 63.3 (taban 81.2)
+[arama] 21.10 02:57 tur K-B k2_odul s0: egitim basladi (--reward zemin_v3 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 21.10 03:01 tur K-B k3_impala s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --encoder impala)
+[arama] 21.10 04:02 tur K-B k2_odul s0: S 69.8 | kalkan B 62.7 T 18.1 s | RL B 63.4 T 17.8 s U 3.9 TO 32.7
+[arama] 21.10 04:46 tur K-B k3_impala s0: S 62.0 | kalkan B 62.8 T 15.3 s | RL B 24.7 T 10.6 s U 75.3 TO 0.0
+[arama] 21.10 04:46 K-B bitti; en iyi k2_odul S 69.8 (taban 87.6)
+[arama] 21.10 04:46 tur K-C k2_odul s1: egitim basladi (--reward zemin_v3 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 21.10 04:50 tur K-C k2_odul s2: egitim basladi (--reward zemin_v3 --env-json {"r_step": -0.5, "a_descend": 1.0})
+[arama] 21.10 04:54 tur K-C k2_odul s0: S 73.7 | kalkan B 65.6 T 18.0 s | RL B 64.4 T 17.5 s U 5.3 TO 30.3
+[arama] 21.10 06:17 tur K-C k2_odul s1: S 97.2 | kalkan B 79.4 T 16.9 s | RL B 74.4 T 15.0 s U 19.1 TO 6.6
+[arama] 21.10 06:20 tur K-C k2_odul s2: S 63.4 | kalkan B 55.9 T 17.7 s | RL B 60.6 T 17.5 s U 7.8 TO 31.6
+[arama] 21.10 06:20 tur K-D 2M s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --steps 2000000)
+[arama] 21.10 06:23 tur K-D 2M s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --steps 2000000)
+[arama] 21.10 07:52 tur K-D 2M s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0} --steps 2000000)
+[arama] 21.10 07:58 tur K-D 2M s0: S 82.3 | kalkan B 67.8 T 17.2 s | RL B 70.9 T 16.2 s U 7.2 TO 21.9
+[arama] 21.10 08:01 tur K-D 2M s1: S 85.3 | kalkan B 71.9 T 17.0 s | RL B 67.2 T 15.4 s U 11.6 TO 21.2
+[arama] 21.10 09:17 tur K-D 2M s2: S 103.1 | kalkan B 84.4 T 17.3 s | RL B 79.7 T 16.0 s U 7.2 TO 13.1
+[arama] 21.10 09:17 birlesim bitti

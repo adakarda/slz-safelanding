@@ -1,0 +1,23 @@
+{
+ "taban": "c23_b1_adim05_alcal1",
+ "taban_args": [
+  "--reward",
+  "zemin_v1",
+  "--env-json",
+  "{\"r_step\": -0.5, \"a_descend\": 1.0}"
+ ],
+ "cesit": "g3_risk",
+ "cesit_args": [
+  "--reward",
+  "zemin_v1",
+  "--env-json",
+  "{\"r_step\": -0.5, \"a_descend\": 1.0}",
+  "--kanallar",
+  "risk"
+ ],
+ "dizinler": [
+  "/home/arda/rl_inis/kos/gozlem/b_g3_risk",
+  "/home/arda/rl_inis/kos/gozlem/c_g3_risk_s1",
+  "/home/arda/rl_inis/kos/gozlem/c_g3_risk_s2"
+ ]
+}

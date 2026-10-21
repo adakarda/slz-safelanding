@@ -1,0 +1,41 @@
+{
+ "taban": "c23_b1_adim05_alcal1",
+ "taban_args": [
+  "--reward",
+  "zemin_v1",
+  "--env-json",
+  "{\"r_step\": -0.5, \"a_descend\": 1.0}"
+ ],
+ "taban_dizinler": [
+  "/home/arda/rl_inis/kos/arama/t2_c23_b1_adim05_alcal1",
+  "/home/arda/rl_inis/kos/arama/t3_c23_b1_adim05_alcal1_s1",
+  "/home/arda/rl_inis/kos/arama/t3_c23_b1_adim05_alcal1_s2"
+ ],
+ "taban_csv": [
+  "/home/arda/rl_inis/kos/arama/t2_c23_b1_adim05_alcal1/eval_val_b32_10.csv",
+  "/home/arda/rl_inis/kos/arama/t3_c23_b1_adim05_alcal1_s1/eval_val_b32_10.csv",
+  "/home/arda/rl_inis/kos/arama/t3_c23_b1_adim05_alcal1_s2/eval_val_b32_10.csv"
+ ],
+ "cesit": "k2_odul",
+ "cesit_args": [
+  "--reward",
+  "zemin_v3",
+  "--env-json",
+  "{\"r_step\": -0.5, \"a_descend\": 1.0}"
+ ],
+ "dizinler": [
+  "/home/arda/rl_inis/kos/birlesim/b_k2_odul",
+  "/home/arda/rl_inis/kos/birlesim/c_k2_odul_s1",
+  "/home/arda/rl_inis/kos/birlesim/c_k2_odul_s2"
+ ],
+ "uzun_kaynak": [
+  "/home/arda/rl_inis/kos/arama/t2_c23_b1_adim05_alcal1",
+  "/home/arda/rl_inis/kos/arama/t3_c23_b1_adim05_alcal1_s1",
+  "/home/arda/rl_inis/kos/arama/t3_c23_b1_adim05_alcal1_s2"
+ ],
+ "uzun_dizinler": [
+  "/home/arda/rl_inis/kos/birlesim/d_2M_s0",
+  "/home/arda/rl_inis/kos/birlesim/d_2M_s1",
+  "/home/arda/rl_inis/kos/birlesim/d_2M_s2"
+ ]
+}
