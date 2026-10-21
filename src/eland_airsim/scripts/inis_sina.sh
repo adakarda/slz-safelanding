@@ -20,6 +20,7 @@ while [ $# -gt 0 ]; do
 	--v3) V3=--v3 ;;
 	--rl) RL+=(--rl "$2"); RL_AD=rl_$(basename "$(dirname "$2")"); shift ;;
 	--kalkan) RL+=(--kalkan "$2"); RL_AD="${RL_AD}_k$2"; shift ;;
+	--hizli-son) RL+=(--hizli-son "$2"); RL_AD="${RL_AD}_hs$2"; shift ;;
 	--etiket) ETIKET=$2; shift ;;
 	--irtifa) IRTIFA=$2; shift ;;
 	--ruzgar) RL+=(--ruzgar "$2"); RL_AD="${RL_AD:-klasik}_r$(echo "$2" | tr -d ' ' | tr ',' '_')"; shift ;;

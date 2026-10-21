@@ -55,6 +55,9 @@ class RlLandingMode : public px4_ros2::ModeBase {
     _target_altitude_m = node.declare_parameter<double>("target_altitude_m", 5.0);
     _touchdown_speed_m_s = node.declare_parameter<double>("touchdown_speed_m_s", 0.7);
     _command_timeout_s = node.declare_parameter<double>("command_timeout_s", 0.5);
+    // amendment 23: faster touchdown phase down to hizli_son_irtifa_m; < 0 (default) keeps the single speed
+    _hizli_son_irtifa_m = node.declare_parameter<double>("hizli_son_irtifa_m", -1.0);
+    _hizli_son_hiz_m_s = node.declare_parameter<double>("hizli_son_hiz_m_s", 2.0);
 
     _command_sub = node.create_subscription<geometry_msgs::msg::TwistStamped>(
         "/eland/rl/hiz_komutu", rclcpp::QoS(10).reliable(),
@@ -109,13 +112,18 @@ class RlLandingMode : public px4_ros2::ModeBase {
       _touchdown_xy = pos.head<2>();
       RCLCPP_INFO(_node.get_logger(), "%.1f m: policy released, touching down at %.2f m/s",
                   altitude_m, _touchdown_speed_m_s);
+      if (_hizli_son_irtifa_m >= 0.0) {
+        RCLCPP_INFO(_node.get_logger(), "  faster down to %.1f m: %.2f m/s (amendment 23)",
+                    _hizli_son_irtifa_m, _hizli_son_hiz_m_s);
+      }
     }
 
     if (_touchdown) {
+      const bool hizli = _hizli_son_irtifa_m >= 0.0 && altitude_m > _hizli_son_irtifa_m;
       px4_ros2::TrajectorySetpoint sp;
       sp.withPositionX(_touchdown_xy.x())
           .withPositionY(_touchdown_xy.y())
-          .withVelocityZ(static_cast<float>(_touchdown_speed_m_s))
+          .withVelocityZ(static_cast<float>(hizli ? _hizli_son_hiz_m_s : _touchdown_speed_m_s))
           .withYaw(_heading);
       _trajectory->update(sp);
       publishState("touchdown", altitude_m);
@@ -173,6 +181,8 @@ class RlLandingMode : public px4_ros2::ModeBase {
   double _target_altitude_m{5.0};
   double _touchdown_speed_m_s{0.7};
   double _command_timeout_s{0.5};
+  double _hizli_son_irtifa_m{-1.0};
+  double _hizli_son_hiz_m_s{2.0};
   Eigen::Vector3f _command{Eigen::Vector3f::Zero()};
   rclcpp::Time _command_time{0, 0, RCL_ROS_TIME};
   rclcpp::Time _last_state{0, 0, RCL_ROS_TIME};

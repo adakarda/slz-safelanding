@@ -1432,3 +1432,61 @@ piksel güvenli alanın kenarında.
 **Tahminler (_tahmin):**
 - c13 ve c23'te süre aşımlarının en az üçte biri başarıya döner, H22a tutar.
 - Başarılı iniş süresi biraz uzar (kilitlenen hedefe gidiş).
+
+## Düzeltme 23 (2026-10-21 15:45): RL modunda daha hızlı son iniş — ölçümden önce
+
+**Kullanıcı kararı (Arda, 2026-10-21):** "İkisi de" (son 5 m hızlandırması ve yanal hız). Soru şuydu: iniş süresini
+kısaltmak için hangisi ön kayıtla denensin?
+
+**Gerekçe (kaynak kod ve _hesap):**
+- RL modu 5 m'nin altında politikayı dinlemez, 0.7 m/s ile dikey iner. Son 5 m ~7.1 s (_hesap). AirSim'de ölçülen
+  16–23 s'lik inişlerin üçte biri bu kısım.
+- Alçalma hızı zaten PX4'ün sınırında (`MPC_Z_VEL_MAX_DN 2.0`). PX4 parametreleri değişmez.
+
+**Değişiklik (onaylı, varsayılan kapalı):**
+- `eland_rl_mode`: `hizli_son_irtifa_m` (varsayılan −1 = kapalı) ve `hizli_son_hiz_m_s` (2.0). Açıkken 5 m'den
+  `hizli_son_irtifa_m`'ye kadar 2 m/s, altında yine 0.7 m/s. Kapalıyken tek hız, eskisi gibi.
+- `run_airsim.sh` ve `inis_sina.sh`: `--hizli-son METRE`.
+- Seçilen değer: **2 m.** Son 2 m 0.7 m/s ile iner. Son kısım ~7.1 s'den ~4.4 s'ye (_hesap).
+- **Risk:** irtifa EKF'den, kalkış noktasına göre. Faz 7'de arazinin hedef bölgede kalkış noktasından ~15 m yüksek olduğu
+  başlangıçlar görüldü. Arazi kalkıştan 2–5 m yüksekse temas 0.7 yerine 2 m/s'ye yakın olabilir. Bu yüzden temas hızı
+  karar kuralında.
+
+**Ölçüm:** AirSim, Faz 7'nin 30 havada başlangıcı (tohum 2026), aynı model (c23 s1), AirSim etiketi, kalkan 10 m,
+`--hizli-son 2`. Kıyas: Faz 7'nin `f7_rl_k10_gt` kolu; aynı başlangıçlar, eşli. Faz 7 ve kilitli kalkan ölçümü bitince
+koşar.
+
+**Karar (H23, `~/rl_inis/hiz2/h23_karar.py`):** benimsenir, eğer üçü de tutarsa:
+- **H23a:** her iki kolda da inen eşli koşularda iniş süresi farkının medyanı ≤ −2.0 s.
+- **H23b:** temas hızı 1.0 m/s'yi aşan iniş sayısı kıyastan fazla değil.
+- **H23c:** zemin kuralına uygun iniş (ortografik harita) kıyastan en çok 1 az.
+
+**Tahmin (_tahmin):** medyan fark −2.5 s; temas hızı ortalaması değişmez.
+
+## Düzeltme 24 (2026-10-21 15:45): yanal hız 1.5 ve 2.0 m/s — eğitimlerden önce
+
+**Kullanıcı kararı:** Düzeltme 23'teki "İkisi de".
+
+**Gerekçe:** c13 s0'ın 13.8 s'sinin ~10 s'si 25 m'den 5 m'ye düz iniş (2 m/s, PX4 sınırı); kalan ~3.8 s kayma ve bekleme
+(_hesap). Kayma 1 m/s (makalenin değeri); PX4 daha fazlasına izin veriyor. Uzaktaki güvenli alanlara 30 s'de yetişmek
+de kolaylaşır.
+
+**Çeşitler** (c23 tarifi: `zemin_v1`, adım −0.5, alçal +1, eğitimde 90 s; `--env-json` ile `v_lateral`):
+- **y15:** yanal 1.5 m/s. **y20:** yanal 2.0 m/s. Kayarken alçalma yok (c23'te de yok).
+- 3'er tohum (0, 1, 2), 1M adım, val_b32 × 10 tam değerlendirme. Aynı anda en çok 2 eğitim.
+- Betik `~/rl_inis/hiz2/hiz2_tur.py`; Düzeltme 23'ün AirSim ölçümü bitince başlar.
+
+**Kıyas:** c23'ün Tur 3'ü (3 tohum): S 88.9, kalkanlı B 72.5, kalkanlı T 16.6 s, kalkansız güvensiz 13.9.
+
+**Karar (H24, `~/rl_inis/hiz2/h24_karar.py`):** bir çeşit benimsenir, eğer 3 tohum ortalamasında üçü de tutarsa:
+- **H24a:** kalkanlı süre ≤ 15.1 s (c23 − 1.5 s).
+- **H24b:** kalkanlı başarı ≥ 69.5 (c23 − 3).
+- **H24c:** kalkansız güvensiz ≤ 18.9 (c23 + 5).
+- İkisi de tutarsa skoru (S) yüksek olan.
+
+**Tahminler (_tahmin):**
+- y15 süreyi ~1 s, y20 ~1.5 s kısaltır.
+- Hız arttıkça "son metre" zikzakı artar (Düzeltme 21 teşhisi), kalkanlı başarı biraz düşebilir.
+
+**AirSim'e taşıma (ayrı iş):** `policy_node` yanal hızı bir ROS parametresinden alıyor (`v_lateral`, varsayılan 1.0),
+`args.json`'dan değil. Benimsenen bir çeşit AirSim'de aynı hızla koşulmalı.

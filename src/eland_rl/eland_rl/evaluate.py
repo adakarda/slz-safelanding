@@ -10,6 +10,7 @@ Tests use max_t 30 s and the measured nominal dynamics, not randomised
 import argparse
 import collections
 import csv
+import json
 
 import numpy as np
 
@@ -58,6 +59,8 @@ def main():
                     help='amendment 22: also rl_kalkan2 (target-locking shield, eland_rl.kilitli_kalkan)')
     ap.add_argument('--yalniz-kalkan2', action='store_true',
                     help='amendment 22: only rl_kalkan2 (rl and rl_kalkan exist in earlier CSVs)')
+    ap.add_argument('--env-json', default='',
+                    help='amendment 24: EnvConfig overrides as JSON, as train.py (e.g. the lateral speed)')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     scenes = load_list(a.scenes, dist_cell_m=a.sora_cell)
@@ -67,7 +70,8 @@ def main():
                                        kanallar=tuple(k for k in a.kanallar.split(',') if k),
                                        **{**REWARD_PRESETS[a.reward],
                                           **({'land_rewards': {**ZEMIN_REWARDS, 1: a.land_hard}}
-                                             if a.land_hard is not None else {})}))
+                                             if a.land_hard is not None else {}),
+                                             **json.loads(a.env_json or '{}')}))
     rng = np.random.default_rng(12345)
     methods = {'duz_inis': lambda o: 9, 'rastgele': lambda o: int(rng.integers(10))}
     if a.obs == 'sem_depth_sora':

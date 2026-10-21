@@ -15,6 +15,8 @@
 #   --ruzgar     sabit ruzgar, m/s NED (AirSim simSetWind; kopru basinda uygulanir)
 #   --izle       AirSim penceresinde asagi kameranin goruntu + segmentasyon alt pencereleri; ayrica
 #                v3 paneli (--v3) ve politikanin gordugu (--rl) icin goruntu pencereleri
+#   --hizli-son METRE   RL modu 5 m'nin altinda METRE'ye kadar 2 m/s, sonra 0.7 m/s iner (Duzeltme 23; yoksa
+#                tek hiz 0.7 m/s, eskisi gibi)
 #   --havada N,E,IRTIFA | rastgele[:TOHUM]
 #                havada baslangic: kalkistan sonra dogma noktasina gore (N, E) m'ye ve IRTIFA m'ye ucar, orada
 #                bekler; tetik (--trigger ya da istasyonda 0) orada verilir. rastgele: dogma noktasi bilinen
@@ -34,7 +36,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
-YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""
+YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""; HIZLI_SON=""
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -55,6 +57,7 @@ while [ $# -gt 0 ]; do
 	--ruzgar) RUZGAR=$2; shift ;;
 	--izle) IZLE=1 ;;
 	--havada) HAVADA=$2; shift ;;
+	--hizli-son) HIZLI_SON=$2; shift ;;
 	-h | --help) sed -n 2,27p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
@@ -337,7 +340,8 @@ print(f'{la + math.degrees(n / r):.8f} {lo + math.degrees(e / (r * math.cos(math
 fi
 if [ -n "$RL_MODEL" ]; then
 	for kayit in 1 2 3; do      # a registration attempted too early fails; try again after a pause
-		ros2 run eland_rl_mode rl_landing_mode >"$LOG_DIR/rl_mod.log" 2>&1 &
+		ros2 run eland_rl_mode rl_landing_mode \
+			${HIZLI_SON:+--ros-args -p hizli_son_irtifa_m:=$HIZLI_SON} >"$LOG_DIR/rl_mod.log" 2>&1 &
 		RLM_PID=$!
 		for _ in $(seq 1 60); do
 			grep -qE "RegisterExtComponentReply|Registration failed" "$LOG_DIR/rl_mod.log" 2>/dev/null && break
