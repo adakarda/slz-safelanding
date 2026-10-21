@@ -49,7 +49,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Int8, String
 
 from . import gozlem
-from .camera import Camera, ground_hits, nearest_source_index, sora_channel
+from .camera import Camera, ground_hits, nearest_source_index, rotation, sora_channel
 from .env import REWARD_PRESETS, EnvConfig, lateral_index
 from .pilots import shield
 from .scene import Scene
@@ -88,6 +88,8 @@ class PolicyNode(Node):
         p('pose_topic', '/eland/gercek_poz')
         p('run_args', '')
         p('kalkan_m', -1.0)
+        p('gimbal', False)          # the camera on a stabilised gimbal: level, its heading fixed in the world
+        p('gimbal_yaw_enu_deg', 90.0)   # that heading, ENU (90 = north: AirSim gimbal Yaw 0)
         g = lambda k: self.get_parameter(k).value  # noqa: E731
         from stable_baselines3 import PPO
         self.model = PPO.load(g('model_path'), device='cpu')
@@ -95,6 +97,8 @@ class PolicyNode(Node):
         self.cfg, self.cfg_note = self.training_config(g('run_args') or os.path.join(
             os.path.dirname(os.path.abspath(g('model_path'))), 'args.json'))
         self.kalkan_m = float(g('kalkan_m'))
+        self.gimbal = bool(g('gimbal'))
+        self.gimbal_yaw = math.radians(float(g('gimbal_yaw_enu_deg')))
         self.source = g('label_source')
         self.offset = int(g('label_offset'))
         self.cam_off, self.ground_z = float(g('camera_offset_m')), float(g('ground_z_m'))
@@ -244,7 +248,8 @@ class PolicyNode(Node):
         t_sim, p, R = pose
         c = p + R @ np.array([0.0, 0.0, self.cam_off])
         c[2] -= self.ground_z
-        got = self.observe(c, R)
+        Rk = rotation((0.0, 0.0, 1.0), self.gimbal_yaw) if self.gimbal else R
+        got = self.observe(c, Rk)
         if got is None:
             return
         obs, sem = got
@@ -255,13 +260,14 @@ class PolicyNode(Node):
         if self.kalkan_m >= 0 and self.n_channels >= 3:
             a, overridden = shield(a, obs, c[2], self.kalkan_m)
         yaw = math.atan2(R[1, 0], R[0, 0])
+        yaw_k = self.gimbal_yaw if self.gimbal else yaw      # the image's up: actions are relative to it
         if a == 9:
             v_enu = np.array([0.0, 0.0, -self.v_down])
         elif a == 0:
             v_enu = np.zeros(3)
         else:
             bx, by = self.lateral[lateral_index(a)] * self.v_lat
-            v_enu = np.array([math.cos(yaw) * bx - math.sin(yaw) * by, math.sin(yaw) * bx + math.cos(yaw) * by,
+            v_enu = np.array([math.cos(yaw_k) * bx - math.sin(yaw_k) * by, math.sin(yaw_k) * bx + math.cos(yaw_k) * by,
                               -self.v_down if a >= 10 else 0.0])
         vn, ve, vd = float(v_enu[1]), float(v_enu[0]), float(-v_enu[2])
         m = TwistStamped()

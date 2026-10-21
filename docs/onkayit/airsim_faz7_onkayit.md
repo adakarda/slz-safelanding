@@ -130,3 +130,36 @@ Seçim ölçütü aynı: val_b32'de RL + kalkan başarısı en yüksek tohum.
 
 **Yeniden koşu:** aynı 30 başlangıç (tohum 2026), aynı 4 kol, aynı model (c23 s1). Tahminler, ölçütler ve karar kuralı
 değişmedi. Geçersiz koşunun sonuçları `airsim_faz3/f7_*_gecersiz_20261021.jsonl` olarak saklandı, hiçbir karara girmez.
+
+## Sonuç (2026-10-21 18:01)
+
+Yeniden koşu (yürütme notu 2026-10-21 14:00), 4 kol × 30 havada başlangıç (tohum 2026), model c23 s1 (Düzeltme 4'ün
+sırası: birleşim turunun tabanı c23; val_b32'de kalkanlı başarısı en yüksek tohum). İniş noktaları ortografik haritada
+(`inis_harita.py`). Ölçülen:
+
+| Kol | İndi | Çim | Sert | Zemin kuralı | SORA (tehlikeye ≥ 3 m) | Diğer | Süre medyan | Süre ort. | Yatay yol ort. |
+|---|---|---|---|---|---|---|---|---|---|
+| K-GT (klasik, AirSim etiketi) | 30/30 | 25 | 2 | **27** | **24** | ağaç 3 | 26.6 s | 25.7 s | 11.3 m |
+| R-GT (RL + kalkan, AirSim etiketi) | 29/30 | 21 | 3 | **24** | 11 | ağaç 5 | **16.7 s** | 24.3 s | 4.3 m |
+| K-v3 (klasik, v3) | 30/30 | 24 | 0 | **24** | 20 | ağaç 3, yol 2, yapı 1 | 26.6 s | 25.4 s | 11.7 m |
+| R-v3 (RL + kalkan, v3) | 30/30 | 15 | 1 | **16** | 10 | ağaç 6, yol 4, yapı 4 | **14.7 s** | 15.3 s | 2.0 m |
+
+R-GT'nin bir koşusu süre aşımı (184.5 s'lik bir uçuş ortalamayı büyütüyor; medyan 16.7 s).
+
+**Tahminler:**
+- **T7a** (R-GT zemin ≥ K-GT − 1): 24 < 26, **tutmadı**. Düzeltme 3'ün orantılı okumasıyla (−3) 24 ≥ 24, sınırda tutar.
+- **T7b** (R-GT medyan süre ≤ K-GT − 3 s): 16.7 ≤ 23.6, **tuttu**. RL ~10 s daha hızlı.
+- **T7c** (K-v3 ve R-v3 ≤ 21/30): K-v3 24 > 21, **tutmadı**; R-v3 16 ≤ 21 tuttu. Klasik zincir v3 ile beklenenden sağlam.
+- **T7d** (R-v3 yola iniş ≤ 18/30): 4/30, **tuttu**. Havada başlangıçta RL v3 ile yola çok daha az iniyor (Faz 6: 9/10).
+
+**Fisher kesin testi (tanımlayıcı, Düzeltme 3):**
+- Zemin kuralı, GT: klasik 27/30, RL 24/30, p = 0.47. Fark ayrılamıyor.
+- Zemin kuralı, v3: klasik 24/30, RL 16/30, p = 0.054. Sınırda.
+- SORA (tehlikeye ≥ 3 m), GT: klasik 24/30, RL 11/30, p = 0.0014. Klasik tehlikeden belirgin uzak iniyor.
+
+**Tanımlayıcı:**
+- RL hızlı (medyan 15–17 s, klasik 27 s) ve az yol yapıyor (2–4 m, klasik 11 m), ama tehlikeye yakın iniyor.
+- v3 ile RL'nin güvenli inişi 24'ten 16'ya düşüyor, klasiğinki 27'den 24'e. Algı hatası RL'yi daha çok etkiliyor.
+- Bazı başlangıçlarda hedef bölgenin zemini kalkış noktasından ~15 m yüksek (iki klasik GT koşusu 15 m'de yola değdi).
+  İki yöntem de irtifayı kalkış noktasına göre ölçüyor, zemini düz sayıyor.
+- **Örneklem:** tek model, 30 başlangıç; ön sonuç. Bu faz model seçmez. Klasik / RL / karma yapı kararı Arda'nındır.

@@ -17,6 +17,7 @@
 #                v3 paneli (--v3) ve politikanin gordugu (--rl) icin goruntu pencereleri
 #   --hizli-son METRE   RL modu 5 m'nin altinda METRE'ye kadar 2 m/s, sonra 0.7 m/s iner (Duzeltme 23; yoksa
 #                tek hiz 0.7 m/s, eskisi gibi)
+#   --gimbal     asagi kamera AirSim gimbaliyla sabit (dik bakar, yon aracla doner); policy_node da buna gore
 #   --havada N,E,IRTIFA | rastgele[:TOHUM]
 #                havada baslangic: kalkistan sonra dogma noktasina gore (N, E) m'ye ve IRTIFA m'ye ucar, orada
 #                bekler; tetik (--trigger ya da istasyonda 0) orada verilir. rastgele: dogma noktasi bilinen
@@ -36,7 +37,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
-YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""; HIZLI_SON=""
+YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""; HIZLI_SON=""; GIMBAL=0
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -58,6 +59,7 @@ while [ $# -gt 0 ]; do
 	--izle) IZLE=1 ;;
 	--havada) HAVADA=$2; shift ;;
 	--hizli-son) HIZLI_SON=$2; shift ;;
+	--gimbal) GIMBAL=1 ;;
 	-h | --help) sed -n 2,27p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
@@ -126,7 +128,8 @@ trap 'exit 130' INT TERM      # exit, so EXIT runs temizle once and nothing afte
 
 # ------------------------------------------------------------ AirSim
 AYAR_WIN='C:\Users\arda_\airsim\settings_px4.json'
-python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" "$BASLANGIC" "$IZLE" <<'PY'
+python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" "$BASLANGIC" "$IZLE" \
+	"$GIMBAL" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1]))
 v = s['Vehicles']['PX4']
@@ -139,6 +142,11 @@ if sys.argv[4]:
 if sys.argv[5] == '1':   # --izle: the downward camera's image and segmentation in AirSim's own window
     s['SubWindows'] = [{'WindowID': i, 'CameraName': 'asagi', 'ImageType': t, 'VehicleName': 'PX4', 'Visible': True}
                        for i, t in ((0, 0), (1, 5))]
+if sys.argv[6] == '1':   # --gimbal: the camera's whole orientation held in the world frame, straight down, nose
+    # north. A free heading spins the image: looking straight down the Euler angles are degenerate and AirSim
+    # turned small body tilts into large heading jumps (21.10). The vehicle keeps its heading anyway (north at
+    # spawn; the RL mode freezes it).
+    v['Cameras']['asagi']['Gimbal'] = {'Stabilization': 1.0, 'Pitch': -90.0, 'Roll': 0.0, 'Yaw': 0.0}
 json.dump(s, open(sys.argv[2], 'w'), indent=2)
 PY
 cp "$AIRSIM_DIR/settings_px4.json" "$LOG_DIR/settings_px4.json"
@@ -258,7 +266,8 @@ if [ -n "$RL_MODEL" ]; then
 		source "$HOME/rl_inis/ortam.sh"
 		exec "$RL_PY" -u -m eland_rl.policy_node --ros-args -p model_path:="$RL_MODEL" \
 			-p label_source:=topic -p label_topic:="$ETIKET_KONU" -p pose_source:=topic \
-			-p ground_z_m:=0.0 -p kalkan_m:="$KALKAN_F" -p log_csv:="$LOG_DIR/politika.csv"
+			-p ground_z_m:=0.0 -p kalkan_m:="$KALKAN_F" -p log_csv:="$LOG_DIR/politika.csv" \
+			-p gimbal:=$([ "$GIMBAL" = 1 ] && echo true || echo false)
 	) >"$LOG_DIR/politika.log" 2>&1 &
 	POL_PID=$!
 	for _ in $(seq 1 90); do
