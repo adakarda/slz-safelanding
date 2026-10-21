@@ -1618,3 +1618,22 @@ ortalaması:
 - **Çelişki notu:** ortamda büyük kazanç, AirSim'de (25c, eski kalkan, c23 s1) yok. Olası sebepler (_tahmin): AirSim'de
   kilitli kalkan yok; c23 s1 kilitli kalkandan da yararlanmayan tohum; AirSim dinamiği farklı. Yeni bir AirSim ölçümü
   kilitli kalkan `policy_node`'a taşındıktan sonra anlamlı olur (Arda'nın onayı).
+
+## Sonuç: Düzeltme 23, hızlı son iniş (2026-10-22 02:54)
+
+Yeniden koşu (ilk koşu geçersiz, 22.10 00:30 yürütme notu). 30 havada başlangıç, c23 s1, AirSim etiketi, kalkan 10,
+`--hizli-son 2`; 29 koşuda RL modu hızlı aşamayı yazdı. Kıyas Faz 7'nin R-GT kolu (eşli). `h23_karar.py` ile. Ölçülen:
+
+| | R-GT (0.7 m/s) | Hızlı son (2 m'ye kadar 2 m/s) |
+|---|---|---|
+| İndi | 29/30 | 30/30 |
+| Zemin kuralına uygun | 24 | 25 |
+| SORA uygun | 11 | 11 |
+| Süre medyanı | 16.7 s | 13.4 s (eşli fark medyanı −3.2 s) |
+| Temas hızı ort. / en çok | 0.71 / 0.73 m/s | 1.10 / 2.28 m/s |
+| Temas > 1.0 m/s | 0 | 14 |
+
+- **H23a tuttu** (−3.2 s), **H23b tutmadı** (14 > 0), **H23c tuttu** (25 ≥ 23). **Karar: hızlı son iniş benimsenmez.**
+- **Tanımlayıcı:** kalkış seviyesindeki düz zeminde bile temaslar 1.0–1.4 m/s; 2 m, 2 m/s'den 0.7 m/s'ye yavaşlamaya
+  yetmiyor. Zeminin kalkıştan yüksek olduğu koşularda 2.0–2.3 m/s (bir koşu çatı köşesine, 9.9 m'de). Daha yüksek bir geçiş
+  irtifası (3.5–4 m) ya da gerçek bir mesafe sensörü ayrı bir ön kayıt ister.

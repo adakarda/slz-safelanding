@@ -107,3 +107,5 @@
 [arama] 22.10 00:07 tur Y y20 s1: egitim hata 2; yeniden denenecek
 [arama] 22.10 00:07 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
 [arama] 22.10 00:11 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 22.10 02:54 yanal hiz ve gimbal egitim turu basladi (Duzeltme 24, 25b)
+[arama] 22.10 02:54 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})

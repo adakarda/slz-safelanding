@@ -1,1 +1,5 @@
 kiyas      kosu 30, indi 29, zemin uygun 24, SORA uygun 11 | sure medyan 16.7 s, ort 24.3 | temas ort 0.71, en cok 0.73, > 1.0: 0
+hizli son  kosu 30, indi 30, zemin uygun 25, SORA uygun 11 | sure medyan 13.4 s, ort 23.0 | temas ort 1.10, en cok 2.28, > 1.0: 14
+esli inen 29: sure farki medyan -3.2 s, ort -6.4 s
+H23a True | H23b False | H23c True
+KARAR: hizli son inis benimsenmez
