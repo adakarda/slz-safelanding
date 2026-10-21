@@ -1462,6 +1462,52 @@ piksel güvenli alanın kenarında.
 - c23 s1'de etki yok (+0.9): süre aşımlarının çoğu yine süre aşımı. Bu tohumun takıldığı yer başka (_tahmin).
 - Düzeltme 21'in teşhisi doğrulandı: süre aşımlarının çoğu bir saat sorunu değil, alçak irtifada hedef seçme sorunuydu.
 
+## Düzeltme 25 (2026-10-21 18:45): gimbal'lı kamera — değerlendirme, eğitim, AirSim — ölçümlerden önce
+
+**Kullanıcı kararı (Arda, 2026-10-21):** "Hepsi." Soru şuydu: gimbal için ön kayıtlı deneyler (ortamda değerlendirme,
+gimbal'la eğitim, AirSim'de RL + gimbal) sıraya eklensin mi? Arda'nın hipotezi: AirSim'deki yalpalama, kameranın eğimiyle
+oluşan komut karmaşasından.
+
+**Gerekçe (ölçülen, tanımlayıcı, `hiz2/gimbal_teshis.py`):** aynı model (c23 s1), aynı 320 başlangıç, eski kalkan;
+gövdeye sabit kamera ↔ gimbal (eğitim yok): başarı %73.4 → %80.3, süre 17.4 → 16.8 s, güvensiz %2.2 → %0.6, adım başına
+eylem değişimi 0.306 → 0.146, ters dönüş 0.080 → 0.019. Gerçek dronlarda kamera gimbal'da; MESSI fotoğrafları da öyle.
+
+**Kod (onaylı, varsayılan kapalı):**
+- `env.py`: `EnvConfig.gimbal` (False). Açıkken kamera düz durur, yalnız yönü araçla döner. `LandingEnv.kamera_pozu()`
+  gözlemin kamera pozu. `evaluate.py`'nin `rl_kalkan2`'si hedefini bu pozla izdüşürür. Kapalıyken CSV bit bit aynı
+  (ölçülen, c13 s0 val_b32 × 1, üç yöntem); `--env-json '{"gimbal": true}'` ile açılır.
+- AirSim: `run_airsim.sh --gimbal` (kameranın yönelimi dünya ekseninde sabit: dik, kuzey üstte) ve `policy_node gimbal`
+  (gözlem dik ve kuzeye bakan kameradan, eylemler görüntünün yönüyle). Gösterimde ölçülen: kamera ekseni dikeyden 0.0°,
+  görüntünün üstü 0.0°, araç 20°'ye kadar eğilirken.
+
+**25a — ortamda gimbal değerlendirmesi** (eğitim yok): 7 model (c13 s0–s2, c23 s0–s2, B2 s0), val_b32 × 10, yöntemler
+rl, rl_kalkan, rl_kalkan2, `gimbal: true`. Kıyas: aynı modellerin gimbal'sız CSV'leri (eşli).
+- **H25a** (c13 ve c23 için ayrı ayrı, 3 tohum ortalaması, yöntem `rl_kalkan2`):
+  - başarı ≥ gimbal'sız − 1, ve
+  - (süre ≤ gimbal'sız − 1.0 s **ya da** başarı ≥ gimbal'sız + 3), ve
+  - güvensiz ≤ gimbal'sız + 2.
+- İkisinde de tutarsa **gimbal benimsenir** (son sistemin kamera düzeni olarak).
+
+**25b — gimbal'la eğitim:** c23 tarifi + `gimbal: true`, 3 tohum, 1M, val_b32 × 10 tam (gimbal'la), `rl_kalkan2` dahil.
+Yanal hız turuyla aynı kuyrukta (`hiz2_tur.py`, aynı anda en çok 2 eğitim).
+- **H25b** (3 tohum ortalaması, `rl_kalkan2`, kıyas 25a'daki c23'ün gimbal'la değerlendirmesi): başarı ≥ kıyas + 3,
+  **ya da** (süre ≤ kıyas − 1.0 s ve başarı ≥ kıyas − 1); ve güvensiz ≤ kıyas + 2. Tutarsa gimbal'la eğitim benimsenir.
+
+**25c — AirSim'de RL + gimbal:** Faz 7'nin 30 havada başlangıcı, c23 s1, AirSim etiketi, kalkan 10 (`policy_node`'un eski
+kalkanı), `--gimbal`. Kıyas: Faz 7'nin R-GT kolu (eşli).
+- **H25c:** zemin kuralına uygun ≥ R-GT (24/30), SORA ≥ R-GT (11/30) ve süre medyanı ≤ R-GT + 1 s (17.7 s). Üçü tutarsa
+  AirSim'de gimbal benimsenir.
+- Tanımlayıcı: RL modu etkinken adım başına eylem değişimi ve ters dönüş (politika.csv, `rl_mod.log`'daki etkinleşme
+  anından sonra).
+
+**Sıra:** son 5 m hızlandırması (Düzeltme 23) → 25c (AirSim, eğitim yokken) → 25a (değerlendirme) → yanal hız ve 25b
+eğitimleri.
+
+**Tahminler (_tahmin):**
+- 25a: gimbal kilitli kalkanla da süreyi ~0.5–1 s kısaltır; başarı benzer kalır.
+- 25b: gimbal'la eğitilen model, gimbal'la değerlendirilen eski modelden 2–5 puan iyi.
+- 25c: RL'nin AirSim'deki eylem değişimi azalır; zemin kuralı ve SORA benzer ya da biraz iyi.
+
 ## Düzeltme 23 (2026-10-21 15:45): RL modunda daha hızlı son iniş — ölçümden önce
 
 **Kullanıcı kararı (Arda, 2026-10-21):** "İkisi de" (son 5 m hızlandırması ve yanal hız). Soru şuydu: iniş süresini

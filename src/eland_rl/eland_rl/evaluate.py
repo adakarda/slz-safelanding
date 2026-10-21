@@ -110,7 +110,7 @@ def main():
                 def rl_kalkan2(o):
                     if env.veh.t < 1e-9:      # a new episode
                         kk.sifirla()
-                    pos, R = env.veh.delayed_pose()
+                    pos, R = env.kamera_pozu()      # amendment 25: the gimbal's level pose when cfg.gimbal
                     return kk(rl(o), o, pos[2], env.veh.t, pos, R, env.veh.pos[:2], env.veh.yaw, env.cam.rays)[0]
                 methods['rl_kalkan2'] = rl_kalkan2
         if a.only_rl:                       # amendment 15 screening: the baselines do not change between models

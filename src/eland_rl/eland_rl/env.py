@@ -33,7 +33,7 @@ import numpy as np
 from eland_common import classes
 
 from . import gozlem
-from .camera import Camera, ground_hits, sora_channel
+from .camera import Camera, ground_hits, rotation, sora_channel
 from .pilots import shield
 from .dynamics import DynamicsParams, Vehicle
 from .scene import MirroredScene
@@ -107,6 +107,8 @@ class EnvConfig:
     # Amendment 16: extra observation channels after the usual ones, any of gozlem.KANALLAR
     # ('risk', 'hedef', 'hafiza'), always in that order.
     kanallar: tuple = ()
+    # Amendment 25: the camera on a stabilised gimbal, level, its heading turning with the vehicle
+    gimbal: bool = False
 
 
 def lateral_index(a):
@@ -175,9 +177,17 @@ class LandingEnv(gym.Env):
         c, s = math.cos(self.veh.yaw), math.sin(self.veh.yaw)
         return np.array([c * bx - s * by, s * bx + c * by, -self.cfg.v_descend if a >= 10 else 0.0])
 
+    def kamera_pozu(self):
+        """(position, attitude) of the camera image arriving now: the delayed body pose, or with cfg.gimbal the
+        same position with a level attitude at the vehicle's heading (amendment 25)."""
+        pos, R = self.veh.delayed_pose()
+        if self.cfg.gimbal:
+            R = rotation((0.0, 0.0, 1.0), self.veh.yaw)
+        return pos, R
+
     def _observe(self):
         cfg, sc = self.cfg, self.scene
-        pos, R = self.veh.delayed_pose()
+        pos, R = self.kamera_pozu()
         elev = None
         if cfg.sem_source == 'gt' and cfg.depth_mode == 'flat' and cfg.sora_elev_tau < 0:
             sem, depth = self.cam.semantic_depth(sc, pos, R)
@@ -314,7 +324,8 @@ class LandingEnv(gym.Env):
             outcome, r_t_end = 'collision', cfg.collision
         elif pos[2] <= cfg.target_h:
             landed = True
-            now, _ = self.cam.semantic_depth(self.scene, pos, self.veh.attitude())
+            now, _ = self.cam.semantic_depth(self.scene, pos, rotation((0.0, 0.0, 1.0), self.veh.yaw)
+                                             if self.cfg.gimbal else self.veh.attitude())
             majority = int(np.bincount(now.ravel(), minlength=N_CLASSES).argmax())
             majority_ok = bool(self._safe[majority])
             if cfg.sora_metric or cfg.success_rule == 'sora':
