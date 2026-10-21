@@ -322,7 +322,7 @@ if [ -n "$HAVADA" ]; then
 		ll=$(python3 -c "import math, sys; la, lo, n, e = map(float, sys.argv[1:]); r = 6378137.0
 print(f'{la + math.degrees(n / r):.8f} {lo + math.degrees(e / (r * math.cos(math.radians(la)))):.8f}')" "$LAT0" "$LON0" "$1" "$2")
 		amsl=$(awk -v a="$ALT0" -v h="$3" 'BEGIN {printf "%.2f", a + h}')
-		ros2 topic pub -1 /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \
+		timeout 10 ros2 topic pub -1 /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \
 			"{command: 192, param1: -1.0, param2: 1.0, param4: .nan, param5: ${ll% *}, param6: ${ll#* }, param7: $amsl, target_system: 1, target_component: 1, source_system: 255, source_component: 190, from_external: true}" \
 			--qos-reliability best_effort --qos-durability transient_local >/dev/null 2>&1
 	}
@@ -376,14 +376,14 @@ if [ "$DO_TRIGGER" = 1 ] && [ -n "$RL_MODEL" ]; then
 	echo "[run_airsim] RL Landing modu seciliyor..."
 	nav_state() { timeout 10 "$PX4_BIN/px4-listener" vehicle_status 2>/dev/null | awk '$1 == "nav_state:" {print $2; exit}'; }
 	for deneme in 1 2 3; do       # as rl_izle.sh: the mode asks for activation, nav_state confirms it
-		ros2 topic pub -1 /eland/rl/etkinlestir std_msgs/msg/Bool "{data: true}" >/dev/null 2>&1
+		timeout 10 ros2 topic pub -1 /eland/rl/etkinlestir std_msgs/msg/Bool "{data: true}" >/dev/null 2>&1
 		sleep 2
 		ID=$(grep -o 'requested activation (nav_state [0-9]*' "$LOG_DIR/rl_mod.log" | tail -1 | awk '{print $NF}')
 		if [ -n "$ID" ] && [ "$(nav_state)" = "$ID" ]; then echo "[run_airsim]   RL Landing secildi (nav_state $ID)"; break; fi
 	done
 elif [ "$DO_TRIGGER" = 1 ]; then
 	echo "[run_airsim] Emergency Landing modu seciliyor..."
-	ros2 topic pub -1 /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \
+	timeout 10 ros2 topic pub -1 /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \
 		"{command: 100001, param1: 23.0, target_system: 1, target_component: 1, source_system: 255, source_component: 190, from_external: true}" \
 		--qos-reliability best_effort --qos-durability transient_local >/dev/null 2>&1
 fi
