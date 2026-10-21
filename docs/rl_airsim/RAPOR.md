@@ -1,8 +1,9 @@
 # RL iniş ve AirSim — sonuç raporu
 
-> **Güncel:** 2026-10-21 00:30. **Durum:** tarama bitti (H15: c23 B1/B2-s0'ın yerini almaz). B2 hızlandırma bitti
-> (H19: B2-s0 aynen kalır). Yedek iniş ölçüldü (H21: benimsenmez; teşhis: alçak irtifada salınım). Gözlem turu sürüyor;
-> birleşim turu (k5 eklendi, Düzeltme 20) ve AirSim Faz 7 sırada. Bu rapor her karardan sonra güncellenmeli.
+> **Güncel:** 2026-10-21 18:30. **Durum:** tarama (H15), B2 hızlandırma (H19), yedek iniş (H21), gözlem (H16) ve
+> birleşim (H18) turları bitti, hiçbiri benimsenmedi. **Kilitli kalkan (H22) benimsendi:** c13 3 tohum kalkanlı %88.8.
+> AirSim Faz 7 bitti (yeniden koşu). Sırada: son 5 m hızlandırması (H23), yanal hız (H24), gimbal (Düzeltme 25).
+> Ayrıntılar ön kayıtta; bu rapor her karardan sonra güncellenmeli.
 > **Kim için:** tezi yazan, deneyi devralan ya da sonuçları kullanan herkes.
 > **Nasıl kurulur, nasıl çalıştırılır:** [`README.md`](README.md).
 > **Kaynak:** her sonucun ön kaydı ve sonucu [`../onkayit/rl_f0_onkayit.md`](../onkayit/rl_f0_onkayit.md)'de.
@@ -275,6 +276,21 @@ val_b32, eşli kıyas):
   alçalmayı engellediği için kenarda zikzak çiziyor. c13'te son 10 s'de 40 adımda 11 kez yön tersine dönüyor. Sorun saat
   değil, alçak irtifada "son metre" kontrolü.
 
+### 4.7d Kilitli kalkan (Düzeltme 22; değerlendirmede bir kural, eğitim yok) — benimsendi
+
+Kalkan, alçalmayı ilk kez durdurduğunda güvenli alanın kenarındaki değil içindeki bir noktayı seçer, yerdeki konumuna
+kilitlenir ve oraya gider; her adım yeniden seçmez. Kalkanlı, eşli kıyas (ölçülen, val_b32):
+
+| Ayar | Eski kalkan | Kilitli kalkan | Güvensiz | Süre |
+|---|---|---|---|---|
+| c13, 3 tohum | 66.4 | **88.8** (82.8 / 88.1 / 95.6) | 10.4 → 0.9 | 15.1 → 17.2 s |
+| c23, 3 tohum | 72.5 | **82.2** (89.7 / 74.4 / 82.5) | 2.9 → 0.5 | 16.6 → 16.9 s |
+| B2 s0 | 76.9 | 80.6 | 0.3 → 0.0 | 17.4 → 17.2 s |
+
+- **Karar (H22): benimsenir.** Şimdiye kadarki en büyük tek iyileşme.
+- c13'ün ortalaması makalenin %87.6'sını geçti (kural ve sahneler farklı; doğrudan kıyas değil). Süre ~2 s uzadı.
+- Tohum farkı küçüldü: c13'ün zayıf tohumu (s2) %60.6'dan %95.6'ya çıktı.
+
 ### 4.8 Tanılamalar (tanımlayıcı, karar değiştirmez)
 
 | Soru | Sonuç | Betik |
@@ -353,8 +369,23 @@ val_b32, eşli kıyas):
   - 6/6, ortalama 17.7 s (_hesap). Çatıya temas yok. Tek koşu, ölçüm değil.
   - Politika zemini düz sayıyor. Çatı ~8 m ise 10 m kalkan çatının ~2 m üstünde devreye girer (_hesap).
     v3 ile denenmedi.
-- **Faz 7** (30 havada başlangıç; klasik ↔ RL, AirSim etiketi ↔ v3, final modelle): ön kayıtlı, birleşim turu
-  bitince koşacak.
+- **Faz 7** (30 havada başlangıç, tohum 2026, model c23 s1, kalkan 10; ölçülen). İlk koşu iki betik hatası yüzünden
+  geçersizdi (yükseklik komutu kayboldu, yarım temizlik PX4 bıraktı), düzeltilip yeniden koşuldu:
+
+| Kol | Zemin kuralı | SORA | Süre medyan | Yatay yol |
+|---|---|---|---|---|
+| Klasik, AirSim etiketi | **27/30** | **24/30** | 26.6 s | 11.3 m |
+| RL, AirSim etiketi | 24/30 | 11/30 | **16.7 s** | 4.3 m |
+| Klasik, v3 | **24/30** | 20/30 | 26.6 s | 11.7 m |
+| RL, v3 | 16/30 | 10/30 | **14.7 s** | 2.0 m |
+
+  - RL ~10 s hızlı, ama tehlikeye yakın iniyor (SORA, GT: p = 0.0014). Zemin kuralında fark GT'de ayrılamıyor
+    (p = 0.47), v3'te sınırda (p = 0.054).
+  - v3 hatası RL'yi klasikten çok etkiliyor. "Yeri klasik seçsin, RL götürsün" (karma yapı) fikrine veri.
+  - Bazı başlangıçlarda hedef zemini kalkıştan ~15 m yüksek; iki yöntem de zemini düz sayıyor.
+- **Gimbal gösterimi** (21.10, 3 RL inişi): AirSim gimbal'ı yön serbestken görüntüyü döndürdü (dik bakışta Euler
+  tekilliği). Yön de kilitlenince kamera ekseni dikeyden 0.0°, görüntünün üstü kuzeyden 0.0° kaldı (araç 20°'ye kadar
+  eğilirken); iki iniş 16.4 ve 16.6 s.
 
 ---
 

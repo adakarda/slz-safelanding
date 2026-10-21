@@ -1,0 +1,106 @@
+[arama] 21.10 21:01 yanal hiz turu basladi (Duzeltme 24)
+[arama] 21.10 21:01 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:05 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:05 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:08 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:08 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:12 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:12 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 21:15 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:15 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 21:19 tur Y y20 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:19 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 21:22 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:22 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:26 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:26 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:29 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:29 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:33 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:33 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 21:36 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:36 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 21:40 tur Y y20 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:40 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 21:43 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:43 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:47 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:47 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:50 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:50 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 21:54 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:54 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 21:57 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 21:57 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 22:01 tur Y y20 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:01 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 22:04 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:04 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:08 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:08 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:11 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:11 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:15 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:15 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 22:18 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:18 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 22:22 tur Y y20 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:22 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 22:25 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:26 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:29 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:29 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:33 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:33 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:36 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:36 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 22:40 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:40 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 22:43 tur Y y20 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:43 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 22:47 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:47 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:50 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:50 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:54 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:54 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 22:57 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 22:57 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:01 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:01 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:04 tur Y y20 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:04 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:08 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:08 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 23:11 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:11 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 23:15 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:15 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 23:18 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:18 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:22 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:22 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:25 tur Y y20 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:25 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:29 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:29 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 23:32 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:32 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 23:36 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:36 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 23:39 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:39 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:43 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:43 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:46 tur Y y20 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:46 tur Y y20 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 21.10 23:50 tur Y y20 s2: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:50 tur Y y15 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 23:53 tur Y y15 s0: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:53 tur Y y15 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 21.10 23:57 tur Y y15 s1: egitim hata 2; yeniden denenecek
+[arama] 21.10 23:57 tur Y y15 s2: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 1.5})
+[arama] 22.10 00:00 tur Y y15 s2: egitim hata 2; yeniden denenecek
+[arama] 22.10 00:00 tur Y y20 s0: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})
+[arama] 22.10 00:04 tur Y y20 s0: egitim hata 2; yeniden denenecek
+[arama] 22.10 00:04 tur Y y20 s1: egitim basladi (--reward zemin_v1 --env-json {"r_step": -0.5, "a_descend": 1.0, "v_lateral": 2.0})

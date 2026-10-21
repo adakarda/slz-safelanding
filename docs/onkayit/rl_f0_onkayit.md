@@ -1433,6 +1433,35 @@ piksel güvenli alanın kenarında.
 - c13 ve c23'te süre aşımlarının en az üçte biri başarıya döner, H22a tutar.
 - Başarılı iniş süresi biraz uzar (kilitlenen hedefe gidiş).
 
+## Sonuç: Düzeltme 22, kilitli kalkan (2026-10-21 18:20)
+
+7 değerlendirme bitti (val_b32 × 10, yalnız `rl_kalkan2`; kıyas aynı modelin eski `rl_kalkan` satırları, eşli).
+`h22_karar.py` ile uygulandı. Ölçülen, kalkanlı:
+
+| Model | Başarı | Güvensiz | Süre aşımı | Süre | Süre aşımları neye döndü |
+|---|---|---|---|---|---|
+| c13 s0 | 69.7 → 82.8 | 7.2 → 1.2 | 23.1 → 15.9 | 13.8 → 16.0 s | 29 başarı, 45 yine süre aşımı |
+| c13 s1 | 68.8 → 88.1 | 8.8 → 0.9 | 22.5 → 10.9 | 14.4 → 16.8 s | 43 başarı, 2 güvensiz, 27 |
+| c13 s2 | 60.6 → **95.6** | 15.3 → 0.6 | 24.1 → 3.8 | 16.9 → 18.8 s | 67 başarı, 1 güvensiz, 9 |
+| c23 s0 | 71.6 → 89.7 | 2.2 → 0.6 | 26.2 → 9.7 | 16.0 → 16.8 s | 54 başarı, 2 güvensiz, 28 |
+| c23 s1 | 73.4 → 74.4 | 2.2 → 0.9 | 24.4 → 24.7 | 17.4 → 17.1 s | 18 başarı, 1 dışarı, 59 |
+| c23 s2 | 72.5 → 82.5 | 4.4 → 0.0 | 23.1 → 17.5 | 16.6 → 16.7 s | 29 başarı, 45 |
+| B2 s0 (tanımlayıcı) | 76.9 → 80.6 | 0.3 → 0.0 | 22.8 → 19.4 | 17.4 → 17.2 s | 27 başarı, 46 |
+
+- **H22a tuttu:** ortalama dB c13'te +22.5 (+13.1, +19.4, +35.0), c23'te +9.7 (+18.1, +0.9, +10.0). Gereken +3, iki
+  tohumda.
+- **H22b tuttu:** ortalama dU c13'te −9.5, c23'te −2.4.
+- **Karar (ön kayıtlı kurala göre): kilitli kalkan benimsenir.** Final testte (Düzeltme 17) `rl_kalkan2` ek yöntem olarak
+  raporlanır. AirSim'e (`policy_node`) taşınması ayrı iş, Arda'nın onayıyla.
+- **Tahminler tuttu:** süre aşımlarının üçte birinden fazlası başarıya döndü (c13 s2'de 76'nın 67'si); süre 0.1–2.2 s
+  uzadı.
+
+**Tanımlayıcı:**
+- c13'ün 3 tohum ortalaması: kalkanlı %88.8, 17.2 s, güvensiz %0.9, S 101.1. Tohumlar arasındaki fark küçüldü (82.8–95.6;
+  eski kalkanla 60.6–69.7). Zayıf tohum (s2) en iyisi oldu.
+- c23 s1'de etki yok (+0.9): süre aşımlarının çoğu yine süre aşımı. Bu tohumun takıldığı yer başka (_tahmin).
+- Düzeltme 21'in teşhisi doğrulandı: süre aşımlarının çoğu bir saat sorunu değil, alçak irtifada hedef seçme sorunuydu.
+
 ## Düzeltme 23 (2026-10-21 15:45): RL modunda daha hızlı son iniş — ölçümden önce
 
 **Kullanıcı kararı (Arda, 2026-10-21):** "İkisi de" (son 5 m hızlandırması ve yanal hız). Soru şuydu: iniş süresini
