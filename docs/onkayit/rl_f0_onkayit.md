@@ -1578,3 +1578,43 @@ de kolaylaşır.
 **Düzeltme:** `run_airsim.sh` parametreyi `%.2f` ile verir; eğitimler temiz ortamda başlar (`env -u PYTHONPATH`, yalnız
 `ortam.sh`). Yeni sıra `~/rl_inis/hiz2/sira2.sh`: gimbal adımı (25c, 25a) → Düzeltme 23 yeniden → eğitimler (24, 25b).
 Ayarlar, tahminler ve karar kuralları değişmedi.
+
+## Sonuç: Düzeltme 25c, AirSim'de RL + gimbal (2026-10-22 01:42)
+
+30 havada başlangıç (Faz 7'nin listesi), c23 s1, AirSim etiketi, eski kalkan 10 m, `--gimbal`. Kıyas Faz 7'nin R-GT kolu.
+`h25c_karar.py` ile. Ölçülen:
+
+| | R-GT (gimbal yok) | R-GT + gimbal |
+|---|---|---|
+| İndi | 29/30 | 30/30 |
+| Zemin kuralına uygun | 24 | 23 |
+| SORA uygun | 11 | 10 |
+| Süre medyanı | 16.7 s | 15.9 s |
+| RL etkinken eylem değişimi / ters dönüş (adım başına) | 0.111 / 0.012 | 0.128 / 0.014 |
+
+- **H25c tutmadı:** zemin 23 < 24, SORA 10 < 11 (süre şartı tuttu). **Karar: AirSim'de gimbal benimsenmez.**
+- **Tanımlayıcı:** farklar 30 denemede birer iniş, gürültü düzeyinde. AirSim'de RL'nin eylem değişimi zaten düşük (0.11/adım;
+  eğitim ortamında 0.31) ve gimbal onu düşürmedi. AirSim'deki yalpalamanın kaynağı kamera eğimi değil gibi (_tahmin).
+- Koşu 9'da AirSim dondu; `ros2 topic pub -1` 29 dk takıldı (`run_airsim.sh` 10 s zaman aşımıyla düzeltildi). 5 koşu
+  yeniden denendi.
+
+## Sonuç: Düzeltme 25a, ortamda gimbal (2026-10-22 02:00)
+
+7 model, val_b32 × 10, eğitim yok; kıyas aynı modellerin gimbal'sız sonuçları (eşli). `h25a_karar.py` ile. Ölçülen, 3 tohum
+ortalaması:
+
+| Ayar, yöntem | Başarı | Süre | Güvensiz |
+|---|---|---|---|
+| c13, rl_kalkan2 | 88.9 → **92.5** | 17.2 → **14.1 s** | 0.9 → 1.8 |
+| c13, rl (= rl_kalkan; kalkan eğitimde) | 66.4 → 77.6 | 15.1 → 14.2 s | 10.4 → 5.7 |
+| c23, rl_kalkan2 | 82.2 → **92.1** | 16.9 → 15.9 s | 0.5 → 0.2 |
+| c23, rl_kalkan | 72.5 → 81.4 | 16.6 → 16.3 s | 2.9 → 0.5 |
+| c23, rl | 69.9 → 71.1 | 15.5 → 15.3 s | 13.9 → 15.6 |
+| B2 s0, rl_kalkan2 (tanımlayıcı) | 80.6 → 86.2 | 17.2 → 16.2 s | 0.0 → 0.0 |
+
+- **H25a iki ayarda da tuttu** (başarı korunuyor, süre ya da başarı kazancı var, güvensiz +2 içinde). **Karar: gimbal
+  benimsenir** (son sistemin kamera düzeni).
+- Tahmin ("süre ~0.5–1 s kısalır, başarı benzer") fazlasıyla aşıldı: c13'te süre 3.1 s kısaldı, başarı +3.6.
+- **Çelişki notu:** ortamda büyük kazanç, AirSim'de (25c, eski kalkan, c23 s1) yok. Olası sebepler (_tahmin): AirSim'de
+  kilitli kalkan yok; c23 s1 kilitli kalkandan da yararlanmayan tohum; AirSim dinamiği farklı. Yeni bir AirSim ölçümü
+  kilitli kalkan `policy_node`'a taşındıktan sonra anlamlı olur (Arda'nın onayı).

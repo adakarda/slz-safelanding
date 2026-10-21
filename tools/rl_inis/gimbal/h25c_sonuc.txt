@@ -1,0 +1,6 @@
+R-GT       kosu 30, indi 29, zemin uygun 24, SORA uygun 11, sure medyan 16.7 s
+R-GT+gimbal kosu 30, indi 30, zemin uygun 23, SORA uygun 10, sure medyan 15.9 s
+R-GT       RL etkinken: eylem degisimi 0.111/adim, ters donus 0.012/adim (2772 adim)
+R-GT+gimbal RL etkinken: eylem degisimi 0.128/adim, ters donus 0.014/adim (2454 adim)
+H25c: zemin 23 >= 24: False | SORA 10 >= 11: False | sure 15.9 <= 17.7: True
+KARAR: AirSim'de gimbal benimsenmez

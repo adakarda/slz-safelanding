@@ -1,0 +1,15 @@
+== c13
+  rl          basari  66.4 ->  77.6 | sure  15.1 ->  14.2 s | guvensiz 10.4 ->  5.7  (3 model)
+  rl_kalkan   basari  66.4 ->  77.6 | sure  15.1 ->  14.2 s | guvensiz 10.4 ->  5.7  (3 model)
+  rl_kalkan2  basari  88.9 ->  92.5 | sure  17.2 ->  14.1 s | guvensiz  0.9 ->  1.8  (3 model)
+  H25a: basari tutuyor True | hiz ya da basari kazanci True | guvensiz True
+== c23
+  rl          basari  69.9 ->  71.1 | sure  15.5 ->  15.3 s | guvensiz 13.9 -> 15.6  (3 model)
+  rl_kalkan   basari  72.5 ->  81.4 | sure  16.6 ->  16.3 s | guvensiz  2.9 ->  0.5  (3 model)
+  rl_kalkan2  basari  82.2 ->  92.1 | sure  16.9 ->  15.9 s | guvensiz  0.5 ->  0.2  (3 model)
+  H25a: basari tutuyor True | hiz ya da basari kazanci True | guvensiz True
+== B2
+  rl          basari  72.5 ->  74.7 | sure  16.1 ->  16.1 s | guvensiz  8.8 ->  7.2  (1 model)
+  rl_kalkan   basari  76.9 ->  78.4 | sure  17.4 ->  16.8 s | guvensiz  0.3 ->  0.0  (1 model)
+  rl_kalkan2  basari  80.6 ->  86.2 | sure  17.2 ->  16.2 s | guvensiz  0.0 ->  0.0  (1 model)
+KARAR: gimbal benimsenir {'c13': True, 'c23': True}
