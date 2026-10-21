@@ -1565,3 +1565,16 @@ de kolaylaşır.
 
 **AirSim'e taşıma (ayrı iş):** `policy_node` yanal hızı bir ROS parametresinden alıyor (`v_lateral`, varsayılan 1.0),
 `args.json`'dan değil. Benimsenen bir çeşit AirSim'de aynı hızla koşulmalı.
+
+## Yürütme notu (2026-10-22 00:30): Düzeltme 23 ve 24'ün ilk koşusu geçersiz
+
+**Olay (ölçülen, günlüklerden):**
+- Düzeltme 23'ün AirSim ölçümü: 30 başlangıcın hiçbiri başlamadı. `run_airsim.sh`, `--hizli-son 2`'yi tamsayı ROS
+  parametresi olarak verdi; `rl_landing_mode` double bekliyor ve başlarken çöktü. Bayrak kapalıyken yapılan doğrulama
+  koşusu ise iniyor (dokunuş 0.70 m/s, "faster down" satırı yok).
+- Düzeltme 24'ün eğitimleri "hata 2" ile düştü (54 deneme): zincir betiği derleme için ROS kurulumunu yükledi, kurulumdaki
+  eski `eland_rl` PYTHONPATH'te öne geçti ve eski `train.py` yeni seçenekleri tanımadı. Hiçbir eğitim koşmadı.
+
+**Düzeltme:** `run_airsim.sh` parametreyi `%.2f` ile verir; eğitimler temiz ortamda başlar (`env -u PYTHONPATH`, yalnız
+`ortam.sh`). Yeni sıra `~/rl_inis/hiz2/sira2.sh`: gimbal adımı (25c, 25a) → Düzeltme 23 yeniden → eğitimler (24, 25b).
+Ayarlar, tahminler ve karar kuralları değişmedi.

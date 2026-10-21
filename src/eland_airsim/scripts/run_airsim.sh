@@ -350,7 +350,8 @@ fi
 if [ -n "$RL_MODEL" ]; then
 	for kayit in 1 2 3; do      # a registration attempted too early fails; try again after a pause
 		ros2 run eland_rl_mode rl_landing_mode \
-			${HIZLI_SON:+--ros-args -p hizli_son_irtifa_m:=$HIZLI_SON} >"$LOG_DIR/rl_mod.log" 2>&1 &
+			${HIZLI_SON:+--ros-args -p hizli_son_irtifa_m:=$(awk -v k="$HIZLI_SON" 'BEGIN{printf "%.2f", k}')} \
+			>"$LOG_DIR/rl_mod.log" 2>&1 &      # a ROS double: "2" would arrive as an integer and abort the mode
 		RLM_PID=$!
 		for _ in $(seq 1 60); do
 			grep -qE "RegisterExtComponentReply|Registration failed" "$LOG_DIR/rl_mod.log" 2>/dev/null && break

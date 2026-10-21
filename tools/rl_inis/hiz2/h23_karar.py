@@ -29,6 +29,10 @@ fark = [b[k]['sure_s'] - a[k]['sure_s'] for k in ortak]
 
 def ozet(d, ad):
     indi = [r for r in d.values() if r.get('sonuc') == 'indi']
+    if not indi:
+        print(f'{ad}: hic inis yok ({sorted(set(r.get("sonuc") for r in d.values()))})')
+        print('KARAR: olcum gecersiz')
+        raise SystemExit(1)
     s = [r['sure_s'] for r in indi]
     v = [r['temas_hizi_mps'] for r in indi if r.get('temas_hizi_mps') is not None]
     print(f'{ad:10s} kosu {len(d)}, indi {len(indi)}, zemin uygun {sum(bool(r.get("zemin_uygun")) for r in indi)}, '
