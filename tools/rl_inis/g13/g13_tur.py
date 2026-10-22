@@ -34,7 +34,7 @@ arama.degerlendirme_args = degerlendirme_args
 
 
 def bekle():
-    while (subprocess.run(['pgrep', '-f', '[h]iz2_tur\\.py|[p]x4_sina_3']).returncode == 0
+    while (subprocess.run(['pgrep', '-f', '[h]iz2_tur\\.py|[p]x4_sina_3'], stdout=subprocess.DEVNULL).returncode == 0
            or arama.egitim_sayisi() > 0):
         time.sleep(60)
 

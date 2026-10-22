@@ -1670,3 +1670,48 @@ güvensiz 1.77.
 - Yalın RL başarısı c13'ün gimbal'la değerlendirmesinden (%77.6) belirgin yüksek. Bunun nedeni 25b'deki kazancın
   tekrarlanması.
 - c13 tohuma duyarlı (Düzeltme 15). Bir tohumun düşük çıkması ortalamayı çekebilir.
+
+## Yürütme notu (2026-10-22 19:35): bilgisayar uykuya geçti, tur yeniden başlatıldı
+
+Bilgisayar 22.10 08:49'da uykuya geçti (Windows kaydı: "Application API"). 14:40'ta uyandı, 16:04–16:13 arası bir kez
+daha uyudu. WSL 19:34'te yeniden başladı. y15 ve y20'nin 6 eğitimi ve değerlendirmesi uykudan önce bitmişti. g s0 ve g s1
+1M'e ulaşmıştı ama değerlendirilmemişti. g s2 08:42'de başlamış, ara kayıt bırakmamıştı. `hiz2_tur.py` aynı işlerle
+yeniden başlatıldı (temiz ortam: `env -u PYTHONPATH -u AMENT_PREFIX_PATH` + `ortam.sh`). Biten işler atlandı, g s2
+sıfırdan eğitildi. Hiçbir karar kuralı ve ayar değişmedi.
+
+## Sonuç: Düzeltme 24, yanal hız 1.5 ve 2.0 m/s (2026-10-22 21:02)
+
+3 tohum ortalaması, val_b32 × 10, `h24_karar.py` ile. Ölçülen:
+
+| | c23 (kıyas) | y15 | y20 |
+|---|---|---|---|
+| S (tohumlar) | 88.9 (87.7, 88.3, 90.7) | 55.2 (94.0, 22.3, 49.3) | 40.3 (48.1, 69.7, 3.1) |
+| Kalkanlı başarı | 72.5 | 51.1 | 43.4 |
+| Kalkanlı süre | 16.6 s | 17.4 s | 18.5 s |
+| Kalkansız başarı | 69.9 | 51.7 | 45.9 |
+| Kalkansız güvensiz | 13.9 | 10.9 | 7.1 |
+
+- İki çeşitte de **H24a tutmadı** (süre kısalmadı, uzadı), **H24b tutmadı**, H24c tuttu.
+  **Karar: yanal hız 1.0 m/s kalır.**
+- Tahmin ("y15 ~1 s, y20 ~1.5 s kısaltır") tutmadı. Daha hızlı kaymada politikalar tohuma çok duyarlı: aynı tarif S 3.1 ile
+  94.0 arasında. Süre aşımı bazı tohumlarda %64–70. Hızlanma, kararsız öğrenmeyle yitiyor (_tahmin).
+
+## Sonuç: Düzeltme 25b, gimbal'la eğitim (2026-10-22 21:02)
+
+c23 tarifi + `gimbal: true`, 3 tohum, 1M, val_b32 × 10 gimbal'la. Kıyas: 25a'daki c23'ün gimbal'la değerlendirmesi.
+`h25b_karar.py` ile. Ölçülen:
+
+| Yöntem | c23 gimbal'la değerlendirme | g (gimbal'la eğitim; tohumlar) |
+|---|---|---|
+| Yalın RL: başarı / süre / güvensiz | 71.1 / 15.3 s / 15.6 | 84.3 (85.6, 88.4, 78.8) / 15.5 s / 7.3 |
+| Eski kalkan | 81.4 / 16.3 s / 0.5 | 88.4 (88.8, 89.7, 86.9) / 16.3 s / 0.5 |
+| Kilitli kalkan (karar) | 92.1 / 15.9 s / 0.2 | 91.0 (89.4, 92.2, 91.6) / 15.8 s / 0.5 |
+
+- **H25b tutmadı** (kilitli kalkanla başarı −1.1, süre −0.1 s). **Karar: gimbal'la eğitim (c23 tarifi) benimsenmez.**
+- **Tanımlayıcı:** gimbal'la eğitim yalın RL'yi +13.2 puan iyileştirdi ve güvensizi yarıya indirdi. Eski kalkanla +7.0.
+  Kilitli kalkan bu kazancı zaten sağlıyor. Arama skoru S (eski kalkan + yalın RL) 113.4 (114.0, 116.6, 109.7). Bu,
+  şimdiye kadarki en yüksek değer (c23: 88.9).
+- **AirSim için not:** `policy_node`'da kilitli kalkan yok, eski kalkan var. Kilitli kalkan taşınana kadar AirSim'de g
+  modelleri daha iyi aday (eski kalkanla 88.4 ↔ 81.4, ortamda).
+- Tahmin ("2–5 puan iyi") kilitli kalkanla tutmadı, eski kalkanla aşıldı.
+- Süre aynı kaldı (15.8 s). Sebebi c23 tarifinde kayarken alçalma olmaması. Bunu Düzeltme 26 (g13) sınıyor.
