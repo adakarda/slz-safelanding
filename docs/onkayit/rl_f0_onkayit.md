@@ -1637,3 +1637,36 @@ Yeniden koşu (ilk koşu geçersiz, 22.10 00:30 yürütme notu). 30 havada başl
 - **Tanımlayıcı:** kalkış seviyesindeki düz zeminde bile temaslar 1.0–1.4 m/s; 2 m, 2 m/s'den 0.7 m/s'ye yavaşlamaya
   yetmiyor. Zeminin kalkıştan yüksek olduğu koşularda 2.0–2.3 m/s (bir koşu çatı köşesine, 9.9 m'de). Daha yüksek bir geçiş
   irtifası (3.5–4 m) ya da gerçek bir mesafe sensörü ayrı bir ön kayıt ister.
+
+## Düzeltme 26 (2026-10-22 20:45): c13 tarifiyle gimbal'lı eğitim (g13) — eğitimlerden önce
+
+**Kullanıcı sorusu (Arda, 2026-10-22):** "son gimballı eğitimleri ortalama olarak hızlandırabilir miyiz".
+
+**Gerekçe (ölçülen, tanımlayıcı; val_b32 × 10 özetlerindeki eylem payları):**
+- 25b'nin g modelleri c23 tarifinde. Her adımda ya kayar ya alçalır. Adımların ~%40'ı yalnız kayma. Kilitli kalkanla
+  süre 15.9 ve 16.0 s (g s0, s1).
+- 20–30 m'den (ort. 25 m) 5 m'ye 2 m/s ile düz iniş ~10 s (_hesap). c23'te alçalma payı ~0.6 × 16 s ≈ 9.6 s. Kalan
+  ~6 s yalnız kayma.
+- c13 tarifi kayarken alçalabiliyor (Düzeltme 13). Gimbal'la değerlendirmede, kilitli kalkanla %92.5, 14.15 s (25a).
+- 25b ara sonucu (2 tohum): gimbal'la eğitim yalın RL'yi iyileştirdi (c23: %71.1 → %87.0, güvensiz %15.6 → %3.8).
+  c13 tarifi bu kazancı henüz almadı.
+
+**Çeşit:** g13 = c13 tarifi (`zemin_v3`, eğitimde 30 s, kayarken alçal, eğitimde kalkan 10 m) + `--env-json
+'{"gimbal": true}'`. 3 tohum (0, 1, 2), 1M adım, val_b32 × 10 tam değerlendirme. Değerlendirme gimbal'la yapılır ve
+`rl_kalkan2` içerir. Aynı anda en çok 2 eğitim. Betik `~/rl_inis/g13/g13_tur.py`. 25b'nin eğitimleri ve Sefa için
+PX4 sınaması (`px4_sina.sh` × 3) bitince başlar.
+
+**Kıyas:** 25a'daki c13'ün gimbal'la değerlendirmesi (c13 s0–s2, `rl_kalkan2`, ölçülen): başarı 92.50, süre 14.15 s,
+güvensiz 1.77.
+
+**Karar (H26, `~/rl_inis/g13/h26_karar.py`, 3 tohum ortalaması, `rl_kalkan2`):**
+- (süre ≤ kıyas − 1.0 s **ve** başarı ≥ kıyas − 1) **ya da** başarı ≥ kıyas + 3; **ve**
+- güvensiz ≤ kıyas + 2.
+- Tutarsa g13 son aday olur (c13 + kilitli kalkan + gimbal yerine).
+- Tanımlayıcı: yalın RL ve eski kalkan da raporlanır. 25b'nin g modelleri de aynı tabloda gösterilir.
+
+**Tahminler (_tahmin):**
+- Kilitli kalkanla süre 13–13.5 s, başarı %92–94.
+- Yalın RL başarısı c13'ün gimbal'la değerlendirmesinden (%77.6) belirgin yüksek. Bunun nedeni 25b'deki kazancın
+  tekrarlanması.
+- c13 tohuma duyarlı (Düzeltme 15). Bir tohumun düşük çıkması ortalamayı çekebilir.
