@@ -1,8 +1,9 @@
 # RL iniş ve AirSim — sonuç raporu
 
-> **Güncel:** 2026-10-21 18:30. **Durum:** tarama (H15), B2 hızlandırma (H19), yedek iniş (H21), gözlem (H16) ve
-> birleşim (H18) turları bitti, hiçbiri benimsenmedi. **Kilitli kalkan (H22) benimsendi:** c13 3 tohum kalkanlı %88.8.
-> AirSim Faz 7 bitti (yeniden koşu). Sırada: son 5 m hızlandırması (H23), yanal hız (H24), gimbal (Düzeltme 25).
+> **Güncel:** 2026-10-23 00:45. **Durum:** ön kayıtlı zincir H15–H26 bitti. Benimsenenler: **kilitli kalkan (H22)**
+> ve **gimbal'lı kamera (H25a)**. **Son aday:** c13 + kilitli kalkan + gimbal, 3 tohum ortalaması %92.5, 14.1 s,
+> %1.8 güvensiz (val_b32). Benimsenmeyenler: hızlı son iniş (H23), yanal hız (H24), AirSim'de gimbal (H25c, eski
+> kalkanla), gimbal'la eğitim (H25b, H26). Sırada: kilitli kalkanın `policy_node`'a taşınması (Sefa), AirSim Faz 8.
 > Ayrıntılar ön kayıtta; bu rapor her karardan sonra güncellenmeli.
 > **Kim için:** tezi yazan, deneyi devralan ya da sonuçları kullanan herkes.
 > **Nasıl kurulur, nasıl çalıştırılır:** [`README.md`](README.md).
@@ -16,6 +17,14 @@ Etiketler: **ölçülen** (koşuldu), **_hesap** (formül), **_tahmin** (varsay�
 
 ## 1. Bulgular
 
+0. **Güncel en iyi sistem (2026-10-23):** c13 tarifi + kilitli kalkan + gimbal'lı kamera. 3 tohum ortalaması %92.5
+   başarı (88.1 / 93.4 / 95.9), 14.1 s, %1.8 güvensiz (val_b32, zemin kuralı). Makale: %87.6, 11.8 s (kurallar
+   farklı, doğrudan kıyas değil). İki büyük adım:
+   - **Kilitli kalkan (H22, §4.7d):** c13 kalkanlı %66.4 → %88.8.
+   - **Gimbal (H25a, §4.7e):** aynı modeller, kamera dik tutulunca %88.8 → %92.5 ve 17.2 → 14.1 s.
+   - Tek modelde en iyisi g13 s1 (gimbal'la eğitilmiş c13): %99.1, 13.2 s. Ama 3 tohumun ortalaması zayıf (§4.7g),
+     val_b32 dışında doğrulanmadı.
+   - Aşağıdaki 1–8. maddeler bu iki adımdan önceki durumu anlatır.
 1. **En iyi model iki ölçüte göre ayrışıyor.** Doğrulama seti `val_b32`, 320 deneme, 30 s.
    - Skor: c13 s0. %69.7 başarı, 13.8 s, %7.2 güvensiz.
    - Başarı: B2 s0 + kalkan. %76.9 başarı, 17.4 s, %0.3 güvensiz.
@@ -291,6 +300,47 @@ kilitlenir ve oraya gider; her adım yeniden seçmez. Kalkanlı, eşli kıyas (�
 - c13'ün ortalaması makalenin %87.6'sını geçti (kural ve sahneler farklı; doğrudan kıyas değil). Süre ~2 s uzadı.
 - Tohum farkı küçüldü: c13'ün zayıf tohumu (s2) %60.6'dan %95.6'ya çıktı.
 
+### 4.7e Gimbal'lı kamera (Düzeltme 25a; değerlendirmede, eğitim yok) — benimsendi
+
+Kamera gövdeyle eğilmez, hep dik bakar, yalnız yönü araçla döner (gerçek dronlardaki gimbal; MESSI fotoğrafları da
+öyle). Aynı modeller, aynı 320 başlangıç, kilitli kalkan (ölçülen):
+
+| Ayar | Gövdeye sabit kamera | Gimbal | Süre | Güvensiz |
+|---|---|---|---|---|
+| c13, 3 tohum | 88.8 | **92.5** (88.1 / 93.4 / 95.9) | 17.2 → **14.1 s** | 0.9 → 1.8 |
+| c23, 3 tohum | 82.2 | **92.1** (95.0 / 89.1 / 92.2) | 16.9 → 15.9 s | 0.5 → 0.2 |
+| B2 s0 | 80.6 | 86.2 | 17.2 → 16.2 s | 0.0 |
+
+- **Karar (H25a): benimsenir.** Son sistemin kamera düzeni gimbal.
+- Tanılama (c23 s1, eski kalkan): adım başına eylem değişimi 0.306 → 0.146, ters dönüş 0.080 → 0.019. Eğik kamera,
+  aynı yer için farklı görüntü verip politikayı kararsızlaştırıyor (Arda'nın hipotezi; hafif ortamda doğrulandı).
+
+### 4.7f Yanal hız 1.5 ve 2.0 m/s (Düzeltme 24; c23 tarifi, 3 tohum, 1M) — benimsenmedi
+
+| | c23 (1.0 m/s) | y15 | y20 |
+|---|---|---|---|
+| S (tohumlar) | 88.9 | 55.2 (94.0 / 22.3 / 49.3) | 40.3 (48.1 / 69.7 / 3.1) |
+| Kalkanlı başarı / süre | 72.5 / 16.6 s | 51.1 / 17.4 s | 43.4 / 18.5 s |
+
+- Süre kısalmadı, uzadı. Daha hızlı kaymada öğrenme kararsız (bazı tohumlarda %64–70 süre aşımı).
+
+### 4.7g Gimbal'la eğitim (Düzeltme 25b: c23 tarifi; Düzeltme 26: c13 tarifi) — benimsenmedi
+
+Kilitli kalkanla, gimbal'la değerlendirme; kıyas aynı tarifin gimbal'sız eğitilip gimbal'la değerlendirilmesi (ölçülen):
+
+| | Kıyas: başarı / süre | Gimbal'la eğitim: başarı (tohumlar) / süre | Yalın RL başarısı |
+|---|---|---|---|
+| c23 tarifi (g, H25b) | 92.1 / 15.9 s | 91.0 (89.4 / 92.2 / 91.6) / 15.8 s | 71.1 → 84.3 |
+| c13 tarifi (g13, H26) | 92.5 / 14.15 s | 87.7 (86.9 / **99.1** / 77.2) / 14.96 s | 77.6 → 81.0 |
+
+- İki karar da tutmadı. Kilitli kalkan, gimbal'la eğitimin kazancını zaten sağlıyor.
+- Gimbal'la eğitim yalın RL'yi ve eski kalkanı belirgin iyileştiriyor (c23: eski kalkanla 81.4 → 88.4). AirSim'de
+  kilitli kalkan taşınana kadar g modelleri daha iyi aday.
+- c23 tarifinde adımların ~%40'ı alçalmadan kayma. 25 m'den 5 m'ye 2 m/s ile düz iniş ~10 s, kalan ~6 s kayma (_hesap).
+  c13'ün kayarken alçalması bunu kısaltıyor. Ama c13 tohuma çok duyarlı (77.2–99.1).
+- g13 s1 (%99.1, 13.2 s, güvensiz %0.6) val_b32'de en iyi tek model. val_b32'ye bakarak seçildiği için iyimser; ayrı
+  bir ölçümle doğrulanmalı.
+
 ### 4.8 Tanılamalar (tanımlayıcı, karar değiştirmez)
 
 | Soru | Sonuç | Betik |
@@ -386,6 +436,15 @@ kilitlenir ve oraya gider; her adım yeniden seçmez. Kalkanlı, eşli kıyas (�
 - **Gimbal gösterimi** (21.10, 3 RL inişi): AirSim gimbal'ı yön serbestken görüntüyü döndürdü (dik bakışta Euler
   tekilliği). Yön de kilitlenince kamera ekseni dikeyden 0.0°, görüntünün üstü kuzeyden 0.0° kaldı (araç 20°'ye kadar
   eğilirken); iki iniş 16.4 ve 16.6 s.
+- **Hızlı son iniş (H23, 22.10)** (Faz 7 başlangıçları, c23 s1, AirSim etiketi, eski kalkan; RL modunda 2 m'ye kadar
+  2 m/s): süre medyanı 16.7 → 13.4 s (eşli fark −3.2 s), zemin kuralı 24 → 25. Ama 14 temas 1.0 m/s'nin üstünde (en
+  sert 2.28 m/s). **Benimsenmedi.** 2 m, 2 m/s'den yavaşlamaya yetmiyor; zemin kalkıştan yüksekse temas daha sert.
+- **AirSim'de gimbal (H25c, 22.10)** (aynı başlangıçlar, c23 s1, eski kalkan, `--gimbal`): zemin 24 → 23, SORA
+  11 → 10, süre medyanı 16.7 → 15.9 s. **Benimsenmedi** (farklar birer iniş, gürültü düzeyinde). AirSim'de RL'nin
+  eylem değişimi zaten düşük (0.111/adım; gimbal'la 0.128). AirSim'deki yalpalamanın kaynağı kamera eğimi değil gibi
+  (_tahmin). Kilitli kalkan `policy_node`'a taşınınca yeniden ölçülmeli.
+- **PX4 sınaması (22.10, güncel kod):** `px4_sina.sh` 3 PX4 açılışında 9/9 deneme tamam. 645 ULog'da pil/güç
+  yayınının arm anında kesildiği 7 koşu var, hepsi Gazebo'da (12–16.10); AirSim'de hiç yok.
 
 ---
 
@@ -413,8 +472,8 @@ kilitlenir ve oraya gider; her adım yeniden seçmez. Kalkanlı, eşli kıyas (�
 
 | | Makale | Bu çalışma |
 |---|---|---|
-| Başarı | %87.6 | %69.7 (c13 s0), %76.9 (B2 s0 + kalkan); 90 s'de %88.1 |
-| Süre | 11.8 s | 13.8 s (c13 s0) |
+| Başarı | %87.6 | **%92.5** (c13 + kilitli kalkan + gimbal, 3 tohum); önce %69.7 (c13 s0, kalkansız) |
+| Süre | 11.8 s | **14.1 s** (aynı ayar); düz inişin alt sınırı ~10 s (_hesap) |
 | Başarı kuralı | 5 m'de görüşün çoğunluk sınıfı | altındaki nokta güvenli zemin + insan/araç tamponu (daha sıkı) |
 | Sahneler | makalenin kendi sahneleri | MESSI fotoğrafları, eğitimde görülmeyen 32 sahne |
 
@@ -430,19 +489,19 @@ Kurallar ve sahneler farklı. Sayılar doğrudan karşılaştırılamaz, yalnız
 
 ## 7. Öneriler (önceliğe göre)
 
-1. **Ön kayıtlı zinciri bitir:** H16 (gözlem; tabanı c23), H18 (birleşim, k5 dahil), Faz 7. H15, H19 ve H21 bitti.
-2. **"Son metre" salınımını çöz** (yeni ön kayıt). Yedek iniş (H21) tutmadı; teşhise göre kalan süre aşımları alçak
-   irtifada güvenli zeminin 0.6–3 m yanında zikzak. Kalkan, her adım en yakın pikseli yeniden seçmek yerine bir hedefe
-   kilitlenmeli (zemindeki noktayı tutup oraya gitmek) ve bölgenin içine (kenara değil) yönelmeli.
-3. **Tohum çeşitliliği** (yeni ön kayıt): 3 tohumun oylaması ya da doğrulamayla tohum seçimi. Zayıf tohumun
-   etkisini azaltır.
-4. **Kolaydan zora eğitim** (yeni ön kayıt): önce güvenli alana yakın başlangıçlar.
-5. **Eğitim hızı:** önce profil. Sonra ortamları ayrı süreçlere bölmek (`--vec subproc`) ya da tek eğitim +
-   daha çok ortam. Bellek sınırı 12 GB.
-6. **AirSim'de algı:** v3'ün AirSim davranışını Arda'ya rapor et. Kod değişikliği Arda'nın onayıyla.
-7. **Çatı ve 3B engeller:** derinliği gerçek bir sensörden (lidar ya da stereo) almak, düz zemin varsayımını
+1. **Kilitli kalkanı `policy_node`'a taşı** (parametreli, varsayılan kapalı; Sefa üzerinde çalışıyor). Sonra AirSim
+   Faz 8: son aday (c13 + kilitli kalkan + gimbal) ile klasik yöntem, GT ve v3, Faz 7'nin 30 başlangıcı.
+2. **Algı kararı (Arda):** v3'ün ince ayarı ya da karma yapı ("yeri klasik seçsin, RL indirsin"). Faz 7'de v3 RL'yi
+   24/30'dan 16/30'a düşürdü.
+3. **Tohum kararlılığı** (yeni ön kayıt): c13 tarifi tohuma çok duyarlı (g13: 77.2–99.1). Seçenekler: 3 tohumun
+   oylaması, daha uzun eğitim (c23 s2 2M'de iyileşti) ya da ayrı bir doğrulama setiyle tohum seçimi. g13 s1 bu yolla
+   doğrulanabilir.
+4. **Hız:** kalan ~4 s (14.1 s ↔ ~10 s alt sınır) çoğunlukla kayma. Hızlı son iniş 3.5–4 m'den başlarsa ya da gerçek bir
+   mesafe sensörü olursa sert temas olmadan ~2–3 s kazanılabilir (_tahmin; yeni ön kayıt). Yanal hızı artırmak işe
+   yaramadı (H24).
+5. **Çatı ve 3B engeller:** derinliği gerçek bir sensörden (lidar ya da stereo) almak, düz zemin varsayımını
    kaldırır. Gelecek iş.
-8. **Final test:** zincir bitince, Arda "koş" deyince, bir kez.
+6. **Final test:** Arda "koş" deyince, bir kez.
 
 ---
 

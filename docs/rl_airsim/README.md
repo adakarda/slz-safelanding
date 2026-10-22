@@ -29,7 +29,11 @@ yazılmaz.
 
 | | Başarı | Süre | Güvensiz | Kaynak |
 |---|---|---|---|---|
-| **En iyi skor:** c13 s0 (`zemin_v3`, eğitimde 30 s, kayarak alçalma, kalkan eğitimde) | %69.7 | 13.8 s | %7.2 | tarama Tur 3 |
+| **Son aday (2026-10-23):** c13, 3 tohum + kilitli kalkan + gimbal'lı kamera | **%92.5** | **14.1 s** | %1.8 | H22 + H25a |
+| c13, 3 tohum + kilitli kalkan (kamera gövdeye sabit) | %88.8 | 17.2 s | %0.9 | H22 |
+| En iyi tek model: g13 s1 (gimbal'la eğitilmiş c13) + kilitli kalkan + gimbal | %99.1 | 13.2 s | %0.6 | H26 tanımlayıcı; val_b32'ye bakılarak seçildi |
+| AirSim Faz 7, c23 s1 + eski kalkan, GT / v3 (30 havada başlangıç, zemin kuralı) | 24/30 / 16/30 | 16.7 / 14.7 s (medyan) | — | Faz 7 |
+| **Eski tablo (2026-10-20):** c13 s0 (`zemin_v3`, eğitimde 30 s, kayarak alçalma, kalkan eğitimde) | %69.7 | 13.8 s | %7.2 | tarama Tur 3 |
 | c13, 3 tohum ortalaması | %66.4 | 15.1 s | %10.4 (kalkansız) | tarama Tur 3 |
 | **En yüksek ortalama skor:** c23, 3 tohum (`zemin_v1`, adım −0.5, alçal +1) | %72.5 (kalkanlı) | 16.6 s | %13.9 (kalkansız) | tarama Tur 3; H15'i geçmedi |
 | **En yüksek başarı:** B2 s0 + kalkan | %76.9 | 17.4 s | %0.3 | B deneyi |
@@ -38,10 +42,11 @@ yazılmaz.
 | AirSim, çatı üstünden havada başlangıç (c13 s0, AirSim etiketi) | 6/6 | ort. 17.7 s | 0 | gösterim, ölçüm değil |
 | AirSim, yoldan tetik, v3 maskesi (B2 s0 + kalkan) | 1/10 | — | 9 yol | Faz 6 |
 
-- **Tarama bitti (H15):** c23 en yüksek ortalama skoru aldı ama ön kayıtlı kuralı geçmedi; B1/B2-s0 yerinde
-  kalır.
-- **B2 hızlandırma bitti (H19):** hiçbir ince ayar çeşidi süreyi 1.5 s kısaltamadı; B2-s0 aynen kalır.
-- **Şu an koşan zincir:** gözlem turu (H16, tabanı c23) → birleşim turu (H18) → AirSim Faz 7. Ayrıntı §7.
+- **Ön kayıtlı zincir H15–H26 bitti (2026-10-23).** Benimsenenler: kilitli kalkan (H22), gimbal'lı kamera (H25a).
+  Benimsenmeyenler: H15, H16, H18, H19, H21, hızlı son iniş (H23), yanal hız (H24), AirSim'de gimbal (H25c),
+  gimbal'la eğitim (H25b, H26). Ayrıntı [`RAPOR.md`](RAPOR.md) §1 ve §4.7d–g.
+- **Şu an koşan zincir yok.** Sırada: kilitli kalkanın `policy_node`'a taşınması (Sefa, parametreli, varsayılan
+  kapalı) → AirSim Faz 8 (son aday ↔ klasik, GT ve v3).
 
 ---
 
