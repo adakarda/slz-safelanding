@@ -1715,3 +1715,24 @@ c23 tarifi + `gimbal: true`, 3 tohum, 1M, val_b32 × 10 gimbal'la. Kıyas: 25a'd
   modelleri daha iyi aday (eski kalkanla 88.4 ↔ 81.4, ortamda).
 - Tahmin ("2–5 puan iyi") kilitli kalkanla tutmadı, eski kalkanla aşıldı.
 - Süre aynı kaldı (15.8 s). Sebebi c23 tarifinde kayarken alçalma olmaması. Bunu Düzeltme 26 (g13) sınıyor.
+
+## Sonuç: Düzeltme 26, c13 tarifiyle gimbal'lı eğitim (2026-10-23 00:34)
+
+g13 = c13 tarifi + `gimbal: true`, 3 tohum, 1M, val_b32 × 10 gimbal'la. Kıyas: 25a'daki c13'ün gimbal'la değerlendirmesi.
+`h26_karar.py` ile. Ölçülen (kilitli kalkan; tohumlar 0, 1, 2):
+
+| | c13 gimbal'la değerlendirme | g13 (gimbal'la eğitim) | g (25b, c23 tarifi) |
+|---|---|---|---|
+| Kilitli kalkan: başarı | 92.5 (88.1, 93.4, 95.9) | 87.7 (86.9, **99.1**, 77.2) | 91.0 (89.4, 92.2, 91.6) |
+| Kilitli kalkan: süre | 14.15 s (13.1, 14.0, 15.4) | 14.96 s (14.4, **13.2**, 17.4) | 15.8 s |
+| Kilitli kalkan: güvensiz | 1.77 | 1.35 | 0.5 |
+| Yalın RL: başarı / güvensiz | 77.6 / 5.7 | 81.0 (81.2, 90.6, 71.2) / 3.1 | 84.3 / 7.3 |
+
+- **H26 tutmadı** (başarı −4.8, süre +0.8 s). **Karar: c13 tarifiyle gimbal'lı eğitim benimsenmez.** Son aday
+  c13 + kilitli kalkan + gimbal (değerlendirmede) olarak kalır.
+- Tahmin ("13–13.5 s, %92–94") ortalamada tutmadı. Yalnız s1'de tuttu: %99.1, 13.2 s, güvensiz %0.6, S 130.4. Bu,
+  şimdiye kadar val_b32'de ölçülen en iyi tek model.
+- **Tanımlayıcı:** tohumlar arası fark çok büyük (77.2–99.1). c13 tarifinin tohuma duyarlılığı (Düzeltme 15) gimbal'la
+  azalmadı, arttı. s2 süre aşımında %24.4.
+- **Seçim yanlılığı notu:** s1'i val_b32 sonucuna bakarak seçmek iyimser bir tahmin verir. s1 ancak val_b32 dışında bir
+  ölçümle (ayrı sahneler ya da AirSim) doğrulanırsa aday olabilir. Bu ayrı bir ön kayıt ister.
