@@ -1736,3 +1736,37 @@ g13 = c13 tarifi + `gimbal: true`, 3 tohum, 1M, val_b32 × 10 gimbal'la. Kıyas:
   azalmadı, arttı. s2 süre aşımında %24.4.
 - **Seçim yanlılığı notu:** s1'i val_b32 sonucuna bakarak seçmek iyimser bir tahmin verir. s1 ancak val_b32 dışında bir
   ölçümle (ayrı sahneler ya da AirSim) doğrulanırsa aday olabilir. Bu ayrı bir ön kayıt ister.
+
+## Düzeltme 27 (2026-10-25): derinlik girdisi karşılaştırması — eğitimlerden önce
+
+**Kullanıcı isteği (Arda, 2026-10-25):** "Makaledeki gibi bir derinlik verisi girince sonuçlarımız daha mı kötü çıkıyor
+... şuanki durum, 0 derinlik girdisi ve Depth Anything ile eğitim, 3 durumu karşılaştırabilir misin."
+
+**Gerekçe:** Bugünkü "düz zemin derinliği" kamera-zemin uzaklığıdır. Zemin düz kabul edildiği için pratikte irtifayı
+taşır; gimbal'la tek renktir. Gerçek derinlik yok. Depth Anything bir kez denendi (Düzeltme 7), ama eski ödülle, eski
+kuralla ve tek tohumla. O sonuç bugünkü sisteme taşınamaz.
+
+**Veri kısıtı (ölçülen):** Depth Anything RGB fotoğraf ister. `train_b`'nin 600 karesinin 133'ünün, `val_b32`'nin
+32 karesinin 14'ünün fotoğrafı var. Düzeltme 7'nin yükseklik haritaları bu 133 + 40 kare (0004 uçuşu) için hazır.
+Adil kıyas için üç kol da aynı 133 fotoğraflı karede yeniden eğitilir. Bu yüzden mutlak sayılar 600 kareyle eğitilen
+son adaydan düşük olabilir; kıyas kollar arasıdır.
+
+**Kollar** (c13 tarifi: `zemin_v3`, eğitimde 30 s, kayarken alçal, eğitimde kalkan 10 m; 1M adım; tohum 0, 1, 2):
+- **A_irtifa:** bugünkü düz zemin derinliği.
+- **B_yok:** derinlik kanalı sıfır (`depth_norm_m` 1e9; kanal 0.000, ölçülen).
+- **C_da:** Depth Anything V2 Small göreli yüksekliği (`--depth-mode elev`). Düzeltme 7'deki haritalar, yeni indirme yok.
+
+**Değerlendirme:** 0004 uçuşunun 40 karesi (`test_foto.txt`, eğitimde yok) × 10 başlangıç = 400 deneme. Koşullar 30 s,
+nominal dinamik, argmax ve gimbal. Yöntemler: `rl` ve `rl_kalkan2`. **Her deneme yeni bir ortamla koşulur.** 25.10'da
+paylaşılan ortamda aynı başlangıcın farklı süre verdiği görüldü; ayrı bir oturum bunu inceliyor. Kod donmuş kopyadan
+çalışır (`~/rl_inis/derinlik2/kod`, 0775798). Betikler: `~/rl_inis/derinlik2/{tur,degerlendir,h27_karar}.py`.
+
+**Karar (H27, 3 tohum ortalaması, `rl_kalkan2`, kıyas A_irtifa):**
+- **H27b:** B_yok başarı ≥ A − 2 ve süre ≤ A + 0.5 s ise "irtifa kanalı gerekmiyor"; yoksa "gerekli".
+- **H27c:** C_da (başarı ≥ A + 3 **ya da** (süre ≤ A − 1.0 s ve başarı ≥ A − 1)) **ve** güvensiz ≤ A + 2 ise "Depth
+  Anything eklemeye değer" (sahada çalıştırılması ayrı bir iş); yoksa "eklenmez".
+- Tanımlayıcı: yalın RL de raporlanır.
+
+**Tahminler (_tahmin):**
+- B, A'dan 2–5 puan düşük. İrtifayı bilmeyen politika alçalma zamanlamasını maskenin ölçeğinden çıkarmak zorunda.
+- C, A'ya yakın ya da güvensizde kötü. Göreli yükseklik ağaç/çimde zayıf (AUC 0.82) ve irtifa bilgisi kayboluyor.
