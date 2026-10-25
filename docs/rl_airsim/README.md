@@ -13,6 +13,8 @@ yazılmaz.
 
 ---
 
+> **v4 verisiyle yeni eğitim:** [`YENI_VERI_PLANI.md`](YENI_VERI_PLANI.md).
+
 ## 0. 60 saniyede
 
 - **Ne:** Bartolomei ve ark. (IROS 2022) yöntemini kendi iniş kurallarımızla yeniden kurduk.

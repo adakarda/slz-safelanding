@@ -1791,3 +1791,34 @@ koşuldu. Ölçülen (3 tohum; tohumlar 0, 1, 2):
 - **Sınırlar:** 133 karelik küçük eğitim seti, tek test uçuşu (0004), 3 tohum. Son aday 600 kareyle eğitildi; Depth
   Anything o 600 karenin 467'sinde kullanılamaz (RGB fotoğraf yok). Sahada kullanmak için Depth Anything'in AirSim'de
   kamera görüntüsü üzerinde çalışması gerekir; bu ayrı bir iş ve Arda'nın kararı.
+
+## Düzeltme 28 (2026-10-25): v4 verisiyle yeni eğitim — eğitimlerden önce
+
+**Kullanıcı isteği (Arda, 2026-10-25):** yeni veri paketi (`veri_v4.zip`), segmentasyon modeli v4 ve "yürürlükteki
+plan ile eğitimlere başla". Plan: [`../rl_airsim/YENI_VERI_PLANI.md`](../rl_airsim/YENI_VERI_PLANI.md).
+
+**Veri (ölçülen):** v4'ün FloodNet ve MESSI kareleri, en az 60 × 45 m olanlar; masks8 → RL sınıfları (yol ve belirsizler
+temkinli; tablo plan belgesinde); 8 cm/piksel. Eğitim 1810 (FloodNet 1445, MESSI 365), doğrulama 175 (FloodNet 60,
+MESSI 115). TU Graz ve VDD ölçek yüzünden dışarıda. Her sahne için Depth Anything V2 Small yüksekliği.
+
+**Kol:** v4_da = c13 tarifi (`zemin_v3`, eğitimde 30 s, kayarken alçal, eğitimde kalkan 10 m) + `--depth-mode elev`,
+v4 eğitim sahneleri, **5 tohum** (0–4), 1M adım. Donmuş kod `~/rl_inis/v4/kod` (7ca8d7a). Betikler
+`~/rl_inis/v4/{hazirla,da_v4,tur,degerlendir,h28_karar}.py`.
+
+**Değerlendirme:** v4 doğrulama, 175 sahne × 5 başlangıç = 875 deneme. 30 s, nominal dinamik, argmax, gimbal.
+Yöntemler `rl` ve `rl_kalkan2`. Her deneme yeni ortamla. Kıyaslar aynı sahnelerde:
+- eski son aday c13 s0–s2 (600 MESSI karesi, düz zemin derinliği);
+- Düzeltme 27'nin C_da s0–s2 (133 kare, Depth Anything).
+Not: eski c13 bazı Agamim doğrulama uçuşlarını eğitimde görmüş olabilir; bu, kıyası eski modelin lehine çevirir.
+
+**Karar (H28, `rl_kalkan2`, bütün doğrulama):**
+- **H28a:** v4_da (5 tohum ortalaması) eski c13'e (3 tohum) karşı: (başarı ≥ eski + 3 **ya da** (süre ≤ eski − 1.0 s
+  ve başarı ≥ eski − 1)) **ve** güvensiz ≤ eski + 2.
+- **H28b:** v4_da'nın en kötü tohumu ≥ %80.
+- İkisi de tutarsa v4_da yeni son aday olur.
+- Tanımlayıcı: kaynak başına (FloodNet, MESSI), yalın RL, Düzeltme 27 modelleri.
+
+**Tahminler (_tahmin):**
+- FloodNet'te eski c13 zayıf kalır (su ve sel sahnelerini hiç görmedi); v4_da belirgin iyi.
+- MESSI'de v4_da eski c13'e yakın (eğitimin yalnız %20'si MESSI).
+- 5 tohumun hepsi %80'in üstünde.
