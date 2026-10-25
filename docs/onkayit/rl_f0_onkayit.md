@@ -1770,3 +1770,24 @@ paylaşılan ortamda aynı başlangıcın farklı süre verdiği görüldü; ayr
 **Tahminler (_tahmin):**
 - B, A'dan 2–5 puan düşük. İrtifayı bilmeyen politika alçalma zamanlamasını maskenin ölçeğinden çıkarmak zorunda.
 - C, A'ya yakın ya da güvensizde kötü. Göreli yükseklik ağaç/çimde zayıf (AUC 0.82) ve irtifa bilgisi kayboluyor.
+
+## Sonuç: Düzeltme 27, derinlik girdisi karşılaştırması (2026-10-25 08:42)
+
+133 fotoğraflı karede eğitim, 0004 uçuşunun 40 karesinde × 10 başlangıç (400 iniş). Her deneme yeni bir ortamla
+koşuldu. Ölçülen (3 tohum; tohumlar 0, 1, 2):
+
+| Kol | Kilitli kalkan: başarı (tohumlar) | Süre | Güvensiz | Yalın RL: başarı | Yalın RL güvensiz |
+|---|---|---|---|---|---|
+| A_irtifa (bugünkü) | 57.3 (95.0, 36.8, 40.2) | 17.77 s | 6.6 | 54.7 | 7.2 |
+| B_yok | 84.9 (61.2, 95.5, 98.0) | 16.48 s | 4.1 | 70.7 | 7.2 |
+| C_da (Depth Anything) | **93.7** (89.8, 93.8, 97.5) | **15.56 s** | 4.3 | 78.6 | 10.2 |
+
+- **H27b tuttu** (B ≥ A − 2, süre ≤ A + 0.5 s): irtifa kanalı gerekmiyor.
+- **H27c tuttu** (C başarı +36.4, süre −2.2 s, güvensiz −2.3): Depth Anything eklemeye değer.
+- **Dikkat (tanımlayıcı):** A'nın ortalamasını iki çöken tohum (36.8, 40.2) düşürüyor. Her kolun en iyi tohumu
+  benzer (95.0 / 98.0 / 97.5). C'nin asıl farkı **kararlılık**: üç tohumun üçü de %89.8 ve üstünde. Yalın RL'de C'nin
+  güvensizi daha yüksek (10.2 ↔ 7.2), ama kilitli kalkan bunu kapatıyor.
+- Tahminler tutmadı: B, A'dan kötü değil; C, A'dan iyi.
+- **Sınırlar:** 133 karelik küçük eğitim seti, tek test uçuşu (0004), 3 tohum. Son aday 600 kareyle eğitildi; Depth
+  Anything o 600 karenin 467'sinde kullanılamaz (RGB fotoğraf yok). Sahada kullanmak için Depth Anything'in AirSim'de
+  kamera görüntüsü üzerinde çalışması gerekir; bu ayrı bir iş ve Arda'nın kararı.
