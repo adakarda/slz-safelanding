@@ -1,4 +1,4 @@
-"""Duzeltme 28: v4 verisiyle yeni egitim. c13 tarifi + Depth Anything kanali, v4 egitim sahneleri (1810), 5 tohum,
+"""Duzeltme 28 (28b ile): v4 verisiyle yeni egitim. c13 tarifi + Depth Anything, dengeli egitim seti (730), 5 tohum,
 1M adim. Kod donmus kopyadan (~/rl_inis/v4/kod). Ayni anda en cok 2 egitim. Sonra degerlendirme (yeni model 5 tohum,
 kiyas: eski son aday c13 s0-s2 ve Duzeltme 27'nin C_da s0-s2), sonra h28_karar.py.
 
@@ -14,7 +14,7 @@ B = f'{H}/rl_inis/v4'
 K = f'{H}/rl_inis/kos/v4'
 PY = os.environ.get('RL_PY', f'{H}/rl_inis/venv/bin/python')
 KOD = f'{B}/kod/src/eland_rl:{B}/kod/src/eland_common'
-ORTAK = ['--scenes', f'{H}/eland_veri/rl/v4/train.txt', '--shard', '--sora-cell', '0.25', '--steps', '1000000',
+ORTAK = ['--scenes', f'{H}/eland_veri/rl/v4/train_denge.txt', '--shard', '--sora-cell', '0.25', '--steps', '1000000',
          '--ent-coef', '0.01', '--obs', 'sem_depth_sora', '--vec', 'dummy',
          '--reward', 'zemin_v3', '--max-t', '30', '--diag', '--shield-train-m', '10',        # the c13 recipe
          '--depth-mode', 'elev']                                                           # Depth Anything (H27)

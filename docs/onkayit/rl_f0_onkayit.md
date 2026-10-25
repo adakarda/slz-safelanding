@@ -1822,3 +1822,14 @@ Not: eski c13 bazı Agamim doğrulama uçuşlarını eğitimde görmüş olabili
 - FloodNet'te eski c13 zayıf kalır (su ve sel sahnelerini hiç görmedi); v4_da belirgin iyi.
 - MESSI'de v4_da eski c13'e yakın (eğitimin yalnız %20'si MESSI).
 - 5 tohumun hepsi %80'in üstünde.
+
+### Düzeltme 28b (2026-10-25 22:15, hiçbir sonuç görülmeden): dengeli eğitim seti
+
+**Kullanıcı kararı (Arda):** "FloodNet'teki sınıf ağırlığını genel eğitimde dengeli olacak şekilde ayarla, FloodNet'in
+hepsini kullanmaman daha iyi olabilir."
+
+- Eğitim seti `train_denge.txt`: MESSI'nin 365 sahnesi + FloodNet eğitiminden rastgele 365 sahne (`random.Random(0)`).
+  Toplam 730. Sınıf payları (ölçülen): çim 33.4, sert 8.3, bitki+yol 33.3, yapı 16.8, su 6.2, araç 1.2.
+  Tam set (1810) çimde %50'nin üstündeydi.
+- Tam setle başlayan v4_da s0, 369 bin adımda durduruldu ve `kos/v4_iptal/`'e taşındı; değerlendirilmez.
+- Doğrulama seti, kollar, karar kuralı (H28) ve tahminler değişmedi.
