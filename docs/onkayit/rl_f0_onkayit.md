@@ -1859,3 +1859,36 @@ Yalın RL: v4_da 84.0, eski c13 86.4, C_da 78.9.
   - Daha büyük veri bu ölçümde politikayı iyileştirmedi. AirSim'deki asıl darboğaz algı (Faz 7: GT 24/30, v3 16/30).
 - Tahminler: FloodNet'te eski c13'ün zayıf kalacağı tahmini tutmadı. MESSI'de yakın olacağı tahmini tuttu. 5 tohumun
   hepsinin %80 üstünde olacağı tahmini tuttu.
+
+## Düzeltme 29 (2026-10-27): veri × derinlik × segmentasyon × kalkan tam karşılaştırması — ölçümlerden önce
+
+**Kullanıcı isteği (Arda, 2026-10-26):** "Yeni dataset, yeni segmentasyon modeli veya eski dataset, eski
+segmentasyon modelleri arasında birbirlerinin kombinasyonlarını kullanarak kalkanlı, kalkansız, depth'li,
+depth'siz bütün kombinasyonları deneyerek detaylıca bir karşılaştırma." Ayrıca `best_v4.pth` simülasyonda.
+
+**Düzeltme (önceki sonuçlar için):** Düzeltme 27–28'deki "yalın RL" ölçümlerinde ortamın iç kalkanı (10 m, c13'ün
+eğitimdeki kalkanı) açıktı. Bunlar "kalkansız" değil "eski kalkanlı" sonuçlardır. Bu düzeltmede kalkansız ayrıca
+ölçülür.
+
+**Etkenler** (hafif ortam, v4 doğrulama 175 sahne × 4 başlangıç = 700 iniş/hücre; her deneme yeni ortam; gimbal;
+başarı her zaman gerçek etiketle):
+- **Ajan (veri × derinlik), c13 tarifi:** eski veri + irtifa (c13 s0–s2), eski veri + Depth Anything (Düzeltme 27
+  C_da s0–s2; 133 karede), yeni veri + irtifa (**v4_flat, yeni eğitim**: `train_denge`, 5 tohum), yeni veri + Depth
+  Anything (v4_da s0–s4). Eski c13'e Depth Anything verilemez; model eğitildiği girdiyi bekler.
+- **Segmentasyon:** gerçek etiket; v3 (`best_v3.pth`); v4 (`best_v4.pth`). Maskeler fotoğraftan, sahadaki kamerayı
+  taklit için 9 cm/piksele indirilerek, Arda'nın `segmentle()` işleviyle (`~/rl_inis/v4/seg_maske.py`). Modellere
+  dokunulmaz. Ön ölçüm (ölçülen, 175 sahne): piksel uyumu v3 %86.0, v4 %91.7; tehlikeliyi güvenli sanma v3 %12.0,
+  v4 %4.8. Not: v4 bu kaynakların eğitim bölümlerini gördü, v3 FloodNet'i görmedi.
+- **Kalkan:** yok (iç kalkan kapalı); eski (iç kalkan 10 m); kilitli (eski + kilitli kalkan).
+
+**Kararlar (`~/rl_inis/v4/h29_ozet.py`):**
+- **H29a:** c13 + kilitli kalkanla v4 maskesindeki başarı ≥ v3 maskesindeki + 3 ise "v4 segmentasyonu RL için daha iyi".
+- **H29b:** kilitli ≥ eski ≥ yok sırasının kaç hücrede tuttuğu (tanımlayıcı).
+- **H29c:** v4 segmentasyonu + kilitli kalkanla en iyi ajan grubu (tanımlayıcı).
+
+**AirSim kısmı (ayrı adım, bu turdan sonra):** c13 s1, Faz 7'nin 30 başlangıcı, eski kalkan, v4 segmentasyonu.
+Kıyas Faz 7: gerçek etiket 24/30, v3 16/30. Kural: zemin kuralına uygun iniş ≥ 19/30 ise v4 AirSim'de v3'ten iyi.
+Depth Anything ve kilitli kalkan `policy_node`'da henüz yok; o kombinasyonlar AirSim'de şimdilik ölçülemez.
+
+**Tahminler (_tahmin):** v4 maskesiyle başarı v3'ten 3–8 puan yüksek; kalkansız en çok segmentasyon hatasından
+etkilenen; yeni veri + Depth Anything v4 maskesinde en iyi grup.
