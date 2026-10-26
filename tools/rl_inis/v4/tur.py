@@ -4,6 +4,7 @@ kiyas: eski son aday c13 s0-s2 ve Duzeltme 27'nin C_da s0-s2), sonra h28_karar.p
 
     env -u PYTHONPATH -u AMENT_PREFIX_PATH bash -c 'source ~/rl_inis/ortam.sh; exec $RL_PY -u ~/rl_inis/v4/tur.py'
 """
+import glob
 import os
 import subprocess
 import sys
@@ -22,7 +23,7 @@ TOHUM = (0, 1, 2, 3, 4)
 KIYAS = {**{f'eski_c13_s{t}': (f'{H}/rl_inis/kos/arama/{d}/model.zip', 'flat') for t, d in
             enumerate(('t2_c13_f_kayarak_kalkan', 't3_c13_f_kayarak_kalkan_s1', 't3_c13_f_kayarak_kalkan_s2'))},
          **{f'd27_C_da_s{t}': (f'{H}/rl_inis/kos/derinlik2/C_da_s{t}/model.zip', 'elev') for t in range(3)}}
-EN_COK = 2
+EN_COK = 1          # 28b: one v4 training holds ~5.5 GB; two filled WSL's 12 GB
 
 
 def log(s):
@@ -33,6 +34,11 @@ def ortam():
     e = dict(os.environ)
     e['PYTHONPATH'] = KOD
     return e
+
+
+def egitim_sayisi():
+    return int(subprocess.run(['pgrep', '-fc', r'eland_rl\.train .*kos/v4/'], capture_output=True,
+                              text=True).stdout.strip() or 0)
 
 
 def bos_mb():
@@ -50,23 +56,26 @@ def degerlendir(ad, model, derinlik):
 
 
 def main():
-    isler = list(TOHUM)
+    isler = [t for t in TOHUM if not os.path.exists(f'{K}/v4_da_s{t}/model.zip')]
     calisan = {}
     while isler or calisan:
         for t, p in list(calisan.items()):
             if p.poll() is not None:
                 log(f'v4_da s{t}: egitim bitti (kod {p.returncode})')
                 del calisan[t]
-        while isler and len(calisan) < EN_COK and bos_mb() > 6000:
+        while isler and egitim_sayisi() < EN_COK and bos_mb() > 6000:
             t = isler.pop(0)
             out = f'{K}/v4_da_s{t}'
             if os.path.exists(f'{out}/model.zip'):
                 log(f'v4_da s{t}: model var, atlandi')
                 continue
             os.makedirs(out, exist_ok=True)
-            calisan[t] = subprocess.Popen([PY, '-u', '-m', 'eland_rl.train', *ORTAK, '--seed', str(t), '--out', out],
+            ck = sorted(glob.glob(f'{out}/ckpt/model_*_steps.zip'), key=lambda c: int(c.split('_')[-2]))
+            devam = ['--resume', ck[-1]] if ck else []     # the host shut down mid-run (26.10)
+            calisan[t] = subprocess.Popen([PY, '-u', '-m', 'eland_rl.train', *ORTAK, '--seed', str(t), *devam,
+                                           '--out', out],
                                           env=ortam(), stdout=open(f'{out}/egitim.log', 'a'), stderr=subprocess.STDOUT)
-            log(f'v4_da s{t}: egitim basladi')
+            log(f'v4_da s{t}: egitim basladi {devam[1:] or ""}')
             time.sleep(300)               # scene loading and the first rollout before the next memory check
         time.sleep(30)
     for t in TOHUM:

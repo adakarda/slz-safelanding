@@ -1833,3 +1833,29 @@ hepsini kullanmaman daha iyi olabilir."
   Tam set (1810) çimde %50'nin üstündeydi.
 - Tam setle başlayan v4_da s0, 369 bin adımda durduruldu ve `kos/v4_iptal/`'e taşındı; değerlendirilmez.
 - Doğrulama seti, kollar, karar kuralı (H28) ve tahminler değişmedi.
+
+## Sonuç: Düzeltme 28, v4 verisiyle yeni eğitim (2026-10-26 17:29)
+
+Dengeli set (28b, 730 sahne), 5 tohum. Bilgisayar 26.10 gece kapandı; s2 300 bin adımlık ara kayıttan sürdürüldü
+(`--resume`), s0 ve s1 tamdı. v4 doğrulama: 175 sahne × 5 = 875 iniş, her deneme yeni ortam. Ölçülen (kilitli kalkan):
+
+| | Hepsi: başarı (tohumlar) | Süre | Güvensiz | FloodNet | MESSI |
+|---|---|---|---|---|---|
+| v4_da (yeni, 5 tohum) | 93.4 (95.2, 92.3, 91.3, 92.9, 95.3) | 13.68 s | 2.2 | 88.3 | 96.1 |
+| eski c13 (3 tohum) | 94.2 (95.5, 95.1, 92.0) | 12.93 s | 1.3 | 88.2 | 97.3 |
+| Düzeltme 27 C_da (3 tohum) | 91.5 (88.5, 93.3, 92.8) | 14.37 s | 2.7 | 83.9 | 95.5 |
+
+Yalın RL: v4_da 84.0, eski c13 86.4, C_da 78.9.
+
+- **H28a tutmadı** (başarı −0.8, süre +0.75 s). **H28b tuttu** (en kötü tohum 91.3). **Karar: v4_da son aday olmaz;
+  eski c13 + kilitli kalkan + gimbal yerinde kalır.**
+- **Tanımlayıcı:**
+  - Yeni model çok kararlı: FloodNet'te beş tohum 87.7–88.7.
+  - Eski model FloodNet'i hiç görmediği hâlde orada aynı başarıyı aldı (88.2). Politika güvenli alan kanalına
+    dayanıyor ve bu kanal yeni sahnelere iyi genelleşiyor.
+  - FloodNet'te iki model de ~%88'de kalıyor. Bu bir tavan gibi görünüyor; sebebi ayrıca incelenmeli (_tahmin: su
+    ağırlıklı sahneler ya da 20–30 m'den ulaşılamayan güvenli alan).
+  - MESSI'de eski model biraz önde. Eski model bazı Agamim doğrulama uçuşlarını eğitimde görmüş olabilir.
+  - Daha büyük veri bu ölçümde politikayı iyileştirmedi. AirSim'deki asıl darboğaz algı (Faz 7: GT 24/30, v3 16/30).
+- Tahminler: FloodNet'te eski c13'ün zayıf kalacağı tahmini tutmadı. MESSI'de yakın olacağı tahmini tuttu. 5 tohumun
+  hepsinin %80 üstünde olacağı tahmini tuttu.
