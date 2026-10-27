@@ -1927,3 +1927,26 @@ Süre: kilitli kalkanla 12.6–14.2 s. Tohum ayrıntısı `~/rl_inis/kos/v4/fakt
   - Gerçek etiketle v4 arasındaki 6–9 puanlık fark algının hâlâ darboğaz olduğunu gösteriyor.
 - Tahminler: "v4, v3'ten 3–8 puan yüksek" başarıda tutmadı (+1.7–3.5), güvenlikte belirgin. "Kalkansız en çok
   segmentasyondan etkilenir" tutmadı (kalkansızken her şey zaten kötü). "Yeni veri + DA en iyi" tutmadı (c13 eşit).
+
+## Düzeltme 30 (2026-10-27): kaynak başına eğitim — eğitimlerden önce
+
+**Kullanıcı isteği (Arda):** "Datasetleri ayrı ayrı eğitim yapmayacak mıydın? Zip'in içinde farklı datasetler var,
+hepsini RL eğitiminde birleştirip kullanacaktın."
+
+**Kapsam:** v4 paketinin dört kaynağından RL'de yalnız MESSI ve FloodNet kullanılabiliyor. TU Graz 5–30 m'den çekilmiş;
+sahne, 20–30 m'deki kamera alanından küçük. VDD'nin irtifası yok (Arda doğruladı); ölçek bilinmeden sahne metre
+cinsinden kurulamaz. Birleşik kol (MESSI + FloodNet, 730) Düzeltme 28b'de eğitildi.
+
+**Kollar** (c13 tarifi + Depth Anything, 1M adım, 3 tohum; `~/rl_inis/v4/tur30.py`, donmuş kod):
+- yalnız MESSI: `train_messi.txt` (train_denge'nin 365 MESSI sahnesi);
+- yalnız FloodNet: `train_flood.txt` (train_denge'nin 365 FloodNet sahnesi);
+- birleşik: v4_da s0–s4 (var).
+
+**Değerlendirme:** Düzeltme 29'un `faktor.py`'si (segmentasyon × kalkan, 700 iniş/hücre). Rapor kaynak başına.
+
+**Karar (H30, `h30_ozet.py`, v4 segmentasyonu + kilitli kalkan):**
+- Birleşik, iki kaynakta da tek kaynaklı kolların en iyisinden en çok 2 puan düşükse "birleştirme zarar vermiyor".
+- Tek kaynaklı bir kol, kendi kaynağı dışında birleşikten 5 puandan fazla düşükse "birleştirme genellemeyi artırıyor".
+
+**Tahminler (_tahmin):** yalnız FloodNet, MESSI'de belirgin düşük (kent sahnesi görmedi); yalnız MESSI FloodNet'te
+birleşiğe yakın (eski c13 FloodNet'i görmeden %88 almıştı); birleştirme zarar vermiyor.
