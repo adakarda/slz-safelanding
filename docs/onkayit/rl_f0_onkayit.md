@@ -1892,3 +1892,38 @@ Depth Anything ve kilitli kalkan `policy_node`'da henüz yok; o kombinasyonlar A
 
 **Tahminler (_tahmin):** v4 maskesiyle başarı v3'ten 3–8 puan yüksek; kalkansız en çok segmentasyon hatasından
 etkilenen; yeni veri + Depth Anything v4 maskesinde en iyi grup.
+
+## Sonuç: Düzeltme 29, tam karşılaştırma (2026-10-27 07:44)
+
+Hafif ortam, v4 doğrulama 175 sahne × 4 = 700 iniş/hücre, tohum ortalaması (c13 ve eski DA 3 tohum, yeni gruplar 5).
+Ölçülen başarı % (güvensiz %):
+
+| Ajan | Seg. | Kalkan yok | Eski kalkan | Kilitli kalkan |
+|---|---|---|---|---|
+| eski veri + irtifa (c13) | gerçek | 68.1 (31.5) | 85.8 (2.9) | **94.0** (1.5) |
+| | v3 | 65.1 (34.9) | 78.0 (13.0) | 85.0 (13.6) |
+| | v4 | 65.9 (34.0) | 79.7 (8.6) | **86.7** (8.8) |
+| eski veri + Depth Anything | gerçek | 46.9 (52.4) | 78.0 (6.5) | 91.4 (3.1) |
+| | v3 | 44.6 (54.2) | 70.7 (16.5) | 82.1 (15.1) |
+| | v4 | 45.8 (53.5) | 74.1 (12.0) | 84.2 (10.4) |
+| yeni veri + irtifa | gerçek | 68.1 (25.1) | 84.5 (2.9) | 90.5 (1.5) |
+| | v3 | 64.9 (31.4) | 77.0 (13.9) | 81.8 (13.4) |
+| | v4 | 65.8 (28.0) | 79.1 (9.5) | 84.1 (8.6) |
+| yeni veri + Depth Anything | gerçek | 46.7 (53.1) | 83.6 (5.5) | 93.2 (2.5) |
+| | v3 | 46.8 (53.2) | 74.1 (17.3) | 82.7 (15.9) |
+| | v4 | 46.5 (53.4) | 77.3 (11.7) | 86.2 (9.3) |
+
+Süre: kilitli kalkanla 12.6–14.2 s. Tohum ayrıntısı `~/rl_inis/kos/v4/faktor/ozet.csv`.
+
+- **H29a tutmadı:** c13 + kilitli kalkanla v4 %86.7, v3 %85.0 (+1.7 < 3). Bütün gruplarda v4 − v3 = +1.7 ile +3.5.
+- **H29b:** kilitli ≥ eski ≥ yok sırası 12 hücrenin 12'sinde tuttu.
+- **H29c:** v4 + kilitli kalkanla en iyi grup eski veri + irtifa (c13), %86.7; yeni veri + Depth Anything %86.2.
+- **Tanımlayıcı:**
+  - **En büyük etken kalkan.** Kalkansız başarı %45–68, güvensiz %25–54. Kilitli kalkan güvensizi %1.5–16'ya indiriyor.
+    Depth Anything'li ajanlar kalkansızken en çok güvensiz iniyor (%53): kalkana daha çok yaslanıyorlar.
+  - **Segmentasyon:** gerçek etiketten v3'e geçiş 8–10 puan kaybettiriyor. v4 bunun yalnız 2–3.5 puanını geri alıyor.
+    Ama kilitli kalkanla **güvensiz iniş v3'te %13–16, v4'te %8.6–10.4**: v4 güvensizi ~%35–40 azaltıyor.
+  - **Veri ve derinlik:** v4 + kilitli kalkanla dört grup %84–87 arasında; fark tohum gürültüsü düzeyinde.
+  - Gerçek etiketle v4 arasındaki 6–9 puanlık fark algının hâlâ darboğaz olduğunu gösteriyor.
+- Tahminler: "v4, v3'ten 3–8 puan yüksek" başarıda tutmadı (+1.7–3.5), güvenlikte belirgin. "Kalkansız en çok
+  segmentasyondan etkilenir" tutmadı (kalkansızken her şey zaten kötü). "Yeni veri + DA en iyi" tutmadı (c13 eşit).
