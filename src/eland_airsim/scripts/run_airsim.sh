@@ -18,6 +18,7 @@
 #   --hizli-son METRE   RL modu 5 m'nin altinda METRE'ye kadar 2 m/s, sonra 0.7 m/s iner (Duzeltme 23; yoksa
 #                tek hiz 0.7 m/s, eskisi gibi)
 #   --gimbal     asagi kamera AirSim gimbaliyla sabit (dik bakar, yon aracla doner); policy_node da buna gore
+#   --alt-pencere  yalniz AirSim alt pencereleri (asagi kamera + segmentasyon); --izle'in rqt pencereleri acilmaz
 #   --seg-model PATH [--seg-adi AD]   --v3 ile: segmentasyon dugumu bu agirliklarla (or. best_v4.pth) calisir;
 #                panelde AD yazar. Yoksa best_v3.pth.
 #   --video      gosterim kaydi icin arkadan takip eden "takip" kamerasi (1280x720, API'den okunur; politika
@@ -41,7 +42,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
-YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""; HIZLI_SON=""; GIMBAL=0; VIDEO=0; SEG_MODEL=""; SEG_ADI=v3
+YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""; HIZLI_SON=""; GIMBAL=0; VIDEO=0; SEG_MODEL=""; SEG_ADI=v3; ALT_PENCERE=0
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -67,6 +68,7 @@ while [ $# -gt 0 ]; do
 	--video) VIDEO=1 ;;
 	--seg-model) SEG_MODEL=$2; shift ;;
 	--seg-adi) SEG_ADI=$2; shift ;;
+	--alt-pencere) ALT_PENCERE=1 ;;
 	-h | --help) sed -n 2,27p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
@@ -135,7 +137,7 @@ trap 'exit 130' INT TERM      # exit, so EXIT runs temizle once and nothing afte
 
 # ------------------------------------------------------------ AirSim
 AYAR_WIN='C:\Users\arda_\airsim\settings_px4.json'
-python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" "$BASLANGIC" "$IZLE" \
+python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" "$BASLANGIC" "$([ "$IZLE" = 1 ] || [ "$ALT_PENCERE" = 1 ] && echo 1 || echo 0)" \
 	"$GIMBAL" "$VIDEO" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1]))
