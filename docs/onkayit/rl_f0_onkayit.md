@@ -1974,3 +1974,19 @@ Tur 13 dakika sonra durduruldu (v4_messi s0, ~100 bin adım); hiçbir sonuç gö
 - **Karar (H31, `h31_ozet.py`, v4 segmentasyonu + kilitli kalkan):** hepsi_da başarı ≥ yeni_da − 1 ve güvensiz
   ≤ yeni_da + 1 ise "VDD eklemek zarar vermiyor"; başarı ≥ yeni_da + 2 ise "VDD eklemek iyileştiriyor".
 - **Tahmin (_tahmin):** fark ±1 puan içinde; VDD (sel ve kent, farklı kamera) zarar vermez, belirgin iyileştirmez.
+
+## Sonuç: Düzeltme 31, MESSI + FloodNet + VDD birleşik eğitim (2026-10-28 01:14)
+
+Aynı 175 doğrulama sahnesi, kilitli kalkan, 5 tohum. Ölçülen başarı % (güvensiz %):
+
+| Ajan | Gerçek etiket | v3 | v4 | v4: FloodNet / MESSI |
+|---|---|---|---|---|
+| yeni_da (MESSI + FloodNet, 730) | 93.2 (2.5) | 82.7 (15.9) | 86.2 (9.3) | 78.7 / 90.2 |
+| hepsi_da (+ VDD, 1010) | 92.4 (3.0) | 81.9 (16.1) | 85.5 (9.6) | 78.2 / 89.3 |
+
+Süre: kilitli kalkan + v4 ile 13.45 s ↔ 13.70 s.
+
+- **H31: VDD eklemek zarar vermiyor (tuttu), iyileştirmiyor (tutmadı).** Farklar tohum gürültüsü içinde.
+- **Tanımlayıcı:** v4'ün v3'e üstünlüğü kaynağa göre çok farklı. FloodNet'te v3 %70–71, v4 %78 (+8); MESSI'de +1.
+  v3 FloodNet'i hiç görmemişti; v4'ün kazancı çoğunlukla bu kaynakta.
+- Tahmin ("fark ±1 puan içinde") tuttu.

@@ -18,6 +18,10 @@
 #   --hizli-son METRE   RL modu 5 m'nin altinda METRE'ye kadar 2 m/s, sonra 0.7 m/s iner (Duzeltme 23; yoksa
 #                tek hiz 0.7 m/s, eskisi gibi)
 #   --gimbal     asagi kamera AirSim gimbaliyla sabit (dik bakar, yon aracla doner); policy_node da buna gore
+#   --seg-model PATH [--seg-adi AD]   --v3 ile: segmentasyon dugumu bu agirliklarla (or. best_v4.pth) calisir;
+#                panelde AD yazar. Yoksa best_v3.pth.
+#   --video      gosterim kaydi icin arkadan takip eden "takip" kamerasi (1280x720, API'den okunur; politika
+#                gormez). Kaydedici: tools/rl_inis/demo/video
 #   --havada N,E,IRTIFA | rastgele[:TOHUM]
 #                havada baslangic: kalkistan sonra dogma noktasina gore (N, E) m'ye ve IRTIFA m'ye ucar, orada
 #                bekler; tetik (--trigger ya da istasyonda 0) orada verilir. rastgele: dogma noktasi bilinen
@@ -37,7 +41,7 @@ PX4_BIN=$PX4_DIR/build/px4_sitl_default/bin
 AIRSIM_DIR=/mnt/c/Users/arda_/airsim
 VENV=$HOME/airsim-venv
 DUNYA=AirSimNH; TAKEOFF_ALT=""; DO_TRIGGER=0; HUD=true; HUD_VIEW=true; STATION=false; PX4_PARAMS=""; ZORLA=0
-YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""; HIZLI_SON=""; GIMBAL=0
+YALNIZ_PX4=0; PARAMS=""; V3=0; BASLANGIC=""; RL_MODEL=""; KALKAN=-1; RUZGAR=""; IZLE=0; HAVADA=""; HIZLI_SON=""; GIMBAL=0; VIDEO=0; SEG_MODEL=""; SEG_ADI=v3
 LOG_DIR=$HOME/eland_veri/_gunlukler/airsim_$(date +%Y%m%d_%H%M%S)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -60,6 +64,9 @@ while [ $# -gt 0 ]; do
 	--havada) HAVADA=$2; shift ;;
 	--hizli-son) HIZLI_SON=$2; shift ;;
 	--gimbal) GIMBAL=1 ;;
+	--video) VIDEO=1 ;;
+	--seg-model) SEG_MODEL=$2; shift ;;
+	--seg-adi) SEG_ADI=$2; shift ;;
 	-h | --help) sed -n 2,27p "$0"; exit 0 ;;
 	*) echo "bilinmeyen secenek: $1"; exit 2 ;;
 	esac
@@ -129,7 +136,7 @@ trap 'exit 130' INT TERM      # exit, so EXIT runs temizle once and nothing afte
 # ------------------------------------------------------------ AirSim
 AYAR_WIN='C:\Users\arda_\airsim\settings_px4.json'
 python3 - "$WS_DIR/src/eland_airsim/config/settings_px4.json" "$AIRSIM_DIR/settings_px4.json" "$GW" "$BASLANGIC" "$IZLE" \
-	"$GIMBAL" <<'PY'
+	"$GIMBAL" "$VIDEO" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1]))
 v = s['Vehicles']['PX4']
@@ -147,6 +154,10 @@ if sys.argv[6] == '1':   # --gimbal: the camera's whole orientation held in the 
     # turned small body tilts into large heading jumps (21.10). The vehicle keeps its heading anyway (north at
     # spawn; the RL mode freezes it).
     v['Cameras']['asagi']['Gimbal'] = {'Stabilization': 1.0, 'Pitch': -90.0, 'Roll': 0.0, 'Yaw': 0.0}
+if sys.argv[7] == '1':   # --video: a chase camera for demo recordings, read only by the recorder via the API
+    v['Cameras']['takip'] = {'CaptureSettings': [{'ImageType': 0, 'Width': 1280, 'Height': 720, 'FOV_Degrees': 90}],
+                             'X': -6.0, 'Y': 0.0, 'Z': -3.0, 'Pitch': -27.0, 'Roll': 0.0, 'Yaw': 0.0,
+                             'Gimbal': {'Stabilization': 1.0, 'Pitch': -27.0, 'Roll': 0.0}}
 json.dump(s, open(sys.argv[2], 'w'), indent=2)
 PY
 cp "$AIRSIM_DIR/settings_px4.json" "$LOG_DIR/settings_px4.json"
@@ -245,7 +256,8 @@ p['perception_node']['ros__parameters']['segmentation_topic'] = '/eland/v3/etike
 yaml.safe_dump(p, open(sys.argv[2], 'w'), sort_keys=False)
 PY
 	PARAMS=$LOG_DIR/params_v3.yaml
-	"$HOME/v3_test/venv/bin/python" -P "$HOME/v3_test/v3_airsim.py" >"$LOG_DIR/v3.log" 2>&1 &
+	"$HOME/v3_test/venv/bin/python" -P "$HOME/v3_test/v3_airsim.py" \
+		${SEG_MODEL:+--ros-args -p model_path:=$SEG_MODEL -p model_adi:=$SEG_ADI} >"$LOG_DIR/v3.log" 2>&1 &
 	V3_PID=$!
 	echo "[run_airsim]   v3 dugumu baslatildi (algi zinciri /eland/v3/etiket'i okuyacak)"
 	[ "$IZLE" = 1 ] && ros2 run rqt_image_view rqt_image_view /eland/v3/panel >"$LOG_DIR/izle_v3.log" 2>&1 &
