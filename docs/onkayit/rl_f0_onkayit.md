@@ -1950,3 +1950,27 @@ cinsinden kurulamaz. Birleşik kol (MESSI + FloodNet, 730) Düzeltme 28b'de eği
 
 **Tahminler (_tahmin):** yalnız FloodNet, MESSI'de belirgin düşük (kent sahnesi görmedi); yalnız MESSI FloodNet'te
 birleşiğe yakın (eski c13 FloodNet'i görmeden %88 almıştı); birleştirme zarar vermiyor.
+
+### Düzeltme 30 durduruldu (2026-10-27 16:50, sonuç yok)
+
+Arda'nın isteği yanlış anlaşılmıştı: istenen, veri setlerinin ayrı ayrı değil **birlikte ve tamamen** eğitilmesiydi.
+Tur 13 dakika sonra durduruldu (v4_messi s0, ~100 bin adım); hiçbir sonuç görülmedi ve kullanılmaz.
+
+## Düzeltme 31 (2026-10-27): MESSI + FloodNet + VDD birleşik eğitim — eğitimden önce
+
+**Kullanıcı kararları (Arda):** "VDD tahmini ölçekle"; TU Graz dışarıda; FloodNet dengeli kalsın.
+
+- **VDD:** irtifa yok; ölçek, v4 segmentasyon eğitimindeki VDD aralığının (1.8–4.3 cm/px) ortası 3.0 cm/px kabul
+  edildi (4000 × 3000 → 120 × 90 m). VDD'de inilebilir sınıf yok: "vegetation" tek etiket (masks8 = 252). Bu
+  piksellerde v4 segmentasyonunun tahmini kullanıldı (çim → 0, gerisi 2). v4 VDD eğitim bölümünü gördü, doğrulamayı
+  görmedi. Ölçülen paylar (eğitim, 280): çim 11.1, bitki+yol 33.0, yapı 20.2, su 14.8, araç 0.6, bilinmiyor 20.3.
+  Betik `~/rl_inis/v4/vdd_hazirla.py`.
+- **TU Graz:** dışarıda (5–30 m'den çekilmiş; sahne, 20–30 m'deki kamera alanından küçük).
+- **Eğitim seti** `train_hepsi.txt`: train_denge (MESSI 365 + FloodNet 365) + VDD 280 = 1010 sahne.
+- **Kol** hepsi_da: c13 tarifi + Depth Anything, 5 tohum, 1M adım (`tur31.py`, donmuş kod). Kıyas: yeni_da
+  (MESSI + FloodNet, 730, 5 tohum).
+- **Değerlendirme:** Düzeltme 29'un `faktor.py`'si, aynı 175 doğrulama sahnesi (karşılaştırılabilirlik için VDD
+  doğrulaması ayrı ve tanımlayıcı).
+- **Karar (H31, `h31_ozet.py`, v4 segmentasyonu + kilitli kalkan):** hepsi_da başarı ≥ yeni_da − 1 ve güvensiz
+  ≤ yeni_da + 1 ise "VDD eklemek zarar vermiyor"; başarı ≥ yeni_da + 2 ise "VDD eklemek iyileştiriyor".
+- **Tahmin (_tahmin):** fark ±1 puan içinde; VDD (sel ve kent, farklı kamera) zarar vermez, belirgin iyileştirmez.

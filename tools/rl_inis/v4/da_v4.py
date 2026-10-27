@@ -21,7 +21,9 @@ def main():
     proc = AutoImageProcessor.from_pretrained(MODEL, local_files_only=True)
     model = AutoModelForDepthEstimation.from_pretrained(MODEL, local_files_only=True).to(dev).eval()
     yol = {m['id'].replace('/', '__'): f"{V}/{m['goruntu']}" for m in csv.DictReader(open(f'{V}/manifest.csv'))}
-    satir = [l.split() for b in ('train', 'val', 'test') for l in open(f'{O}/{b}.txt')]
+    import sys
+    listeler = sys.argv[1:] or [f'{O}/{b}.txt' for b in ('train', 'val', 'test')]
+    satir = [l.split() for p_ in listeler for l in open(p_)]
     n = 0
     for s in satir:
         mp, ep = s[0], s[3][5:]
