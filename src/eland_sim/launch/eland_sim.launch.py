@@ -65,6 +65,10 @@ def generate_launch_description() -> LaunchDescription:
 
     args = [
         DeclareLaunchArgument(
+            'pipeline', default_value='true',
+            description='Run the perception/mapping chain. An RL run in AirSim reads its labels and pose directly '
+                        'and can switch it off to save ~0.7 GB (run_airsim.sh --klasiksiz).'),
+        DeclareLaunchArgument(
             'params_file', default_value=default_params,
             description='Full path to the pipeline parameter YAML.'),
         DeclareLaunchArgument(
@@ -166,7 +170,8 @@ def generate_launch_description() -> LaunchDescription:
     pipeline_nodes = [
         Node(package=pkg, executable=exe, name=exe,
              parameters=[params], output='screen', arguments=log_args,
-             additional_env=compat_env)
+             additional_env=compat_env,
+             condition=IfCondition(LaunchConfiguration('pipeline')))
         for pkg, exe in (
             ('eland_perception', 'perception_node'),
             ('eland_mapping', 'mapping_node'),

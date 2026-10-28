@@ -23,7 +23,7 @@ for deneme in 1 2; do
 	Y=$(python3 -c "import json; print(json.load(open('$K/senaryo.json'))['dogma'][1])")
 	Z=$(python3 -c "import json; z=json.load(open('$K/senaryo.json')).get('dogma_z'); print('' if z is None else z)")
 	bash $S/run_airsim.sh --baslangic "$X,$Y" ${Z:+--dogma-z $Z} --takeoff 30 --rl "$M" --kalkan 10 --gimbal \
-		--v3 --seg-model $HOME/v4_seg/best_v4.pth --seg-adi v4 --no-hud --log-dir $K/calisma_$deneme > $K/run_$deneme.out 2>&1 &
+		--v3 --seg-model $HOME/v4_seg/best_v4.pth --seg-adi v4 --no-hud --klasiksiz --log-dir $K/calisma_$deneme > $K/run_$deneme.out 2>&1 &
 	R=$!
 	for _ in $(seq 1 600); do
 		grep -qE "hazir\. Kapatmak|HATA" $K/run_$deneme.out 2>/dev/null && break
