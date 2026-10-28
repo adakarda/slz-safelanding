@@ -48,11 +48,21 @@ class Harita:
         return self._mesafe
 
 
+HAVUZ = os.path.expanduser('~/rl_inis/senaryo/dogma_havuzu.csv')
+
+
 def dogma_sec(h, rng, bilinen):
+    """Spawn (N, E, kind, ground m above PlayerStart's level). Measured pool first: a spawn drawn straight from the
+    map put the vehicle inside higher ground and it fell through the world (28.10); zemin_olc.py measured 150 points
+    in the open areas (ground -0.20 .. +1.28 m)."""
     if bilinen:
         rows = [l.split(',') for l in open(BILINEN).read().split('\n')[1:] if l.strip()]
         x, y = map(float, rng.choice(rows)[:2])
-        return x, y, 'bilinen'
+        return x, y, 'bilinen', -0.19
+    if os.path.exists(HAVUZ):
+        rows = [l.split(',') for l in open(HAVUZ).read().split('\n')[1:] if l.strip()]
+        x, y, z = map(float, rng.choice(rows))
+        return x, y, 'havuz', z
     # an open area first (each equally likely), then a point in it: drawing pixels directly kept landing in the one
     # big meadow (three draws within 2 m of each other, 28.10)
     acik = (h.mesafe() >= 4.0).astype(np.uint8)
@@ -64,7 +74,7 @@ def dogma_sec(h, rng, bilinen):
     alanlar = sorted(set(lab[rr, cc].tolist()))
     sec = lab[rr, cc] == rng.choice(alanlar)
     i = rng.randrange(int(sec.sum()))
-    return round(float(n[sec][i]), 1), round(float(e[sec][i]), 1), 'rastgele'
+    return round(float(n[sec][i]), 1), round(float(e[sec][i]), 1), 'rastgele', None
 
 
 def rota_cek(rng, bas):
@@ -156,13 +166,14 @@ def main():
     rng = random.Random(tohum)
     h = Harita()
     gecmis = {json.loads(l)['ozet'] for l in open(GECMIS)} if os.path.exists(GECMIS) else set()
-    x, y, tur = dogma_sec(h, rng, a.bilinen)
+    x, y, tur, zemin = dogma_sec(h, rng, a.bilinen)
     for _ in range(100):
         rota = rota_cek(rng, (x, y))
         if ozet(rota) not in gecmis:
             break
     s, an, bacak = acil_nokta(rng, (x, y), rota)
-    sen = dict(tohum=tohum, dogma=[x, y], dogma_turu=tur, irtifa=IRTIFA, r_merkez=R_MERKEZ,
+    sen = dict(tohum=tohum, dogma=[x, y], dogma_turu=tur, dogma_z=None if zemin is None else round(-(zemin + 0.5), 2),
+               irtifa=IRTIFA, r_merkez=R_MERKEZ,
                rota=[list(q) for q in rota], acil_mesafe_m=s, acil_nokta=list(an), acil_bacak=bacak,
                ozet=ozet(rota), zaman=time.strftime('%Y-%m-%d %H:%M:%S'))
     json.dump(sen, open(a.cikti, 'w'), indent=1)
